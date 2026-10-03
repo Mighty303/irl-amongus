@@ -23,6 +23,7 @@ struct ToolsLabView: View {
                         MiniGameHost { UploadGame(seconds: 8, start: { true }, onDone: $0) }
                     }
                     NavigationLink("Swipe Card") { MiniGameHost { SwipeCardGame(onDone: $0) } }
+                    NavigationLink("Prime Shields") { MiniGameHost { ShieldsGame(onDone: $0) } }
                 }
             }
             .navigationTitle("Tools")

@@ -28,13 +28,13 @@ enum StationKind: String, Codable, CaseIterable, Identifiable {
 }
 
 enum TaskType: String, Codable, CaseIterable, Identifiable {
-    case wiring, upload, sequence, delivery, swipe
+    case wiring, upload, sequence, delivery, swipe, shields
     /// A mini-game from a newer server than this app. Decoding it this way keeps the rest of the
     /// game state readable instead of failing the whole snapshot.
     case unknown
 
     /// The mini-games this app can play (the lobby toggles).
-    static let allCases: [TaskType] = [.wiring, .upload, .sequence, .delivery, .swipe]
+    static let allCases: [TaskType] = [.wiring, .upload, .sequence, .delivery, .swipe, .shields]
 
     init(from decoder: Decoder) throws {
         self = TaskType(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
@@ -49,6 +49,7 @@ enum TaskType: String, Codable, CaseIterable, Identifiable {
         case .sequence: return "Start Reactor Sequence"
         case .delivery: return "Delivery"
         case .swipe: return "Swipe Card"
+        case .shields: return "Prime Shields"
         case .unknown: return "New task (update the app)"
         }
     }
