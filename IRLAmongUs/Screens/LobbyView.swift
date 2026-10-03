@@ -133,7 +133,7 @@ private struct SettingsSection: View {
                 Toggle(type.label, isOn: Binding(
                     get: { settings.taskTypes.contains(type) },
                     set: { on in
-                        var types = settings.taskTypes.filter { $0 != type }
+                        var types = settings.taskTypes.filter { $0 != type && $0 != .unknown }
                         if on { types.append(type) }
                         store.updateSetting("taskTypes", types.map(\.rawValue))
                     }

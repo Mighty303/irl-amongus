@@ -263,3 +263,14 @@ private final class LobbyHTTPStub: URLProtocol, @unchecked Sendable {
     }
     override func stopLoading() {}
 }
+
+struct TaskTypeDecodingTests {
+    @Test func unknownTaskTypesFromANewerServerDontBreakDecoding() throws {
+        let types = try JSONDecoder().decode([TaskType].self, from: Data(#"["wiring","hoverboard"]"#.utf8))
+        #expect(types == [.wiring, .unknown])
+        let task = try JSONDecoder().decode(GameTask.self, from: Data(
+            #"{"id":"t1","type":"hoverboard","steps":["s1"],"step":0,"completed":false,"startedAt":null}"#.utf8))
+        #expect(task.type == .unknown)
+        #expect(!TaskType.allCases.contains(.unknown))
+    }
+}
