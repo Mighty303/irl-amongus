@@ -89,49 +89,6 @@ struct TaskSheet: View {
     }
 }
 
-/// Connect matching colored wires: tap a left wire, then the same color on the right.
-struct WiringGame: View {
-    let onDone: () -> Void
-    private let colors: [Color] = [.red, .blue, .yellow, .pink]
-    @State private var left: [Int] = Array(0..<4).shuffled()
-    @State private var right: [Int] = Array(0..<4).shuffled()
-    @State private var selected: Int?
-    @State private var connected: Set<Int> = []
-
-    var body: some View {
-        VStack {
-            Text("Fix wiring").font(.title2.bold())
-            HStack(spacing: 80) {
-                column(left) { c in selected = c }
-                column(right) { c in
-                    guard let s = selected else { return }
-                    if s == c {
-                        connected.insert(c)
-                        Haptics.tap()
-                        if connected.count == colors.count { onDone() }
-                    } else {
-                        Haptics.error()
-                    }
-                    selected = nil
-                }
-            }
-        }
-    }
-
-    private func column(_ order: [Int], tap: @escaping (Int) -> Void) -> some View {
-        VStack(spacing: 24) {
-            ForEach(order, id: \.self) { c in
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(colors[c])
-                    .frame(width: 70, height: 36)
-                    .overlay(connected.contains(c) ? Image(systemName: "checkmark").foregroundStyle(.white) : nil)
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(selected == c ? Color.primary : .clear, lineWidth: 3))
-                    .onTapGesture { if !connected.contains(c) { tap(c) } }
-            }
-        }
-    }
-}
-
 /// Stay on the screen at the station until the upload finishes. Backgrounding cancels it.
 struct UploadGame: View {
     @Environment(\.scenePhase) private var scenePhase
