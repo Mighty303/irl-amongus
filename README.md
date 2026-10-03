@@ -16,4 +16,3 @@ From the command line, you can inspect available schemes and destinations with:
 ```sh
 xcodebuild -project IRLAmongUs.xcodeproj -scheme IRLAmongUs -showdestinations
 ```
-
