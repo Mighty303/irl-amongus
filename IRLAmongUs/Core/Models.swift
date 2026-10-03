@@ -80,14 +80,21 @@ struct Settings: Codable, Equatable {
     var revealRoleOnEject: Bool
     var emergencyMeetingsPerPlayer: Int
     var emergencyCooldownSec: Int
-    var killRssiThreshold: Int
-    var reportRssiThreshold: Int
+    /// Approximate meters; the server converts them to RSSI cutoffs (see `BLEDistance`).
+    var killDistanceM: Double
+    var reportDistanceM: Double
+    /// Calibration: smoothed RSSI two phones read 1 m apart.
+    var rssiAt1m: Double
+    var pathLossExponent: Double
     var proximityFreshSec: Int
     var checkpointTtlSec: Int
     var qrFallback: Bool
     var devSkipProximity: Bool
     var devSkipCheckpoint: Bool
     var ghostTasks: Bool
+    var taskTypes: [TaskType]
+    /// Only filled in for the host; blank for everyone else.
+    var forcedImpostorIds: [String]
     var uploadSec: Int
     var sabotageCooldownSec: Int
     var reactorSec: Int
@@ -188,6 +195,17 @@ struct SabotageView: Decodable, Equatable {
     let kind: String
     let deadline: Double?
     let stations: [FixStation]
+}
+
+/// Log-distance path-loss model, matching the server's `rssiAtDistance`. BLE RSSI is noisy, so these are estimates.
+enum BLEDistance {
+    static func rssi(atMeters d: Double, rssiAt1m: Double, exponent: Double) -> Double {
+        rssiAt1m - 10 * exponent * log10(max(d, 0.1))
+    }
+
+    static func meters(forRSSI rssi: Double, rssiAt1m: Double, exponent: Double) -> Double {
+        pow(10, (rssiAt1m - rssi) / (10 * exponent))
+    }
 }
 
 struct Session: Codable, Equatable {

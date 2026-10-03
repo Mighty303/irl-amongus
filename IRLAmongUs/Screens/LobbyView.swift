@@ -51,7 +51,7 @@ struct LobbyView: View {
                 }
 
                 if state.isHost {
-                    SettingsSection(settings: state.settings)
+                    SettingsSection(settings: state.settings, players: state.players)
                     Section {
                         Button("Start game") { Task { await store.perform("start_game") } }
                             .font(.headline)
@@ -105,18 +105,60 @@ struct StationRow: View {
 private struct SettingsSection: View {
     @Environment(GameStore.self) private var store
     let settings: Settings
+    let players: [PlayerView]
 
     var body: some View {
-        Section("Host settings") {
+        Section("Players & tasks") {
             stepper("Impostors", \.impostors, "impostors", 1...3)
+            Picker("Impostor", selection: Binding(
+                get: { settings.forcedImpostorIds.first ?? "" },
+                set: { store.updateSetting("forcedImpostorIds", $0.isEmpty ? [String]() : [$0]) }
+            )) {
+                Text("Random").tag("")
+                ForEach(players) { Text($0.name).tag($0.id) }
+            }
             stepper("Min players", \.minPlayers, "minPlayers", 2...12)
             stepper("Tasks per player", \.tasksPerPlayer, "tasksPerPlayer", 1...8)
-            stepper("Kill cooldown (s)", \.killCooldownSec, "killCooldownSec", 0...120, step: 5)
-            stepper("Discussion (s)", \.discussionSec, "discussionSec", 0...300, step: 15)
-            stepper("Voting (s)", \.votingSec, "votingSec", 10...300, step: 15)
+            ForEach(TaskType.allCases) { type in
+                Toggle(type.label, isOn: Binding(
+                    get: { settings.taskTypes.contains(type) },
+                    set: { on in
+                        var types = settings.taskTypes.filter { $0 != type }
+                        if on { types.append(type) }
+                        store.updateSetting("taskTypes", types.map(\.rawValue))
+                    }
+                ))
+            }
+        }
+        Section {
+            meters("Kill distance", \.killDistanceM, "killDistanceM")
+            meters("Report distance", \.reportDistanceM, "reportDistanceM")
+            Stepper("RSSI at 1 m: \(Int(settings.rssiAt1m)) dBm",
+                    value: Binding(get: { settings.rssiAt1m }, set: { store.updateSetting("rssiAt1m", $0.rounded()) }),
+                    in: -100...(-30), step: 1)
+            Stepper(String(format: "Indoor factor: %.1f", settings.pathLossExponent),
+                    value: Binding(get: { settings.pathLossExponent },
+                                   set: { store.updateSetting("pathLossExponent", ($0 * 10).rounded() / 10) }),
+                    in: 1.5...4, step: 0.1)
+        } header: {
+            Text("Bluetooth range")
+        } footer: {
+            Text("Approximate: phones only measure signal strength. Calibrate \"RSSI at 1 m\" with the Bluetooth proximity test (Developer Mode) and two phones 1 m apart. Raise the indoor factor if kills trigger from too far away.")
+        }
+        Section("Timers (seconds)") {
+            stepper("Role reveal", \.roleRevealSec, "roleRevealSec", 3...60, step: 1)
+            stepper("Gather for meeting", \.gatherTimeoutSec, "gatherTimeoutSec", 0...300, step: 15)
+            stepper("Discussion", \.discussionSec, "discussionSec", 0...300, step: 15)
+            stepper("Voting", \.votingSec, "votingSec", 10...300, step: 15)
+            stepper("Results screen", \.resultSec, "resultSec", 2...30, step: 1)
+            stepper("Kill cooldown", \.killCooldownSec, "killCooldownSec", 0...120, step: 5)
+            stepper("Emergency cooldown", \.emergencyCooldownSec, "emergencyCooldownSec", 0...120, step: 5)
+            stepper("Sabotage cooldown", \.sabotageCooldownSec, "sabotageCooldownSec", 0...180, step: 5)
+            stepper("Reactor meltdown", \.reactorSec, "reactorSec", 15...180, step: 5)
+            stepper("Upload task", \.uploadSec, "uploadSec", 3...30, step: 1)
+        }
+        Section("Rules") {
             stepper("Emergency meetings", \.emergencyMeetingsPerPlayer, "emergencyMeetingsPerPlayer", 0...5)
-            stepper("Kill RSSI ≥ (dBm)", \.killRssiThreshold, "killRssiThreshold", -100...(-30))
-            stepper("Report RSSI ≥ (dBm)", \.reportRssiThreshold, "reportRssiThreshold", -100...(-30))
             toggle("Anonymous votes", \.anonymousVotes, "anonymousVotes")
             toggle("Reveal role on ejection", \.revealRoleOnEject, "revealRoleOnEject")
             toggle("Player/station QR fallback", \.qrFallback, "qrFallback")
@@ -130,6 +172,13 @@ private struct SettingsSection: View {
         Stepper("\(label): \(settings[keyPath: path])",
                 value: Binding(get: { settings[keyPath: path] }, set: { store.updateSetting(key, $0) }),
                 in: range, step: step)
+    }
+
+    private func meters(_ label: String, _ path: KeyPath<Settings, Double>, _ key: String) -> some View {
+        let dbm = BLEDistance.rssi(atMeters: settings[keyPath: path], rssiAt1m: settings.rssiAt1m, exponent: settings.pathLossExponent)
+        return Stepper(String(format: "%@: ~%.1f m (≥ %d dBm)", label, settings[keyPath: path], Int(dbm.rounded())),
+                       value: Binding(get: { settings[keyPath: path] }, set: { store.updateSetting(key, $0) }),
+                       in: 0.5...15, step: 0.5)
     }
 
     private func toggle(_ label: String, _ path: KeyPath<Settings, Bool>, _ key: String) -> some View {
