@@ -537,82 +537,41 @@ private struct GameLobbyView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let scale = max(geometry.size.width / 828, geometry.size.height / 1792)
+            let size = geometry.size
+            let landscape = size.width > size.height
+            let screenStars = stars.map {
+                Star(x: $0.x / 828 * size.width, y: $0.y / 1792 * size.height,
+                     radius: $0.radius * 0.4, phase: $0.phase, speed: $0.speed)
+            }
 
             ZStack {
                 Color.black
 
-                TwinklingStarfield(stars: stars, scale: scale)
-                    .frame(width: 828 * scale, height: 1792 * scale)
+                TwinklingStarfield(stars: screenStars, scale: 1)
+                    .frame(width: size.width, height: size.height)
                     .allowsHitTesting(false)
 
                 VStack(spacing: 14) {
                     lobbyTopBar
 
-                    ZStack(alignment: .bottomLeading) {
-                        WaitingRoomScene()
-                            .clipShape(RoundedRectangle(cornerRadius: 22))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 22)
-                                    .stroke(.white.opacity(0.75), lineWidth: 3)
-                            )
-
-                        Text("Waiting for players…")
-                            .font(.system(size: 17, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.88))
-                            .padding(.horizontal, 15)
-                            .padding(.vertical, 9)
-                            .background(.black.opacity(0.72), in: Capsule())
-                            .padding(16)
-                    }
-                    .frame(maxHeight: .infinity)
-
-                    HStack(spacing: 12) {
-                        lobbyCode
-                        playersCard
-                    }
-
-                    HStack(spacing: 12) {
-                        Button {
-                            buttonAudio.play()
-                            lobbyAlert = LobbyAlert(
-                                title: "Customize",
-                                message: "Color, hats, pets, and name customization will live here."
-                            )
-                        } label: {
-                            Label("CUSTOMIZE", systemImage: "tshirt.fill")
-                                .frame(maxWidth: .infinity, minHeight: 54)
+                    if landscape {
+                        HStack(spacing: 20) {
+                            waitingRoom
+                            lobbyControls
+                                .frame(width: min(340, size.width * 0.4))
                         }
-                        .buttonStyle(LobbyOutlineButtonStyle())
-
-                        Button {
-                            buttonAudio.play()
-                            lobbyAlert = LobbyAlert(
-                                title: "Need more players",
-                                message: "Invite at least three more crewmates before starting the game."
-                            )
-                        } label: {
-                            Text("START")
-                                .frame(maxWidth: .infinity, minHeight: 54)
-                        }
-                        .buttonStyle(LobbyStartButtonStyle())
+                        .frame(maxHeight: .infinity)
+                    } else {
+                        waitingRoom
+                        lobbyControls
                     }
-
-                    Button {
-                        buttonAudio.play()
-                        onLeave()
-                    } label: {
-                        Text("Leave Game")
-                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.82))
-                            .underline()
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.bottom, 4)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 18)
+                .frame(width: size.width, height: size.height)
             }
+            .frame(width: size.width, height: size.height)
+            .clipped()
         }
         .background(Color.black)
         .alert(item: $lobbyAlert) { alert in
@@ -621,6 +580,72 @@ private struct GameLobbyView: View {
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
             )
+        }
+    }
+
+    private var waitingRoom: some View {
+        ZStack(alignment: .bottomLeading) {
+            WaitingRoomScene()
+
+            Text("Waiting for players…")
+                .font(.system(size: 17, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.88))
+                .padding(.horizontal, 15)
+                .padding(.vertical, 9)
+                .background(.black.opacity(0.72), in: Capsule())
+                .padding(16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.75), lineWidth: 3))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("lobby.waitingRoom")
+    }
+
+    private var lobbyControls: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 12) {
+                lobbyCode
+                playersCard
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    buttonAudio.play()
+                    lobbyAlert = LobbyAlert(
+                        title: "Customize",
+                        message: "Color, hats, pets, and name customization will live here."
+                    )
+                } label: {
+                    Label("CUSTOMIZE", systemImage: "tshirt.fill")
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(LobbyOutlineButtonStyle())
+
+                Button {
+                    buttonAudio.play()
+                    lobbyAlert = LobbyAlert(
+                        title: "Need more players",
+                        message: "Invite at least three more crewmates before starting the game."
+                    )
+                } label: {
+                    Text("START")
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(LobbyStartButtonStyle())
+            }
+
+            Button {
+                buttonAudio.play()
+                onLeave()
+            } label: {
+                Text("Leave Game")
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .underline()
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 4)
         }
     }
 
@@ -689,12 +714,14 @@ private struct GameLobbyView: View {
 
 private struct WaitingRoomScene: View {
     var body: some View {
-        Image("LobbyRoom")
-            .resizable()
-            .interpolation(.high)
-            .scaledToFit()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityHidden(true)
+        GeometryReader { geometry in
+            Image("LobbyRoom")
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .accessibilityHidden(true)
+        }
     }
 }
 

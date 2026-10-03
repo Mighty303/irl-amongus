@@ -6,6 +6,33 @@ final class IRLAmongUsUITests: XCTestCase {
     }
 
     @MainActor
+    func testLandscapeLobbyFitsOnScreen() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launchArguments.append("-disableAudio")
+        app.launch()
+        XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
+        app.buttons["Local"].tap()
+        XCTAssertTrue(app.buttons["Classic"].waitForExistence(timeout: 5))
+        app.buttons["Classic"].tap()
+
+        let room = app.descendants(matching: .any)["lobby.waitingRoom"].firstMatch
+        XCTAssertTrue(room.waitForExistence(timeout: 5))
+        let screen = app.windows.firstMatch.frame
+        XCTAssertGreaterThan(screen.width, screen.height)
+        XCTAssertTrue(screen.contains(room.frame), "The waiting room must fit inside the screen")
+        XCTAssertGreaterThan(room.frame.height, screen.height * 0.5)
+        for title in ["CUSTOMIZE", "START", "Leave Game"] {
+            let button = app.buttons[title]
+            XCTAssertTrue(button.isHittable, "\(title) must be visible and tappable")
+            XCTAssertTrue(screen.contains(button.frame))
+        }
+        captureVoting(app, name: "Game lobby landscape")
+        app.buttons["Leave Game"].tap()
+        XCTAssertTrue(app.staticTexts["HOST"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testLaunchesToMainMenu() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()
