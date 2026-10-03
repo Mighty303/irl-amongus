@@ -139,6 +139,7 @@ struct PlayingView: View {
 }
 
 struct TaskRow: View {
+    @Environment(GameStore.self) private var store
     let state: GameState
     let task: GameTask
 
@@ -149,19 +150,16 @@ struct TaskRow: View {
             VStack(alignment: .leading) {
                 Text(title).foregroundStyle(.primary)
                 if let station = state.station(task.currentStationId) {
-                    Text("📍 \(station.name)").font(.caption).foregroundStyle(.secondary)
+                    let distance = store.location.distance(to: station).map { " · \(SignGuide.format($0))" } ?? ""
+                    Text("📍 \(station.name)\(distance)").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
     }
 
     private var title: String {
-        switch task.type {
-        case .wiring: return "Fix Wiring"
-        case .upload: return "Upload Data"
-        case .sequence: return "Start Reactor Sequence"
-        case .delivery: return task.step == 0 ? "Delivery: pick up package" : "Delivery: drop off package"
-        }
+        guard task.type == .delivery else { return task.type.label }
+        return task.step == 0 ? "Delivery: pick up package" : "Delivery: drop off package"
     }
 }
 

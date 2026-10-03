@@ -33,15 +33,18 @@ struct DebugView: View {
                         }
                     }
                     if let s = store.state {
-                        row("Kill threshold", "≥ \(s.settings.killRssiThreshold) dBm")
-                        row("Report threshold", "≥ \(s.settings.reportRssiThreshold) dBm")
+                        let st = s.settings
+                        row("Kill range", String(format: "~%.1f m (≥ %d dBm)", st.killDistanceM,
+                            Int(BLEDistance.rssi(atMeters: st.killDistanceM, rssiAt1m: st.rssiAt1m, exponent: st.pathLossExponent).rounded())))
+                        row("Report range", String(format: "~%.1f m (≥ %d dBm)", st.reportDistanceM,
+                            Int(BLEDistance.rssi(atMeters: st.reportDistanceM, rssiAt1m: st.rssiAt1m, exponent: st.pathLossExponent).rounded())))
                         row("Server says in kill range", "\(s.me.killTargets.count)")
                         row("Server says body nearby", "\(s.me.nearbyBodies.count)")
                     }
                 } header: {
                     Text("Bluetooth proximity")
                 } footer: {
-                    Text("Calibrate: hold two phones at 'kill distance' (arm's length) and note the smoothed RSSI, then set the host's kill threshold just below it. Tokens appear only during a game (state 5 = powered on).")
+                    Text("Calibrate with the Bluetooth proximity test (Developer Mode): hold two phones 1 m apart and use that reading as the host's \"RSSI at 1 m\". Tokens appear only during a game (state 5 = powered on).")
                 }
 
                 Section("Location") {

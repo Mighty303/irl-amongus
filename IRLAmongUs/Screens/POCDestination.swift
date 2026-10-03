@@ -2,19 +2,25 @@ import SwiftUI
 
 /// POC screens opened from the shake-to-open Developer Mode menu (Debug builds).
 enum POCDestination: String, CaseIterable, Identifiable {
-    case onlineGame
+    case onlineGame, signsLab, bluetoothLab, tools
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .onlineGame: return "Online game (server POC)"
+        case .signsLab: return "Sign recognition test"
+        case .bluetoothLab: return "Bluetooth proximity test"
+        case .tools: return "GPS, QR, haptics & mini-games"
         }
     }
 
     var systemImage: String {
         switch self {
         case .onlineGame: return "gamecontroller.fill"
+        case .signsLab: return "camera.viewfinder"
+        case .bluetoothLab: return "dot.radiowaves.left.and.right"
+        case .tools: return "wrench.and.screwdriver"
         }
     }
 }
@@ -44,6 +50,9 @@ struct POCDestinationView: View {
     @ViewBuilder private var content: some View {
         switch destination {
         case .onlineGame: GameRootView()
+        case .signsLab: SignsLabView()
+        case .bluetoothLab: BluetoothLabView()
+        case .tools: ToolsLabView()
         }
     }
 }
