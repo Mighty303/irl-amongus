@@ -7,12 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B0000000000000000000000D /* VotingPOCView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000D /* VotingPOCView.swift */; };
+		B0000000000000000000000C /* VotingRound.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0000000000000000000000C /* VotingRound.swift */; };
 		B10000000000000000000001 /* IRLAmongUsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* IRLAmongUsApp.swift */; };
 		B10000000000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* ContentView.swift */; };
 		B10000000000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000003 /* Assets.xcassets */; };
 		B10000000000000000000004 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* Preview Assets.xcassets */; };
 		B10000000000000000000007 /* among-us-theme-song.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* among-us-theme-song.mp3 */; };
 		B10000000000000000000008 /* button-press.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000011 /* button-press.mp3 */; };
+		B10000000000000000000009 /* among-us-killed.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000012 /* among-us-killed.mp3 */; };
+		B10000000000000000000010 /* among-us-kill.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000013 /* among-us-kill.mp3 */; };
 		B10000000000000000000005 /* IRLAmongUsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* IRLAmongUsTests.swift */; };
 		B10000000000000000000006 /* IRLAmongUsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000006 /* IRLAmongUsUITests.swift */; };
 /* End PBXBuildFile section */
@@ -35,6 +39,8 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		C0000000000000000000000D /* VotingPOCView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VotingPOCView.swift; sourceTree = "<group>"; };
+		C0000000000000000000000C /* VotingRound.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VotingRound.swift; sourceTree = "<group>"; };
 		C10000000000000000000001 /* IRLAmongUsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRLAmongUsApp.swift; sourceTree = "<group>"; };
 		C10000000000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		C10000000000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -46,7 +52,27 @@
 		C10000000000000000000009 /* IRLAmongUsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IRLAmongUsUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000010 /* among-us-theme-song.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "among-us-theme-song.mp3"; sourceTree = "<group>"; };
 		C10000000000000000000011 /* button-press.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "button-press.mp3"; sourceTree = "<group>"; };
+		C10000000000000000000012 /* among-us-killed.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "among-us-killed.mp3"; sourceTree = "<group>"; };
+		C10000000000000000000013 /* among-us-kill.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "among-us-kill.mp3"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		S10000000000000000000001 /* Core */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Core;
+			sourceTree = "<group>";
+		};
+		S10000000000000000000002 /* Device */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Device;
+			sourceTree = "<group>";
+		};
+		S10000000000000000000003 /* Screens */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Screens;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		F10000000000000000000001 /* Frameworks */ = {
@@ -88,10 +114,16 @@
 			children = (
 				C10000000000000000000001 /* IRLAmongUsApp.swift */,
 				C10000000000000000000002 /* ContentView.swift */,
+				C0000000000000000000000D /* VotingPOCView.swift */,
+				C0000000000000000000000C /* VotingRound.swift */,
 				C10000000000000000000003 /* Assets.xcassets */,
+				G10000000000000000000007 /* Assets */,
 				C10000000000000000000010 /* among-us-theme-song.mp3 */,
 				C10000000000000000000011 /* button-press.mp3 */,
 				G10000000000000000000003 /* Preview Content */,
+				S10000000000000000000001 /* Core */,
+				S10000000000000000000002 /* Device */,
+				S10000000000000000000003 /* Screens */,
 			);
 			path = IRLAmongUs;
 			sourceTree = "<group>";
@@ -130,6 +162,23 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		G10000000000000000000007 /* Assets */ = {
+			isa = PBXGroup;
+			children = (
+				G10000000000000000000008 /* Audio */,
+			);
+			path = Assets;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000008 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				C10000000000000000000013 /* among-us-kill.mp3 */,
+				C10000000000000000000012 /* among-us-killed.mp3 */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -144,6 +193,11 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				S10000000000000000000001 /* Core */,
+				S10000000000000000000002 /* Device */,
+				S10000000000000000000003 /* Screens */,
 			);
 			name = IRLAmongUs;
 			productName = IRLAmongUs;
@@ -238,6 +292,8 @@
 				B10000000000000000000004 /* Preview Assets.xcassets in Resources */,
 				B10000000000000000000007 /* among-us-theme-song.mp3 in Resources */,
 				B10000000000000000000008 /* button-press.mp3 in Resources */,
+				B10000000000000000000009 /* among-us-killed.mp3 in Resources */,
+				B10000000000000000000010 /* among-us-kill.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -264,6 +320,8 @@
 			files = (
 				B10000000000000000000001 /* IRLAmongUsApp.swift in Sources */,
 				B10000000000000000000002 /* ContentView.swift in Sources */,
+				B0000000000000000000000D /* VotingPOCView.swift in Sources */,
+				B0000000000000000000000C /* VotingRound.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -422,18 +480,19 @@
 				DEVELOPMENT_TEAM = FW528PK6A5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "IRL Among Us";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.IRLAmongUs;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -449,18 +508,19 @@
 				DEVELOPMENT_TEAM = FW528PK6A5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "IRL Among Us";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = UIInterfaceOrientationPortrait;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.IRLAmongUs;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;

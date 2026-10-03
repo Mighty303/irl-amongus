@@ -3,9 +3,7 @@ import SwiftUI
 import UIKit
 
 struct ContentView: View {
-    private static let referenceSize = CGSize(width: 828, height: 1792)
     private static let audioEnabled = !ProcessInfo.processInfo.arguments.contains("-disableAudio")
-    private static let animatedSceneHeight = 1288.0
 
     private static let stars = [
         Star(x: 31, y: 128, radius: 16, phase: 0.1, speed: 1.1),
@@ -85,139 +83,118 @@ struct ContentView: View {
     ]
 
     @State private var selectedHotspot: MenuHotspot?
-    @State private var showingPhysicalMap = false
+    @State private var developerDestination: DeveloperDestination?
+    @State private var pendingDeveloperDestination: DeveloperDestination?
     @State private var showingDeveloperMenu = ProcessInfo.processInfo.arguments.contains("-showDeveloperMenu")
-    @State private var openMapAfterDeveloperMenu = false
+    @State private var travelProgress = 0.0
     @State private var isShowingLocalLobby = false
     @StateObject private var themeAudio = ThemeAudioPlayer()
     @StateObject private var buttonAudio = ButtonPressAudioPlayer()
 
     var body: some View {
         GeometryReader { geometry in
-            let scale = max(
-                geometry.size.width / Self.referenceSize.width,
-                geometry.size.height / Self.referenceSize.height
-            )
-            let artworkSize = CGSize(
-                width: Self.referenceSize.width * scale,
-                height: Self.referenceSize.height * scale
-            )
-            let origin = CGPoint(
-                x: (geometry.size.width - artworkSize.width) / 2,
-                y: (geometry.size.height - artworkSize.height) / 2
-            )
-
+            let size = geometry.size
+            let menuWidth = min(size.width * 0.46, 400)
+            let primaryHeight = min(size.height * 0.15, 64)
+            let iconSize = min(size.height * 0.12, 48)
+            let stars = Self.stars.map {
+                Star(x: $0.x / 828 * size.width, y: $0.y / 1792 * size.height,
+                     radius: $0.radius * 0.4, phase: $0.phase, speed: $0.speed)
+            }
             if isShowingLocalLobby {
                 LocalLobbyView(stars: Self.stars, buttonAudio: buttonAudio) {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isShowingLocalLobby = false
-                    }
+                    isShowingLocalLobby = false
+                    travelProgress = 0
+                    DispatchQueue.main.async { travelProgress = 1 }
                 }
-                .transition(.opacity)
             } else {
-                ZStack(alignment: .topLeading) {
-                Color.black
+                ZStack {
+                    Color.black
+                    TwinklingStarfield(stars: stars, scale: 1)
+                        .allowsHitTesting(false)
+                    Image("RedCrewmate")
+                        .resizable().scaledToFit()
+                        .frame(width: 150, height: 110)
+                        .rotationEffect(.degrees(-12))
+                        .position(x: -100 + travelProgress * (size.width + 200), y: size.height * 0.48)
+                        .animation(.linear(duration: 8).repeatForever(autoreverses: false), value: travelProgress)
+                        .allowsHitTesting(false).accessibilityHidden(true)
 
-                Image("MainMenu")
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: artworkSize.width, height: artworkSize.height)
-                    .offset(x: origin.x, y: origin.y)
-                    .accessibilityHidden(true)
+                    Text("IRL Among Us")
+                        .font(.system(size: min(size.height * 0.17, 72), weight: .ultraLight, design: .rounded))
+                        .tracking(2).foregroundStyle(.white.opacity(0.85))
+                        .position(x: size.width * 0.56, y: size.height * 0.2)
+                        .accessibilityAddTraits(.isHeader)
 
-                Color.black
-                    .frame(
-                        width: artworkSize.width,
-                        height: Self.animatedSceneHeight * scale
-                    )
-                    .offset(x: origin.x, y: origin.y)
+                    VStack(spacing: 8) {
+                        HStack(spacing: 12) {
+                            landscapeMenuButton(Self.hotspots[0], artwork: "LocalEnglish", height: primaryHeight)
+                            landscapeMenuButton(Self.hotspots[1], artwork: "OnlineEnglish", height: primaryHeight)
+                        }
+                        HStack(spacing: 12) {
+                            landscapeMenuButton(Self.hotspots[2], artwork: "HowToPlayEnglish", height: primaryHeight * 0.68)
+                            landscapeMenuButton(Self.hotspots[3], artwork: "FreeplayEnglish", height: primaryHeight * 0.68)
+                        }
+                        HStack(spacing: 14) {
+                            ForEach([4, 7, 8, 6], id: \.self) { index in
+                                landscapeMenuButton(Self.hotspots[index], artwork: Self.hotspots[index].title + "MenuIcon", height: iconSize)
+                                    .frame(width: iconSize)
+                            }
+                        }
+                    }
+                    .frame(width: menuWidth)
+                    .position(x: size.width * 0.56, y: size.height * 0.76)
 
-                TwinklingStarfield(stars: Self.stars, scale: scale)
-                    .frame(width: artworkSize.width, height: artworkSize.height)
-                    .offset(x: origin.x, y: origin.y)
-                    .allowsHitTesting(false)
-
-                Text("IRL Among Us")
-                    .font(.system(size: 92 * scale, weight: .ultraLight, design: .rounded))
-                    .tracking(2 * scale)
-                    .foregroundStyle(Color(white: 0.68))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .frame(width: 700 * scale)
-                    .position(
-                        x: origin.x + Self.referenceSize.width * scale / 2,
-                        y: origin.y + 225 * scale
-                    )
-                    .accessibilityAddTraits(.isHeader)
-
-                LoopingCrewmate(scale: scale, origin: origin)
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .allowsHitTesting(false)
-
-                ForEach(Self.hotspots) { hotspot in
                     Button {
                         buttonAudio.play()
-                        if hotspot.title == "Local" {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                isShowingLocalLobby = true
-                            }
-                        } else {
-                            selectedHotspot = hotspot
-                        }
+                        selectedHotspot = Self.hotspots[5]
                     } label: {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .frame(
-                                width: hotspot.frame.width * scale,
-                                height: hotspot.frame.height * scale
-                            )
+                        VStack(spacing: 2) {
+                            Image("AccountMenuIcon").resizable().scaledToFit().frame(width: 54, height: 54)
+                            Text("ACCOUNT").font(.system(size: 11, weight: .semibold, design: .rounded))
+                        }
+                        .padding(6).overlay(RoundedRectangle(cornerRadius: 6).stroke(.white, lineWidth: 2))
                     }
-                    .buttonStyle(GameMenuButtonStyle())
-                    .offset(
-                        x: origin.x + hotspot.frame.minX * scale,
-                        y: origin.y + hotspot.frame.minY * scale
-                    )
-                    .accessibilityLabel(hotspot.title)
-                    .accessibilityHint("Opens \(hotspot.title)")
-                }
+                    .foregroundStyle(.white).buttonStyle(.plain)
+                    .position(x: 48, y: size.height * 0.25)
+                    .accessibilityLabel("Account")
 
-                Button {
-                    buttonAudio.play()
-                    themeAudio.toggleMuted()
-                } label: {
-                    Image(systemName: themeAudio.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 48, height: 48)
-                        .background(.black.opacity(0.6), in: Circle())
-                        .overlay(Circle().stroke(.white.opacity(0.45), lineWidth: 1))
+                    Button {
+                        buttonAudio.play()
+                        themeAudio.toggleMuted()
+                    } label: {
+                        Image(systemName: themeAudio.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                            .font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
+                            .frame(width: 44, height: 44)
+                            .background(.black.opacity(0.6), in: Circle())
+                            .overlay(Circle().stroke(.white.opacity(0.45), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .position(x: size.width - 28, y: 30)
+                    .accessibilityLabel(themeAudio.isMuted ? "Unmute theme music" : "Mute theme music")
                 }
-                .buttonStyle(.plain)
-                .position(x: geometry.size.width - 40, y: 56)
-                .accessibilityLabel(themeAudio.isMuted ? "Unmute theme music" : "Mute theme music")
-                .accessibilityHint("Toggles the opening theme music")
-                }
-                .transition(.opacity)
             }
         }
-        .background(Color.black)
-        .ignoresSafeArea()
+        .background(Color.black.ignoresSafeArea())
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
         .background {
 #if DEBUG
             ShakeDetectorView {
-                guard !showingPhysicalMap else { return }
+                guard developerDestination == nil else { return }
                 showingDeveloperMenu = true
             }
             .allowsHitTesting(false)
 #endif
         }
         .onAppear {
+            OrientationDelegate.requestLandscape()
             if Self.audioEnabled {
                 themeAudio.play()
             }
+            travelProgress = 0
+            travelProgress = 1
         }
         .alert(item: $selectedHotspot) { hotspot in
             Alert(
@@ -227,27 +204,55 @@ struct ContentView: View {
             )
         }
         .sheet(isPresented: $showingDeveloperMenu, onDismiss: openPendingDeveloperDestination) {
-            DeveloperMenuView {
-                openMapAfterDeveloperMenu = true
+            DeveloperMenuView(onOpenPhysicalMap: {
+                pendingDeveloperDestination = .physicalMap
                 showingDeveloperMenu = false
-            }
+            }, onOpenVoting: {
+                pendingDeveloperDestination = .voting
+                showingDeveloperMenu = false
+            }, onOpenPOC: { destination in
+                pendingDeveloperDestination = .poc(destination)
+                showingDeveloperMenu = false
+            })
             .presentationDetents([.medium])
         }
-        .fullScreenCover(isPresented: $showingPhysicalMap, onDismiss: {
-            if Self.audioEnabled {
-                themeAudio.play()
+        .fullScreenCover(item: $developerDestination, onDismiss: {
+            OrientationDelegate.requestLandscape()
+            if Self.audioEnabled { themeAudio.play() }
+        }) { destination in
+            switch destination {
+            case .physicalMap: PhysicalMapPOCView()
+            case .voting: VotingPOCView()
+            case .poc(let destination): POCDestinationView(destination: destination)
             }
-        }) {
-            PhysicalMapPOCView()
         }
     }
 
-    private func openPendingDeveloperDestination() {
-        guard openMapAfterDeveloperMenu else { return }
-        openMapAfterDeveloperMenu = false
-        themeAudio.pause()
-        showingPhysicalMap = true
+    private func landscapeMenuButton(_ hotspot: MenuHotspot, artwork: String, height: CGFloat) -> some View {
+        Button {
+            buttonAudio.play()
+            if hotspot.title == "Local" {
+                isShowingLocalLobby = true
+            } else {
+                selectedHotspot = hotspot
+            }
+        } label: {
+            Image(artwork).resizable().scaledToFit()
+                .frame(maxWidth: .infinity).frame(height: height)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(hotspot.title)
+        .accessibilityHint("Opens \(hotspot.title)")
     }
+
+    private func openPendingDeveloperDestination() {
+        guard let destination = pendingDeveloperDestination else { return }
+        pendingDeveloperDestination = nil
+        themeAudio.pause()
+        developerDestination = destination
+    }
+
 }
 
 private struct LoopingCrewmate: View {
@@ -282,8 +287,25 @@ private struct LocalLobbyView: View {
     let onBack: () -> Void
 
     @State private var lobbyAlert: LobbyAlert?
+    @State private var isShowingGameLobby = false
 
     var body: some View {
+        Group {
+            if isShowingGameLobby {
+                GameLobbyView(stars: stars, buttonAudio: buttonAudio) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isShowingGameLobby = false
+                    }
+                }
+                .transition(.opacity)
+            } else {
+                localGamePicker
+                    .transition(.opacity)
+            }
+        }
+    }
+
+    private var localGamePicker: some View {
         GeometryReader { geometry in
             let referenceSize = CGSize(width: 828, height: 1792)
             let scale = max(
@@ -305,8 +327,11 @@ private struct LocalLobbyView: View {
                 TwinklingStarfield(stars: stars, scale: scale)
                     .frame(width: artworkSize.width, height: artworkSize.height)
                     .offset(x: origin.x, y: origin.y)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
                     .allowsHitTesting(false)
 
+                ScrollView {
                 VStack(spacing: 16) {
                     playerBar
 
@@ -319,10 +344,9 @@ private struct LocalLobbyView: View {
 
                         HStack(spacing: 12) {
                             lobbyButton("Classic") {
-                                showLobbyMessage(
-                                    title: "Classic",
-                                    message: "A classic local lobby is ready to be created."
-                                )
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    isShowingGameLobby = true
+                                }
                             }
 
                             lobbyButton("Hide n Seek") {
@@ -360,7 +384,7 @@ private struct LocalLobbyView: View {
                         .accessibilityLabel("Available Games")
                         .accessibilityValue("Searching for nearby games")
                     }
-                    .frame(maxHeight: .infinity)
+                    .frame(height: max(100, geometry.size.height - 380))
 
                     HStack(alignment: .bottom) {
                         Button {
@@ -383,7 +407,10 @@ private struct LocalLobbyView: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 18)
+                }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .clipped()
         }
         .background(Color.black)
         .alert(item: $lobbyAlert) { alert in
@@ -503,6 +530,205 @@ private struct LocalLobbyView: View {
     }
 }
 
+private struct GameLobbyView: View {
+    let stars: [Star]
+    let buttonAudio: ButtonPressAudioPlayer
+    let onLeave: () -> Void
+
+    @State private var playerCount = 1
+    @State private var isPrivate = true
+    @State private var lobbyAlert: LobbyAlert?
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            let landscape = size.width > size.height
+            let screenStars = stars.map {
+                Star(x: $0.x / 828 * size.width, y: $0.y / 1792 * size.height,
+                     radius: $0.radius * 0.4, phase: $0.phase, speed: $0.speed)
+            }
+
+            ZStack {
+                Color.black
+
+                TwinklingStarfield(stars: screenStars, scale: 1)
+                    .frame(width: size.width, height: size.height)
+                    .allowsHitTesting(false)
+
+                VStack(spacing: 14) {
+                    lobbyTopBar
+
+                    if landscape {
+                        HStack(spacing: 20) {
+                            waitingRoom
+                            lobbyControls
+                                .frame(width: min(340, size.width * 0.4))
+                        }
+                        .frame(maxHeight: .infinity)
+                    } else {
+                        waitingRoom
+                        lobbyControls
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 18)
+                .frame(width: size.width, height: size.height)
+            }
+            .frame(width: size.width, height: size.height)
+            .clipped()
+        }
+        .background(Color.black)
+        .alert(item: $lobbyAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+    }
+
+    private var waitingRoom: some View {
+        ZStack(alignment: .bottomLeading) {
+            WaitingRoomScene()
+
+            Text("Waiting for players…")
+                .font(.system(size: 17, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.88))
+                .padding(.horizontal, 15)
+                .padding(.vertical, 9)
+                .background(.black.opacity(0.72), in: Capsule())
+                .padding(16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.75), lineWidth: 3))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("lobby.waitingRoom")
+    }
+
+    private var lobbyControls: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 12) {
+                lobbyCode
+                playersCard
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    buttonAudio.play()
+                    lobbyAlert = LobbyAlert(
+                        title: "Customize",
+                        message: "Color, hats, pets, and name customization will live here."
+                    )
+                } label: {
+                    Label("CUSTOMIZE", systemImage: "tshirt.fill")
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(LobbyOutlineButtonStyle())
+
+                Button {
+                    buttonAudio.play()
+                    lobbyAlert = LobbyAlert(
+                        title: "Need more players",
+                        message: "Invite at least three more crewmates before starting the game."
+                    )
+                } label: {
+                    Text("START")
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(LobbyStartButtonStyle())
+            }
+
+            Button {
+                buttonAudio.play()
+                onLeave()
+            } label: {
+                Text("Leave Game")
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .underline()
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 4)
+        }
+    }
+
+    private var lobbyTopBar: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 1) {
+                Text("THE SKELD")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+                Text("GAME LOBBY")
+                    .font(.system(size: 31, weight: .light, design: .rounded))
+                    .foregroundStyle(.white)
+            }
+
+            Spacer()
+
+            Button {
+                buttonAudio.play()
+                isPrivate.toggle()
+            } label: {
+                Image(systemName: isPrivate ? "lock.fill" : "lock.open.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .frame(width: 48, height: 48)
+            }
+            .buttonStyle(LobbyCircleButtonStyle())
+            .accessibilityLabel(isPrivate ? "Private lobby" : "Public lobby")
+        }
+    }
+
+    private var lobbyCode: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("CODE")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.65))
+            Text("IRLUS")
+                .font(.system(size: 30, weight: .bold, design: .monospaced))
+                .tracking(3)
+                .foregroundStyle(.white)
+            Text(isPrivate ? "Private • share with friends" : "Public • open to join")
+                .font(.system(size: 12, design: .rounded))
+                .foregroundStyle(.white.opacity(0.62))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.35), lineWidth: 1.5))
+    }
+
+    private var playersCard: some View {
+        VStack(spacing: 5) {
+            Text("PLAYERS")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.65))
+            Text("\(playerCount) / 15")
+                .font(.system(size: 27, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+            Stepper("", value: $playerCount, in: 1...15)
+                .labelsHidden()
+                .tint(.mint)
+        }
+        .frame(width: 132, height: 105)
+        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.35), lineWidth: 1.5))
+    }
+}
+
+private struct WaitingRoomScene: View {
+    var body: some View {
+        GeometryReader { geometry in
+            Image("LobbyRoom")
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
 private struct LobbyAlert: Identifiable {
     let title: String
     let message: String
@@ -522,6 +748,18 @@ private struct LobbyOutlineButtonStyle: ButtonStyle {
             )
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+private struct LobbyStartButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 20, weight: .bold, design: .rounded))
+            .foregroundStyle(configuration.isPressed ? Color.black.opacity(0.75) : .black.opacity(0.55))
+            .background(Color(red: 0.52, green: 0.64, blue: 0.62).opacity(configuration.isPressed ? 0.75 : 1))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.4), lineWidth: 2))
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
     }
 }
 
@@ -698,8 +936,23 @@ private struct MenuHotspot: Identifiable {
     var id: String { title }
 }
 
+private enum DeveloperDestination: Identifiable {
+    case physicalMap, voting
+    case poc(POCDestination)
+
+    var id: String {
+        switch self {
+        case .physicalMap: return "physicalMap"
+        case .voting: return "voting"
+        case .poc(let destination): return "poc.\(destination.rawValue)"
+        }
+    }
+}
+
 private struct DeveloperMenuView: View {
     let onOpenPhysicalMap: () -> Void
+    let onOpenVoting: () -> Void
+    let onOpenPOC: (POCDestination) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -711,6 +964,18 @@ private struct DeveloperMenuView: View {
                         Label("Open Physical Map POC", systemImage: "map.fill")
                     }
                     .accessibilityIdentifier("developer.openPhysicalMap")
+
+                    Button(action: onOpenVoting) {
+                        Label("Open Voting POC", systemImage: "checkmark.bubble.fill")
+                    }
+                    .accessibilityIdentifier("developer.openVoting")
+
+                    ForEach(POCDestination.allCases) { destination in
+                        Button { onOpenPOC(destination) } label: {
+                            Label(destination.title, systemImage: destination.systemImage)
+                        }
+                        .accessibilityIdentifier("developer.\(destination.rawValue)")
+                    }
                 }
 
                 Section("Developer shortcut") {
@@ -865,6 +1130,7 @@ private struct PhysicalMapPOCView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear { OrientationDelegate.requestPortrait() }
         .sheet(item: $selectedStation) { station in
             POCStationDetailView(
                 station: station,
