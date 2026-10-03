@@ -1,5 +1,6 @@
 import AVFoundation
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     private static let referenceSize = CGSize(width: 828, height: 1792)
@@ -84,6 +85,8 @@ struct ContentView: View {
 
     @State private var selectedHotspot: MenuHotspot?
     @State private var showingPhysicalMap = false
+    @State private var showingDeveloperMenu = ProcessInfo.processInfo.arguments.contains("-showDeveloperMenu")
+    @State private var openMapAfterDeveloperMenu = false
     @State private var travelProgress = 0.0
     @StateObject private var themeAudio = ThemeAudioPlayer()
     @StateObject private var buttonAudio = ButtonPressAudioPlayer()
@@ -197,6 +200,15 @@ struct ContentView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
+        .background {
+#if DEBUG
+            ShakeDetectorView {
+                guard !showingPhysicalMap else { return }
+                showingDeveloperMenu = true
+            }
+            .allowsHitTesting(false)
+#endif
+        }
         .onAppear {
             themeAudio.play()
             travelProgress = 0
@@ -211,9 +223,23 @@ struct ContentView: View {
                 dismissButton: .default(Text("Back"))
             )
         }
+        .sheet(isPresented: $showingDeveloperMenu, onDismiss: openPendingDeveloperDestination) {
+            DeveloperMenuView {
+                openMapAfterDeveloperMenu = true
+                showingDeveloperMenu = false
+            }
+            .presentationDetents([.medium])
+        }
         .fullScreenCover(isPresented: $showingPhysicalMap, onDismiss: themeAudio.play) {
             PhysicalMapPOCView()
         }
+    }
+
+    private func openPendingDeveloperDestination() {
+        guard openMapAfterDeveloperMenu else { return }
+        openMapAfterDeveloperMenu = false
+        themeAudio.pause()
+        showingPhysicalMap = true
     }
 }
 
@@ -346,6 +372,79 @@ private struct MenuHotspot: Identifiable {
 
     var id: String { title }
 }
+
+private struct DeveloperMenuView: View {
+    let onOpenPhysicalMap: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Proofs of concept") {
+                    Button(action: onOpenPhysicalMap) {
+                        Label("Open Physical Map POC", systemImage: "map.fill")
+                    }
+                    .accessibilityIdentifier("developer.openPhysicalMap")
+                }
+
+                Section("Developer shortcut") {
+                    Label("Shake the device to open this menu.", systemImage: "iphone.gen3.radiowaves.left.and.right")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Developer Mode")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+#if DEBUG
+private struct ShakeDetectorView: UIViewControllerRepresentable {
+    let onShake: () -> Void
+
+    func makeUIViewController(context: Context) -> ShakeDetectorViewController {
+        let controller = ShakeDetectorViewController()
+        controller.onShake = onShake
+        return controller
+    }
+
+    func updateUIViewController(_ controller: ShakeDetectorViewController, context: Context) {
+        controller.onShake = onShake
+    }
+}
+
+private final class ShakeDetectorViewController: UIViewController {
+    var onShake: (() -> Void)?
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        becomeFirstResponder()
+    }
+
+    override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+        guard motion == .motionShake else {
+            super.motionEnded(motion, with: event)
+            return
+        }
+
+        onShake?()
+    }
+}
+#endif
 
 private struct PhysicalMapPOCView: View {
     private static let rooms = [

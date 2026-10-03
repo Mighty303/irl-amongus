@@ -34,4 +34,19 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Electrical"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["/game/ABCD/station/electrical"].exists)
     }
+
+    @MainActor
+    func testDeveloperMenuLaunchesPhysicalMapPOC() throws {
+        let app = XCUIApplication()
+        app.launchArguments.append("-showDeveloperMenu")
+        app.launch()
+
+        XCTAssertTrue(app.navigationBars["Developer Mode"].waitForExistence(timeout: 5))
+
+        let mapButton = app.buttons["developer.openPhysicalMap"]
+        XCTAssertTrue(mapButton.exists)
+        mapButton.tap()
+
+        XCTAssertTrue(app.staticTexts["PHYSICAL MAP"].waitForExistence(timeout: 5))
+    }
 }
