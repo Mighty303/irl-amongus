@@ -10,3 +10,21 @@ without redrawing from the supplied sprite sheet:
 Among Us and its original artwork belong to their respective rights holders.
 Use and redistribution remain subject to the applicable source and game-asset
 terms.
+
+## Task mini-game sprites and sounds
+
+The `Task*` assets under `IRLAmongUs/Assets.xcassets/Tasks` are imported
+unchanged (sounds re-encoded to AAC) by `scripts/import-task-assets.py`:
+
+- **Sprites:** PC / Computer - Among Us - Miscellaneous - Tasks, extracted by
+  Schubert (https://github.com/schuberty) —
+  https://www.spriters-resource.com/pc_computer/amongus/asset/141567/
+- **Accept Diverted Power sprites:** `electricity_Receive_Bg` and
+  `electricity_Receive_switch` from
+  https://github.com/AlvajoyAsante/among-us-assets/tree/main/Tasks
+- **Sounds:** PC / Computer - Among Us - Sound Effects - Task Panels and
+  General Sounds, uploaded by imJJ —
+  https://www.sounds-resource.com/pc_computer/amongus/
+
+Among Us and its original artwork and audio belong to Innersloth. Use and
+redistribution remain subject to the applicable source and game-asset terms.
