@@ -132,6 +132,17 @@ struct LocalServerLobbyTests {
         return GameStore(defaults: defaults, httpSession: URLSession(configuration: configuration), restoresSession: false)
     }
 
+    @Test func keepsHostedDefaultAndMigratesStaleAddresses() {
+        let defaults = UserDefaults(suiteName: "LocalServerLobbyTests.\(UUID().uuidString)")!
+        #expect(GameStore(defaults: defaults, restoresSession: false).serverURLString == GameStore.defaultServerURL)
+        for address in ["http://192.168.1.100:3000", "https://old-demo.trycloudflare.com"] {
+            defaults.set(address, forKey: "serverURL")
+            #expect(GameStore(defaults: defaults, restoresSession: false).serverURLString == GameStore.defaultServerURL)
+        }
+        defaults.set("http://192.168.1.20:3000", forKey: "serverURL")
+        #expect(GameStore(defaults: defaults, restoresSession: false).serverURLString == "http://192.168.1.20:3000")
+    }
+
     @Test func validatesServerAndRoomCode() {
         #expect(GameStore.validatedServerURL(" http://192.168.1.10:3000/ ")?.absoluteString == "http://192.168.1.10:3000")
         #expect(GameStore.validatedServerURL("example.com")?.scheme == "https")

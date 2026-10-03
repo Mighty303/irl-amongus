@@ -1281,7 +1281,9 @@ private struct POCFloorPlan: View {
     let ownLastCheckpoint: POCCheckpoint
     let onSelectStation: (POCStation) -> Void
 
-    @State private var zoomScale: CGFloat = 1
+    private static let playerZoomScale: CGFloat = 2.2
+
+    @State private var zoomScale: CGFloat = Self.playerZoomScale
     @GestureState private var gestureZoomScale: CGFloat = 1
     @State private var panOffset: CGSize = .zero
     @GestureState private var gesturePanOffset: CGSize = .zero
@@ -1303,7 +1305,7 @@ private struct POCFloorPlan: View {
                             .stroke(.cyan.opacity(0.55), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                     }
 
-                mapContent(projection: projection)
+                mapContent(projection: projection, zoomScale: visibleScale)
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .scaleEffect(visibleScale)
                     .offset(visibleOffset)
@@ -1315,9 +1317,9 @@ private struct POCFloorPlan: View {
                     HStack {
                         Spacer()
                         Button {
-                            resetViewport()
+                            focusOnPlayer(projection: projection, size: geometry.size)
                         } label: {
-                            Image(systemName: "arrow.counterclockwise")
+                            Image(systemName: "location.fill")
                                 .font(.subheadline.weight(.bold))
                                 .foregroundStyle(.white)
                                 .frame(width: 36, height: 36)
@@ -1325,7 +1327,7 @@ private struct POCFloorPlan: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("map.resetViewport")
-                        .accessibilityLabel("Reset map position and zoom")
+                        .accessibilityLabel("Focus on player")
                     }
 
                     Spacer()
@@ -1344,6 +1346,15 @@ private struct POCFloorPlan: View {
                 .padding(12)
             }
             .clipShape(RoundedRectangle(cornerRadius: 22))
+            .onAppear {
+                focusOnPlayer(projection: projection, size: geometry.size)
+            }
+            .onChange(of: ownLastCheckpoint.stationID) {
+                focusOnPlayer(projection: projection, size: geometry.size)
+            }
+            .onChange(of: geometry.size) {
+                focusOnPlayer(projection: projection, size: geometry.size)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.floorPlan")
@@ -1352,7 +1363,7 @@ private struct POCFloorPlan: View {
     }
 
     @ViewBuilder
-    private func mapContent(projection: POCMapProjection) -> some View {
+    private func mapContent(projection: POCMapProjection, zoomScale: CGFloat) -> some View {
         Canvas { context, _ in
             for room in rooms {
                 let isHighlighted = selectedStation?.roomID == room.roomID
@@ -1376,6 +1387,7 @@ private struct POCFloorPlan: View {
                 .minimumScaleFactor(0.65)
                 .foregroundStyle(.white.opacity(0.72))
                 .frame(width: 54)
+                .scaleEffect(1 / zoomScale)
                 .position(projection.point(room.center))
         }
 
@@ -1403,6 +1415,7 @@ private struct POCFloorPlan: View {
                 }
             }
             .buttonStyle(.plain)
+            .scaleEffect(1 / zoomScale)
             .position(projection.point(station.position))
             .accessibilityLabel("\(station.displayName) station, \(station.roomLabel), \(isCompleted ? "completed" : "assigned")")
         }
@@ -1416,6 +1429,7 @@ private struct POCFloorPlan: View {
         .padding(8)
         .background(.red, in: Circle())
         .overlay(Circle().stroke(.white, lineWidth: 2))
+        .scaleEffect(1 / zoomScale)
         .position(projection.point(meetingPoint))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Emergency meeting point, SUB 2430 public study area, Level 2")
@@ -1435,6 +1449,7 @@ private struct POCFloorPlan: View {
                     .padding(.vertical, 3)
                     .background(.cyan, in: Capsule())
             }
+            .scaleEffect(1 / zoomScale)
             .position(playerMarkerPosition(for: checkpointStation, projection: projection))
             .accessibilityElement(children: .ignore)
             .accessibilityIdentifier("map.ownCheckpoint")
@@ -1477,10 +1492,20 @@ private struct POCFloorPlan: View {
         )
     }
 
-    private func resetViewport() {
+    private func focusOnPlayer(projection: POCMapProjection, size: CGSize) {
+        guard let station = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) else {
+            return
+        }
+
+        let playerPosition = playerMarkerPosition(for: station, projection: projection)
+        let offset = CGSize(
+            width: (size.width / 2 - playerPosition.x) * Self.playerZoomScale,
+            height: (size.height / 2 - playerPosition.y) * Self.playerZoomScale
+        )
+
         withAnimation(.snappy) {
-            zoomScale = 1
-            panOffset = .zero
+            zoomScale = Self.playerZoomScale
+            panOffset = constrainedOffset(offset, in: size, scale: Self.playerZoomScale)
         }
     }
 
