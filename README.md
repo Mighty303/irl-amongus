@@ -56,6 +56,13 @@ The networked game: real roles, BLE proximity kills, sign check-ins, meetings an
 
 Testing with one phone: in the backend repo, `npm run bots -- <CODE> 3` fills the lobby with bots. In the lobby host settings, the `DEV:` toggles skip BLE and checkpoint checks for simulator testing.
 
+### Test lab (no server needed)
+
+Developer Mode (shake) also has test benches for each device component:
+- **Sign recognition test**: capture reference photos, then point the camera around to see live match distances, OCR text and per-frame timing.
+- **Bluetooth proximity test**: run on two iPhones; shows each phone's token, live RSSI, peak readings and an "in kill range" indicator with an adjustable threshold.
+- **GPS, QR, haptics & mini-games**: GPS (fix accuracy, indoor floor, pins with live distance and inside/outside geofence), QR scanner/generator, haptics, the task mini-games and a body-screen preview.
+
 ### Server
 
 Hosting, storage (Redis), live-game restore and the WebSocket protocol are documented in the
@@ -81,8 +88,8 @@ Hosting, storage (Redis), live-game restore and the WebSocket protocol are docum
 
 ### Things to validate on real phones
 
-1. **BLE RSSI threshold.** In a game, open *Diagnostics* on two phones, hold them at "kill distance", note the smoothed dBm, and set the host's *Kill RSSI ≥* just below it. Default is -65.
-2. **Sign recognition threshold.** In the station scanner, turn on *Show distances* and compare the right sign with wrong signs and surroundings, then tune the slider. Entering the sign's text on the station makes OCR match too, which is often more reliable.
+1. **BLE RSSI threshold.** On two phones, open the **Bluetooth proximity test**, hold them at "kill distance", note the smoothed dBm, and set the host's *Kill RSSI ≥* just below it. Default is -65.
+2. **Sign recognition threshold.** In the **Sign recognition test**, capture a few signs and compare the distance on the right sign with other signs and surroundings, then tune the slider (the game's scanner has the same slider). Entering the sign's text on the station makes OCR match too, which is often more reliable.
 3. **Indoor GPS** will be rough. Treat it as a map aid, not proof of presence.
 
 ### Not in the POC yet
