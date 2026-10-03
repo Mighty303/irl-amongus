@@ -83,6 +83,7 @@ struct ContentView: View {
     ]
 
     @State private var selectedHotspot: MenuHotspot?
+    @State private var showingPhysicalMap = false
     @State private var travelProgress = 0.0
     @StateObject private var themeAudio = ThemeAudioPlayer()
     @StateObject private var buttonAudio = ButtonPressAudioPlayer()
@@ -151,7 +152,12 @@ struct ContentView: View {
                 ForEach(Self.hotspots) { hotspot in
                     Button {
                         buttonAudio.play()
-                        selectedHotspot = hotspot
+                        if hotspot.title == "Local" {
+                            themeAudio.pause()
+                            showingPhysicalMap = true
+                        } else {
+                            selectedHotspot = hotspot
+                        }
                     } label: {
                         Color.clear
                             .contentShape(Rectangle())
@@ -204,6 +210,9 @@ struct ContentView: View {
                 message: Text(hotspot.message),
                 dismissButton: .default(Text("Back"))
             )
+        }
+        .fullScreenCover(isPresented: $showingPhysicalMap, onDismiss: themeAudio.play) {
+            PhysicalMapPOCView()
         }
     }
 }
@@ -272,6 +281,10 @@ private final class ThemeAudioPlayer: ObservableObject {
             player?.play()
         }
     }
+
+    func pause() {
+        player?.pause()
+    }
 }
 
 private struct Star: Identifiable {
@@ -332,6 +345,319 @@ private struct MenuHotspot: Identifiable {
     let frame: CGRect
 
     var id: String { title }
+}
+
+private struct PhysicalMapPOCView: View {
+    private static let rooms = [
+        POCRoom(id: "hallway", label: "Hallway", frame: CGRect(x: 0.08, y: 0.08, width: 0.84, height: 0.18)),
+        POCRoom(id: "room-a", label: "Room A", frame: CGRect(x: 0.08, y: 0.30, width: 0.37, height: 0.24)),
+        POCRoom(id: "room-b", label: "Room B", frame: CGRect(x: 0.55, y: 0.30, width: 0.37, height: 0.24)),
+        POCRoom(id: "lobby", label: "Lobby", frame: CGRect(x: 0.08, y: 0.60, width: 0.37, height: 0.28)),
+        POCRoom(id: "classroom", label: "Classroom", frame: CGRect(x: 0.55, y: 0.60, width: 0.37, height: 0.28))
+    ]
+
+    private static let stations = [
+        POCStation(id: "electrical", displayName: "Electrical", taskType: "Fix Wiring", roomID: "hallway", roomLabel: "Hallway", position: CGPoint(x: 0.50, y: 0.17)),
+        POCStation(id: "reactor-a", displayName: "Reactor A", taskType: "Start Reactor", roomID: "room-a", roomLabel: "Room A", position: CGPoint(x: 0.27, y: 0.42)),
+        POCStation(id: "reactor-b", displayName: "Reactor B", taskType: "Start Reactor", roomID: "room-b", roomLabel: "Room B", position: CGPoint(x: 0.73, y: 0.42)),
+        POCStation(id: "communications", displayName: "Communications", taskType: "Upload Data", roomID: "lobby", roomLabel: "Lobby", position: CGPoint(x: 0.27, y: 0.74)),
+        POCStation(id: "medbay", displayName: "Medbay", taskType: "Submit Scan", roomID: "classroom", roomLabel: "Classroom", position: CGPoint(x: 0.73, y: 0.74))
+    ]
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedStation: POCStation?
+    @State private var completedStationIDs: Set<String> = ["reactor-a"]
+    @State private var ownLastCheckpoint = POCCheckpoint(
+        stationName: "Reactor A",
+        roomLabel: "Room A",
+        verifiedAt: Date().addingTimeInterval(-420)
+    )
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(red: 0.025, green: 0.04, blue: 0.055)
+                    .ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("PHYSICAL MAP")
+                                .font(.caption.weight(.bold))
+                                .tracking(2)
+                                .foregroundStyle(.cyan)
+
+                            Text("Demo Building · Level 2")
+                                .font(.title2.bold())
+
+                            Text("Bundled POC schematic · map-v1")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        POCFloorPlan(
+                            rooms: Self.rooms,
+                            stations: Self.stations,
+                            completedStationIDs: completedStationIDs,
+                            selectedStation: selectedStation,
+                            onSelectStation: { selectedStation = $0 }
+                        )
+                        .frame(height: 430)
+
+                        checkpointCard
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("ASSIGNED TASKS")
+                                .font(.caption.weight(.bold))
+                                .tracking(1.5)
+                                .foregroundStyle(.secondary)
+
+                            ForEach(Self.stations) { station in
+                                taskRow(station)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .padding(.bottom, 24)
+                }
+            }
+            .navigationTitle("Map POC")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Label("Close", systemImage: "xmark")
+                    }
+                    .accessibilityLabel("Close physical map")
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .sheet(item: $selectedStation) { station in
+            POCStationDetailView(
+                station: station,
+                isCompleted: completedStationIDs.contains(station.id),
+                onVerifyCompletion: {
+                    completedStationIDs.insert(station.id)
+                    ownLastCheckpoint = POCCheckpoint(
+                        stationName: station.displayName,
+                        roomLabel: station.roomLabel,
+                        verifiedAt: .now
+                    )
+                }
+            )
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    private var checkpointCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "location.fill")
+                .foregroundStyle(.cyan)
+                .frame(width: 34, height: 34)
+                .background(.cyan.opacity(0.12), in: Circle())
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("YOUR LAST VERIFIED CHECKPOINT")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
+                Text("\(ownLastCheckpoint.stationName) · \(ownLastCheckpoint.roomLabel)")
+                    .font(.subheadline.weight(.semibold))
+                Text(ownLastCheckpoint.verifiedAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(14)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func taskRow(_ station: POCStation) -> some View {
+        let isCompleted = completedStationIDs.contains(station.id)
+
+        return Button {
+            selectedStation = station
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isCompleted ? .green : .orange)
+                    .font(.title3)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(station.displayName)
+                        .font(.body.weight(.semibold))
+                    Text("\(station.roomLabel) · Level 2 · \(station.taskType)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(station.displayName), \(station.roomLabel), Level 2, \(isCompleted ? "completed" : "assigned")")
+    }
+}
+
+private struct POCFloorPlan: View {
+    let rooms: [POCRoom]
+    let stations: [POCStation]
+    let completedStationIDs: Set<String>
+    let selectedStation: POCStation?
+    let onSelectStation: (POCStation) -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(Color(red: 0.06, green: 0.09, blue: 0.11))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 22)
+                            .stroke(.cyan.opacity(0.55), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                    }
+
+                ForEach(rooms) { room in
+                    let isHighlighted = selectedStation?.roomID == room.id
+
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(isHighlighted ? Color.orange.opacity(0.24) : Color.white.opacity(0.08))
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(isHighlighted ? Color.orange : Color.white.opacity(0.18), lineWidth: isHighlighted ? 2 : 1)
+                        Text(room.label.uppercased())
+                            .font(.caption2.weight(.bold))
+                            .tracking(0.7)
+                            .foregroundStyle(.secondary)
+                            .padding(6)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    }
+                    .frame(
+                        width: room.frame.width * geometry.size.width,
+                        height: room.frame.height * geometry.size.height
+                    )
+                    .position(
+                        x: room.frame.midX * geometry.size.width,
+                        y: room.frame.midY * geometry.size.height
+                    )
+                }
+
+                ForEach(stations) { station in
+                    let isCompleted = completedStationIDs.contains(station.id)
+
+                    Button {
+                        onSelectStation(station)
+                    } label: {
+                        Image(systemName: isCompleted ? "checkmark" : "wrench.and.screwdriver.fill")
+                            .font(.caption.weight(.black))
+                            .foregroundStyle(.black)
+                            .frame(width: 34, height: 34)
+                            .background(isCompleted ? Color.green : Color.orange, in: Circle())
+                            .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 2))
+                            .shadow(color: (isCompleted ? Color.green : Color.orange).opacity(0.45), radius: 8)
+                    }
+                    .buttonStyle(.plain)
+                    .position(
+                        x: station.position.x * geometry.size.width,
+                        y: station.position.y * geometry.size.height
+                    )
+                    .accessibilityLabel("\(station.displayName) station, \(station.roomLabel), \(isCompleted ? "completed" : "assigned")")
+                }
+
+                VStack(spacing: 2) {
+                    Image(systemName: "megaphone.fill")
+                    Text("MEETING")
+                        .font(.system(size: 8, weight: .black))
+                }
+                .foregroundStyle(.white)
+                .padding(8)
+                .background(.red, in: Circle())
+                .overlay(Circle().stroke(.white, lineWidth: 2))
+                .position(x: geometry.size.width * 0.50, y: geometry.size.height * 0.57)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Emergency meeting point, central hallway, Level 2")
+            }
+            .padding(4)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Demo Building Level 2 floor map")
+    }
+}
+
+private struct POCStationDetailView: View {
+    let station: POCStation
+    let isCompleted: Bool
+    let onVerifyCompletion: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Station") {
+                    LabeledContent("Name", value: station.displayName)
+                    LabeledContent("Task", value: station.taskType)
+                    LabeledContent("Room", value: station.roomLabel)
+                    LabeledContent("Floor", value: "Demo Building · Level 2")
+                    LabeledContent("Station ID", value: station.id)
+                }
+
+                Section("Checkpoint route") {
+                    Text("/game/ABCD/station/\(station.id)")
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+
+                Section {
+                    Button(isCompleted ? "Verified complete" : "Simulate server verification") {
+                        onVerifyCompletion()
+                        dismiss()
+                    }
+                    .disabled(isCompleted)
+                } footer: {
+                    Text("POC only: completion is simulated locally. Production state remains server-authoritative.")
+                }
+            }
+            .navigationTitle(station.displayName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct POCRoom: Identifiable {
+    let id: String
+    let label: String
+    let frame: CGRect
+}
+
+private struct POCStation: Identifiable {
+    let id: String
+    let displayName: String
+    let taskType: String
+    let roomID: String
+    let roomLabel: String
+    let position: CGPoint
+}
+
+private struct POCCheckpoint {
+    let stationName: String
+    let roomLabel: String
+    let verifiedAt: Date
 }
 
 #Preview {
