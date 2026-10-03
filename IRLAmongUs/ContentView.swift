@@ -1,8 +1,10 @@
 import AVFoundation
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     private static let referenceSize = CGSize(width: 828, height: 1792)
+    private static let audioEnabled = !ProcessInfo.processInfo.arguments.contains("-disableAudio")
     private static let animatedSceneHeight = 1288.0
 
     private static let stars = [
@@ -83,6 +85,9 @@ struct ContentView: View {
     ]
 
     @State private var selectedHotspot: MenuHotspot?
+    @State private var showingPhysicalMap = false
+    @State private var showingDeveloperMenu = ProcessInfo.processInfo.arguments.contains("-showDeveloperMenu")
+    @State private var openMapAfterDeveloperMenu = false
     @State private var isShowingLocalLobby = false
     @StateObject private var themeAudio = ThemeAudioPlayer()
     @StateObject private var buttonAudio = ButtonPressAudioPlayer()
@@ -200,8 +205,19 @@ struct ContentView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
+        .background {
+#if DEBUG
+            ShakeDetectorView {
+                guard !showingPhysicalMap else { return }
+                showingDeveloperMenu = true
+            }
+            .allowsHitTesting(false)
+#endif
+        }
         .onAppear {
-            themeAudio.play()
+            if Self.audioEnabled {
+                themeAudio.play()
+            }
         }
         .alert(item: $selectedHotspot) { hotspot in
             Alert(
@@ -210,6 +226,27 @@ struct ContentView: View {
                 dismissButton: .default(Text("Back"))
             )
         }
+        .sheet(isPresented: $showingDeveloperMenu, onDismiss: openPendingDeveloperDestination) {
+            DeveloperMenuView {
+                openMapAfterDeveloperMenu = true
+                showingDeveloperMenu = false
+            }
+            .presentationDetents([.medium])
+        }
+        .fullScreenCover(isPresented: $showingPhysicalMap, onDismiss: {
+            if Self.audioEnabled {
+                themeAudio.play()
+            }
+        }) {
+            PhysicalMapPOCView()
+        }
+    }
+
+    private func openPendingDeveloperDestination() {
+        guard openMapAfterDeveloperMenu else { return }
+        openMapAfterDeveloperMenu = false
+        themeAudio.pause()
+        showingPhysicalMap = true
     }
 }
 
@@ -888,6 +925,10 @@ private final class ThemeAudioPlayer: ObservableObject {
             player?.play()
         }
     }
+
+    func pause() {
+        player?.pause()
+    }
 }
 
 private struct Star: Identifiable {
@@ -948,6 +989,724 @@ private struct MenuHotspot: Identifiable {
     let frame: CGRect
 
     var id: String { title }
+}
+
+private struct DeveloperMenuView: View {
+    let onOpenPhysicalMap: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Proofs of concept") {
+                    Button(action: onOpenPhysicalMap) {
+                        Label("Open Physical Map POC", systemImage: "map.fill")
+                    }
+                    .accessibilityIdentifier("developer.openPhysicalMap")
+                }
+
+                Section("Developer shortcut") {
+                    Label("Shake the device to open this menu.", systemImage: "iphone.gen3.radiowaves.left.and.right")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Developer Mode")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+#if DEBUG
+private struct ShakeDetectorView: UIViewControllerRepresentable {
+    let onShake: () -> Void
+
+    func makeUIViewController(context: Context) -> ShakeDetectorViewController {
+        let controller = ShakeDetectorViewController()
+        controller.onShake = onShake
+        return controller
+    }
+
+    func updateUIViewController(_ controller: ShakeDetectorViewController, context: Context) {
+        controller.onShake = onShake
+    }
+}
+
+private final class ShakeDetectorViewController: UIViewController {
+    var onShake: (() -> Void)?
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .clear
+        view.isUserInteractionEnabled = false
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        becomeFirstResponder()
+    }
+
+    override func motionEnded(_ motion: UIEvent.EventSubtype, with event: UIEvent?) {
+        guard motion == .motionShake else {
+            super.motionEnded(motion, with: event)
+            return
+        }
+
+        onShake?()
+    }
+}
+#endif
+
+private struct PhysicalMapPOCView: View {
+    private static let rooms = SUBLevel2Map.rooms
+
+    private static let stations = [
+        POCStation(id: "electrical", displayName: "Electrical", taskType: "Fix Wiring", roomID: "2125", roomLabel: "SUB 2125 · Community Kitchen", position: SUBLevel2Map.center(of: "2125")),
+        POCStation(id: "reactor-a", displayName: "Reactor A", taskType: "Start Reactor", roomID: "2310", roomLabel: "SUB 2310 · Dining", position: SUBLevel2Map.center(of: "2310")),
+        POCStation(id: "reactor-b", displayName: "Reactor B", taskType: "Start Reactor", roomID: "2400", roomLabel: "SUB 2400 · Gamers' Lounge", position: SUBLevel2Map.center(of: "2400")),
+        POCStation(id: "communications", displayName: "Communications", taskType: "Upload Data", roomID: "2410", roomLabel: "SUB 2410 · Rehearsal Room", position: SUBLevel2Map.center(of: "2410")),
+        POCStation(id: "medbay", displayName: "Medbay", taskType: "Submit Scan", roomID: "2440", roomLabel: "SUB 2440 · Meeting Room", position: SUBLevel2Map.center(of: "2440"))
+    ]
+    private static let meetingPoint = SUBLevel2Map.center(of: "2430")
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedStation: POCStation?
+    @State private var completedStationIDs: Set<String> = ["reactor-a"]
+    @State private var ownLastCheckpoint = POCCheckpoint(
+        stationID: "reactor-a",
+        stationName: "Reactor A",
+        roomLabel: "SUB 2310 · Dining",
+        verifiedAt: Date().addingTimeInterval(-420)
+    )
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color(red: 0.025, green: 0.04, blue: 0.055)
+                    .ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("PHYSICAL MAP")
+                                .font(.caption.weight(.bold))
+                                .tracking(2)
+                                .foregroundStyle(.cyan)
+
+                            Text("SFU Student Union Building · Level 2")
+                                .font(.title2.bold())
+
+                            Text("Bundled offline room geometry · SUB / 2000")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        POCFloorPlan(
+                            rooms: Self.rooms,
+                            stations: Self.stations,
+                            meetingPoint: Self.meetingPoint,
+                            completedStationIDs: completedStationIDs,
+                            selectedStation: selectedStation,
+                            ownLastCheckpoint: ownLastCheckpoint,
+                            onSelectStation: { selectedStation = $0 }
+                        )
+                        .frame(height: 430)
+
+                        Label("Your icon marks the last verified checkpoint, not live indoor position.", systemImage: "clock.badge.checkmark")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Label("Room geometry from SFU Companion by Akki Singh; underlying data from Simon Fraser University.", systemImage: "info.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        checkpointCard
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("ASSIGNED TASKS")
+                                .font(.caption.weight(.bold))
+                                .tracking(1.5)
+                                .foregroundStyle(.secondary)
+
+                            ForEach(Self.stations) { station in
+                                taskRow(station)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .padding(.bottom, 24)
+                }
+            }
+            .navigationTitle("Map POC")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Label("Close", systemImage: "xmark")
+                    }
+                    .accessibilityLabel("Close physical map")
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .sheet(item: $selectedStation) { station in
+            POCStationDetailView(
+                station: station,
+                isCompleted: completedStationIDs.contains(station.id),
+                onVerifyCompletion: {
+                    completedStationIDs.insert(station.id)
+                    ownLastCheckpoint = POCCheckpoint(
+                        stationID: station.id,
+                        stationName: station.displayName,
+                        roomLabel: station.roomLabel,
+                        verifiedAt: .now
+                    )
+                }
+            )
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    private var checkpointCard: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "location.fill")
+                .foregroundStyle(.cyan)
+                .frame(width: 34, height: 34)
+                .background(.cyan.opacity(0.12), in: Circle())
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("YOUR LAST VERIFIED CHECKPOINT")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
+                Text("\(ownLastCheckpoint.stationName) · \(ownLastCheckpoint.roomLabel)")
+                    .font(.subheadline.weight(.semibold))
+                Text(ownLastCheckpoint.verifiedAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(14)
+        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func taskRow(_ station: POCStation) -> some View {
+        let isCompleted = completedStationIDs.contains(station.id)
+
+        return Button {
+            selectedStation = station
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: isCompleted ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isCompleted ? .green : .orange)
+                    .font(.title3)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(station.displayName)
+                        .font(.body.weight(.semibold))
+                    Text("\(station.roomLabel) · Level 2 · \(station.taskType)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(14)
+            .background(.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(station.displayName), \(station.roomLabel), Level 2, \(isCompleted ? "completed" : "assigned")")
+    }
+}
+
+private struct POCFloorPlan: View {
+    let rooms: [POCRoom]
+    let stations: [POCStation]
+    let meetingPoint: CGPoint
+    let completedStationIDs: Set<String>
+    let selectedStation: POCStation?
+    let ownLastCheckpoint: POCCheckpoint
+    let onSelectStation: (POCStation) -> Void
+
+    @State private var zoomScale: CGFloat = 1
+    @GestureState private var gestureZoomScale: CGFloat = 1
+    @State private var panOffset: CGSize = .zero
+    @GestureState private var gesturePanOffset: CGSize = .zero
+
+    var body: some View {
+        GeometryReader { geometry in
+            let projection = POCMapProjection(bounds: POCMapBounds.covering(rooms), size: geometry.size)
+            let visibleScale = min(max(zoomScale * gestureZoomScale, 1), 4)
+            let visibleOffset = CGSize(
+                width: panOffset.width + gesturePanOffset.width,
+                height: panOffset.height + gesturePanOffset.height
+            )
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 22)
+                    .fill(Color(red: 0.06, green: 0.09, blue: 0.11))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 22)
+                            .stroke(.cyan.opacity(0.55), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                    }
+
+                mapContent(projection: projection)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .scaleEffect(visibleScale)
+                    .offset(visibleOffset)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(panGesture(in: geometry.size))
+                    .simultaneousGesture(zoomGesture(in: geometry.size))
+
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button {
+                            resetViewport()
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.subheadline.weight(.bold))
+                                .foregroundStyle(.white)
+                                .frame(width: 36, height: 36)
+                                .background(.black.opacity(0.72), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("map.resetViewport")
+                        .accessibilityLabel("Reset map position and zoom")
+                    }
+
+                    Spacer()
+
+                    HStack {
+                        Label("Drag to move · Pinch to zoom", systemImage: "hand.draw.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.86))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 6)
+                            .background(.black.opacity(0.7), in: Capsule())
+                            .allowsHitTesting(false)
+                        Spacer()
+                    }
+                }
+                .padding(12)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("map.floorPlan")
+        .accessibilityLabel("Simon Fraser University Student Union Building Level 2 floor map")
+        .accessibilityHint("Drag to move the map and pinch to zoom")
+    }
+
+    @ViewBuilder
+    private func mapContent(projection: POCMapProjection) -> some View {
+        Canvas { context, _ in
+            for room in rooms {
+                let isHighlighted = selectedStation?.roomID == room.roomID
+                let isCorridor = room.roomType.localizedCaseInsensitiveContains("corridor")
+                let path = room.path(using: projection)
+                let fill = isHighlighted
+                    ? Color.orange.opacity(0.42)
+                    : isCorridor ? Color.cyan.opacity(0.10) : Color.white.opacity(0.12)
+                let stroke = isHighlighted ? Color.orange : Color.white.opacity(0.34)
+
+                context.fill(path, with: .color(fill))
+                context.stroke(path, with: .color(stroke), lineWidth: isHighlighted ? 2.5 : 0.8)
+            }
+        }
+
+        ForEach(rooms.filter(shouldShowLabel)) { room in
+            Text(room.mapLabel)
+                .font(.system(size: 7, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.65)
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(width: 54)
+                .position(projection.point(room.center))
+        }
+
+        ForEach(stations) { station in
+            let isCompleted = completedStationIDs.contains(station.id)
+
+            Button {
+                onSelectStation(station)
+            } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: isCompleted ? "checkmark" : "wrench.and.screwdriver.fill")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(.black)
+                        .frame(width: 32, height: 32)
+                        .background(isCompleted ? Color.green : Color.orange, in: Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
+                        .shadow(color: (isCompleted ? Color.green : Color.orange).opacity(0.45), radius: 7)
+
+                    Text(station.roomID)
+                        .font(.system(size: 8, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.black.opacity(0.76), in: Capsule())
+                }
+            }
+            .buttonStyle(.plain)
+            .position(projection.point(station.position))
+            .accessibilityLabel("\(station.displayName) station, \(station.roomLabel), \(isCompleted ? "completed" : "assigned")")
+        }
+
+        VStack(spacing: 2) {
+            Image(systemName: "megaphone.fill")
+            Text("MEETING")
+                .font(.system(size: 8, weight: .black))
+        }
+        .foregroundStyle(.white)
+        .padding(8)
+        .background(.red, in: Circle())
+        .overlay(Circle().stroke(.white, lineWidth: 2))
+        .position(projection.point(meetingPoint))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Emergency meeting point, SUB 2430 public study area, Level 2")
+
+        if let checkpointStation = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) {
+            VStack(spacing: 0) {
+                Image("PlayerMarker")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 58, height: 58)
+                    .shadow(color: .cyan.opacity(0.75), radius: 8)
+
+                Text("YOU")
+                    .font(.system(size: 9, weight: .black, design: .rounded))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(.cyan, in: Capsule())
+            }
+            .position(playerMarkerPosition(for: checkpointStation, projection: projection))
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("map.ownCheckpoint")
+            .accessibilityLabel("You, last verified at \(ownLastCheckpoint.stationName), \(ownLastCheckpoint.roomLabel), \(ownLastCheckpoint.verifiedAt.formatted(date: .omitted, time: .shortened))")
+        }
+    }
+
+    private func panGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 8)
+            .updating($gesturePanOffset) { value, state, _ in
+                state = value.translation
+            }
+            .onEnded { value in
+                let proposed = CGSize(
+                    width: panOffset.width + value.translation.width,
+                    height: panOffset.height + value.translation.height
+                )
+                panOffset = constrainedOffset(proposed, in: size, scale: zoomScale)
+            }
+    }
+
+    private func zoomGesture(in size: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .updating($gestureZoomScale) { value, state, _ in
+                state = value
+            }
+            .onEnded { value in
+                zoomScale = min(max(zoomScale * value, 1), 4)
+                panOffset = constrainedOffset(panOffset, in: size, scale: zoomScale)
+            }
+    }
+
+    private func constrainedOffset(_ proposed: CGSize, in size: CGSize, scale: CGFloat) -> CGSize {
+        let horizontalLimit = max(48, (size.width * (scale - 1) / 2) + 36)
+        let verticalLimit = max(48, (size.height * (scale - 1) / 2) + 36)
+
+        return CGSize(
+            width: min(max(proposed.width, -horizontalLimit), horizontalLimit),
+            height: min(max(proposed.height, -verticalLimit), verticalLimit)
+        )
+    }
+
+    private func resetViewport() {
+        withAnimation(.snappy) {
+            zoomScale = 1
+            panOffset = .zero
+        }
+    }
+
+    private func shouldShowLabel(_ room: POCRoom) -> Bool {
+        room.priority == 30
+            && room.roomID != "2430"
+            && !stations.contains(where: { $0.roomID == room.roomID })
+    }
+
+    private func playerMarkerPosition(for station: POCStation, projection: POCMapProjection) -> CGPoint {
+        let stationPoint = projection.point(station.position)
+        return CGPoint(x: stationPoint.x + 31, y: stationPoint.y - 34)
+    }
+}
+
+private struct POCStationDetailView: View {
+    let station: POCStation
+    let isCompleted: Bool
+    let onVerifyCompletion: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Station") {
+                    LabeledContent("Name", value: station.displayName)
+                    LabeledContent("Task", value: station.taskType)
+                    LabeledContent("Room", value: station.roomLabel)
+                    LabeledContent("Floor", value: "SFU SUB · Level 2")
+                    LabeledContent("Station ID", value: station.id)
+                }
+
+                Section("Checkpoint route") {
+                    Text("/game/ABCD/station/\(station.id)")
+                        .font(.system(.footnote, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+
+                Section {
+                    Button(isCompleted ? "Verified complete" : "Simulate server verification") {
+                        onVerifyCompletion()
+                        dismiss()
+                    }
+                    .disabled(isCompleted)
+                } footer: {
+                    Text("POC only: completion is simulated locally. Production state remains server-authoritative.")
+                }
+            }
+            .navigationTitle(station.displayName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct POCRoom: Identifiable {
+    let id: String
+    let label: String
+    let roomID: String
+    let roomType: String
+    let priority: Int
+    let rings: [[CGPoint]]
+    let center: CGPoint
+
+    var mapLabel: String {
+        label.hasPrefix("SUB ") ? roomID : "\(roomID)\n\(label)"
+    }
+
+    func path(using projection: POCMapProjection) -> Path {
+        var path = Path()
+
+        for ring in rings {
+            guard let first = ring.first else { continue }
+            path.move(to: projection.point(first))
+            for coordinate in ring.dropFirst() {
+                path.addLine(to: projection.point(coordinate))
+            }
+            path.closeSubpath()
+        }
+
+        return path
+    }
+}
+
+private struct POCMapBounds {
+    let minX: CGFloat
+    let maxX: CGFloat
+    let minY: CGFloat
+    let maxY: CGFloat
+
+    static func covering(_ rooms: [POCRoom]) -> POCMapBounds {
+        let coordinates = rooms.flatMap(\.rings).flatMap { $0 }
+        guard let first = coordinates.first else {
+            return POCMapBounds(minX: -122.918639, maxX: -122.917862, minY: 49.278239, maxY: 49.278905)
+        }
+
+        return coordinates.dropFirst().reduce(
+            POCMapBounds(minX: first.x, maxX: first.x, minY: first.y, maxY: first.y)
+        ) { bounds, coordinate in
+            POCMapBounds(
+                minX: min(bounds.minX, coordinate.x),
+                maxX: max(bounds.maxX, coordinate.x),
+                minY: min(bounds.minY, coordinate.y),
+                maxY: max(bounds.maxY, coordinate.y)
+            )
+        }
+    }
+}
+
+private struct POCMapProjection {
+    private let bounds: POCMapBounds
+    private let longitudeCorrection: CGFloat
+    private let scale: CGFloat
+    private let origin: CGPoint
+
+    init(bounds: POCMapBounds, size: CGSize) {
+        self.bounds = bounds
+
+        let middleLatitude = (bounds.minY + bounds.maxY) / 2
+        longitudeCorrection = CGFloat(cos(Double(middleLatitude) * .pi / 180))
+
+        let horizontalSpan = max((bounds.maxX - bounds.minX) * longitudeCorrection, 0.000_001)
+        let verticalSpan = max(bounds.maxY - bounds.minY, 0.000_001)
+        let availableWidth = max(size.width - 28, 1)
+        let availableHeight = max(size.height - 28, 1)
+        scale = min(availableWidth / horizontalSpan, availableHeight / verticalSpan)
+
+        let renderedWidth = horizontalSpan * scale
+        let renderedHeight = verticalSpan * scale
+        origin = CGPoint(
+            x: (size.width - renderedWidth) / 2,
+            y: (size.height - renderedHeight) / 2
+        )
+    }
+
+    func point(_ coordinate: CGPoint) -> CGPoint {
+        CGPoint(
+            x: origin.x + ((coordinate.x - bounds.minX) * longitudeCorrection * scale),
+            y: origin.y + ((bounds.maxY - coordinate.y) * scale)
+        )
+    }
+}
+
+private enum SUBLevel2Map {
+    static let rooms: [POCRoom] = loadRooms()
+
+    static func center(of roomID: String) -> CGPoint {
+        rooms.first(where: { $0.roomID == roomID })?.center
+            ?? CGPoint(x: -122.91825, y: 49.27855)
+    }
+
+    private static func loadRooms() -> [POCRoom] {
+        guard let asset = NSDataAsset(name: "SUBLevel2Map") else {
+            assertionFailure("Missing bundled SUB level 2 map data")
+            return []
+        }
+
+        do {
+            let collection = try JSONDecoder().decode(SFUGeoJSONFeatureCollection.self, from: asset.data)
+            return collection.features.compactMap { feature in
+                let rings = feature.geometry.coordinates.map { ring in
+                    ring.compactMap { coordinate -> CGPoint? in
+                        guard coordinate.count >= 2 else { return nil }
+                        return CGPoint(x: coordinate[0], y: coordinate[1])
+                    }
+                }
+
+                guard let exteriorRing = rings.first, exteriorRing.count >= 3 else { return nil }
+
+                return POCRoom(
+                    id: feature.id,
+                    label: feature.properties.name,
+                    roomID: feature.properties.roomID,
+                    roomType: feature.properties.roomType,
+                    priority: feature.properties.priority,
+                    rings: rings,
+                    center: polygonCenter(exteriorRing)
+                )
+            }
+        } catch {
+            assertionFailure("Unable to decode SUB level 2 map data: \(error)")
+            return []
+        }
+    }
+
+    private static func polygonCenter(_ ring: [CGPoint]) -> CGPoint {
+        guard let reference = ring.first else { return .zero }
+
+        var crossSum: CGFloat = 0
+        var longitudeSum: CGFloat = 0
+        var latitudeSum: CGFloat = 0
+
+        for index in ring.indices {
+            let nextIndex = ring.index(after: index) == ring.endIndex ? ring.startIndex : ring.index(after: index)
+            let current = CGPoint(x: ring[index].x - reference.x, y: ring[index].y - reference.y)
+            let next = CGPoint(x: ring[nextIndex].x - reference.x, y: ring[nextIndex].y - reference.y)
+            let cross = (current.x * next.y) - (next.x * current.y)
+            crossSum += cross
+            longitudeSum += (current.x + next.x) * cross
+            latitudeSum += (current.y + next.y) * cross
+        }
+
+        guard abs(crossSum) > .ulpOfOne else {
+            let count = CGFloat(ring.count)
+            return CGPoint(
+                x: ring.reduce(0) { $0 + $1.x } / count,
+                y: ring.reduce(0) { $0 + $1.y } / count
+            )
+        }
+
+        return CGPoint(
+            x: reference.x + (longitudeSum / (3 * crossSum)),
+            y: reference.y + (latitudeSum / (3 * crossSum))
+        )
+    }
+}
+
+private struct SFUGeoJSONFeatureCollection: Decodable {
+    let features: [SFUGeoJSONFeature]
+}
+
+private struct SFUGeoJSONFeature: Decodable {
+    let id: String
+    let properties: SFUGeoJSONProperties
+    let geometry: SFUGeoJSONGeometry
+}
+
+private struct SFUGeoJSONProperties: Decodable {
+    let name: String
+    let roomID: String
+    let roomType: String
+    let priority: Int
+
+    enum CodingKeys: String, CodingKey {
+        case name
+        case roomID = "roomId"
+        case roomType
+        case priority
+    }
+}
+
+private struct SFUGeoJSONGeometry: Decodable {
+    let coordinates: [[[Double]]]
+}
+
+private struct POCStation: Identifiable {
+    let id: String
+    let displayName: String
+    let taskType: String
+    let roomID: String
+    let roomLabel: String
+    let position: CGPoint
+}
+
+private struct POCCheckpoint {
+    let stationID: String
+    let stationName: String
+    let roomLabel: String
+    let verifiedAt: Date
 }
 
 #Preview {
