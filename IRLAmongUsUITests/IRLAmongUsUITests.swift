@@ -8,6 +8,7 @@ final class IRLAmongUsUITests: XCTestCase {
     @MainActor
     func testLaunchesToMainMenu() throws {
         let app = XCUIApplication()
+        app.launchArguments.append("-disableAudio")
         app.launch()
 
         XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
@@ -17,6 +18,7 @@ final class IRLAmongUsUITests: XCTestCase {
     @MainActor
     func testOpensPhysicalMapAndStationDetails() throws {
         let app = XCUIApplication()
+        app.launchArguments.append("-disableAudio")
         app.launch()
 
         let localButton = app.buttons["Local"]
@@ -24,20 +26,22 @@ final class IRLAmongUsUITests: XCTestCase {
         localButton.tap()
 
         XCTAssertTrue(app.staticTexts["PHYSICAL MAP"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Demo Building · Level 2"].exists)
-        XCTAssertTrue(app.staticTexts["YOU"].exists)
+        XCTAssertTrue(app.staticTexts["SFU Student Union Building · Level 2"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["map.ownCheckpoint"].exists)
 
-        let electricalPin = app.buttons["Electrical station, Hallway, assigned"]
+        let electricalPin = app.buttons["Electrical station, SUB 2125 · Community Kitchen, assigned"]
         XCTAssertTrue(electricalPin.exists)
         electricalPin.tap()
 
         XCTAssertTrue(app.navigationBars["Electrical"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["SUB 2125 · Community Kitchen"].exists)
         XCTAssertTrue(app.staticTexts["/game/ABCD/station/electrical"].exists)
     }
 
     @MainActor
     func testDeveloperMenuLaunchesPhysicalMapPOC() throws {
         let app = XCUIApplication()
+        app.launchArguments.append("-disableAudio")
         app.launchArguments.append("-showDeveloperMenu")
         app.launch()
 
