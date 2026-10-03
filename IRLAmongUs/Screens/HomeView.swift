@@ -28,7 +28,7 @@ struct HomeView: View {
                         .disabled(store.playerName.isEmpty || busy)
                 }
                 Section {
-                    TextField("http://192.168.x.x:3000", text: $store.serverURLString)
+                    TextField(GameStore.defaultServerURL, text: $store.serverURLString)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
@@ -40,7 +40,7 @@ struct HomeView: View {
                 } header: {
                     Text("Server")
                 } footer: {
-                    Text("The game server (amongus-irl-backend) prints the URL to use. Scanning a lobby QR sets this automatically.")
+                    Text("Defaults to the hosted server. Scanning a lobby QR sets this automatically. For a local server, use the URL it prints (or a tunnel).")
                 }
             }
             .navigationTitle("IRL Among Us")
