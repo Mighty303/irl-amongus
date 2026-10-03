@@ -3,9 +3,7 @@ import SwiftUI
 import UIKit
 
 struct ContentView: View {
-    private static let referenceSize = CGSize(width: 828, height: 1792)
     private static let audioEnabled = !ProcessInfo.processInfo.arguments.contains("-disableAudio")
-    private static let animatedSceneHeight = 1288.0
 
     private static let stars = [
         Star(x: 31, y: 128, radius: 16, phase: 0.1, speed: 1.1),
@@ -85,134 +83,109 @@ struct ContentView: View {
     ]
 
     @State private var selectedHotspot: MenuHotspot?
-    @State private var showingPhysicalMap = false
+    @State private var developerDestination: DeveloperDestination?
+    @State private var pendingDeveloperDestination: DeveloperDestination?
     @State private var showingDeveloperMenu = ProcessInfo.processInfo.arguments.contains("-showDeveloperMenu")
-    @State private var openMapAfterDeveloperMenu = false
     @State private var travelProgress = 0.0
     @StateObject private var themeAudio = ThemeAudioPlayer()
     @StateObject private var buttonAudio = ButtonPressAudioPlayer()
 
     var body: some View {
         GeometryReader { geometry in
-            let scale = max(
-                geometry.size.width / Self.referenceSize.width,
-                geometry.size.height / Self.referenceSize.height
-            )
-            let artworkSize = CGSize(
-                width: Self.referenceSize.width * scale,
-                height: Self.referenceSize.height * scale
-            )
-            let origin = CGPoint(
-                x: (geometry.size.width - artworkSize.width) / 2,
-                y: (geometry.size.height - artworkSize.height) / 2
-            )
-
-            ZStack(alignment: .topLeading) {
+            let size = geometry.size
+            let menuWidth = min(size.width * 0.46, 400)
+            let primaryHeight = min(size.height * 0.15, 64)
+            let iconSize = min(size.height * 0.12, 48)
+            let stars = Self.stars.map {
+                Star(x: $0.x / 828 * size.width, y: $0.y / 1792 * size.height,
+                     radius: $0.radius * 0.4, phase: $0.phase, speed: $0.speed)
+            }
+            ZStack {
                 Color.black
-
-                Image("MainMenu")
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: artworkSize.width, height: artworkSize.height)
-                    .offset(x: origin.x, y: origin.y)
-                    .accessibilityHidden(true)
-
-                Color.black
-                    .frame(
-                        width: artworkSize.width,
-                        height: Self.animatedSceneHeight * scale
-                    )
-                    .offset(x: origin.x, y: origin.y)
-
-                TwinklingStarfield(stars: Self.stars, scale: scale)
-                    .frame(width: artworkSize.width, height: artworkSize.height)
-                    .offset(x: origin.x, y: origin.y)
+                TwinklingStarfield(stars: stars, scale: 1)
                     .allowsHitTesting(false)
+                Image("RedCrewmate")
+                    .resizable().scaledToFit()
+                    .frame(width: 150, height: 110)
+                    .rotationEffect(.degrees(-12))
+                    .position(x: -100 + travelProgress * (size.width + 200), y: size.height * 0.48)
+                    .animation(.linear(duration: 8).repeatForever(autoreverses: false), value: travelProgress)
+                    .allowsHitTesting(false).accessibilityHidden(true)
 
                 Text("IRL Among Us")
-                    .font(.system(size: 92 * scale, weight: .ultraLight, design: .rounded))
-                    .tracking(2 * scale)
-                    .foregroundStyle(Color(white: 0.68))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .frame(width: 700 * scale)
-                    .position(
-                        x: origin.x + Self.referenceSize.width * scale / 2,
-                        y: origin.y + 225 * scale
-                    )
+                    .font(.system(size: min(size.height * 0.17, 72), weight: .ultraLight, design: .rounded))
+                    .tracking(2).foregroundStyle(.white.opacity(0.85))
+                    .position(x: size.width * 0.56, y: size.height * 0.2)
                     .accessibilityAddTraits(.isHeader)
 
-                Image("RedCrewmate")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 245 * scale, height: 175 * scale)
-                    .rotationEffect(.degrees(-7))
-                    .position(
-                        x: origin.x + (-150 + travelProgress * 1_128) * scale,
-                        y: origin.y + 870 * scale
-                    )
-                    .accessibilityHidden(true)
-
-                ForEach(Self.hotspots) { hotspot in
-                    Button {
-                        buttonAudio.play()
-                        selectedHotspot = hotspot
-                    } label: {
-                        Color.clear
-                            .contentShape(Rectangle())
+                VStack(spacing: 8) {
+                    HStack(spacing: 12) {
+                        landscapeMenuButton(Self.hotspots[0], artwork: "Local", height: primaryHeight)
+                        landscapeMenuButton(Self.hotspots[1], artwork: "Online", height: primaryHeight)
                     }
-                    .buttonStyle(.plain)
-                    .frame(
-                        width: hotspot.frame.width * scale,
-                        height: hotspot.frame.height * scale
-                    )
-                    .offset(
-                        x: origin.x + hotspot.frame.minX * scale,
-                        y: origin.y + hotspot.frame.minY * scale
-                    )
-                    .accessibilityLabel(hotspot.title)
-                    .accessibilityHint("Opens \(hotspot.title)")
+                    HStack(spacing: 12) {
+                        landscapeMenuButton(Self.hotspots[2], artwork: "HowToPlay", height: primaryHeight * 0.68)
+                        landscapeMenuButton(Self.hotspots[3], artwork: "Freeplay", height: primaryHeight * 0.68)
+                    }
+                    HStack(spacing: 14) {
+                        ForEach([4, 7, 8, 6], id: \.self) { index in
+                            landscapeMenuButton(Self.hotspots[index], artwork: Self.hotspots[index].title, height: iconSize)
+                                .frame(width: iconSize)
+                        }
+                    }
                 }
+                .frame(width: menuWidth)
+                .position(x: size.width * 0.56, y: size.height * 0.76)
+
+                Button {
+                    buttonAudio.play()
+                    selectedHotspot = Self.hotspots[5]
+                } label: {
+                    VStack(spacing: 2) {
+                        Image("LandscapeMenuAccount").resizable().scaledToFit().frame(width: 54, height: 54)
+                        Text("ACCOUNT").font(.system(size: 11, weight: .semibold, design: .rounded))
+                    }
+                    .padding(6).overlay(RoundedRectangle(cornerRadius: 6).stroke(.white, lineWidth: 2))
+                }
+                .foregroundStyle(.white).buttonStyle(.plain)
+                .position(x: 48, y: size.height * 0.25)
+                .accessibilityLabel("Account")
 
                 Button {
                     buttonAudio.play()
                     themeAudio.toggleMuted()
                 } label: {
                     Image(systemName: themeAudio.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 48, height: 48)
+                        .font(.system(size: 20, weight: .semibold)).foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
                         .background(.black.opacity(0.6), in: Circle())
                         .overlay(Circle().stroke(.white.opacity(0.45), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-                .position(x: geometry.size.width - 40, y: 56)
+                .position(x: size.width - 28, y: 30)
                 .accessibilityLabel(themeAudio.isMuted ? "Unmute theme music" : "Mute theme music")
-                .accessibilityHint("Toggles the opening theme music")
             }
         }
-        .background(Color.black)
-        .ignoresSafeArea()
+        .background(Color.black.ignoresSafeArea())
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
         .background {
 #if DEBUG
             ShakeDetectorView {
-                guard !showingPhysicalMap else { return }
+                guard developerDestination == nil else { return }
                 showingDeveloperMenu = true
             }
             .allowsHitTesting(false)
 #endif
         }
         .onAppear {
+            OrientationDelegate.requestLandscape()
             if Self.audioEnabled {
                 themeAudio.play()
             }
             travelProgress = 0
-            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
-                travelProgress = 1
-            }
+            travelProgress = 1
         }
         .alert(item: $selectedHotspot) { hotspot in
             Alert(
@@ -222,27 +195,46 @@ struct ContentView: View {
             )
         }
         .sheet(isPresented: $showingDeveloperMenu, onDismiss: openPendingDeveloperDestination) {
-            DeveloperMenuView {
-                openMapAfterDeveloperMenu = true
+            DeveloperMenuView(onOpenPhysicalMap: {
+                pendingDeveloperDestination = .physicalMap
                 showingDeveloperMenu = false
-            }
+            }, onOpenVoting: {
+                pendingDeveloperDestination = .voting
+                showingDeveloperMenu = false
+            })
             .presentationDetents([.medium])
         }
-        .fullScreenCover(isPresented: $showingPhysicalMap, onDismiss: {
-            if Self.audioEnabled {
-                themeAudio.play()
+        .fullScreenCover(item: $developerDestination, onDismiss: {
+            if Self.audioEnabled { themeAudio.play() }
+        }) { destination in
+            switch destination {
+            case .physicalMap: PhysicalMapPOCView()
+            case .voting: VotingPOCView()
             }
-        }) {
-            PhysicalMapPOCView()
         }
     }
 
-    private func openPendingDeveloperDestination() {
-        guard openMapAfterDeveloperMenu else { return }
-        openMapAfterDeveloperMenu = false
-        themeAudio.pause()
-        showingPhysicalMap = true
+    private func landscapeMenuButton(_ hotspot: MenuHotspot, artwork: String, height: CGFloat) -> some View {
+        Button {
+            buttonAudio.play()
+            selectedHotspot = hotspot
+        } label: {
+            Image("LandscapeMenu\(artwork)").resizable().scaledToFit()
+                .frame(maxWidth: .infinity).frame(height: height)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(hotspot.title)
+        .accessibilityHint("Opens \(hotspot.title)")
     }
+
+    private func openPendingDeveloperDestination() {
+        guard let destination = pendingDeveloperDestination else { return }
+        pendingDeveloperDestination = nil
+        themeAudio.pause()
+        developerDestination = destination
+    }
+
 }
 
 @MainActor
@@ -375,8 +367,14 @@ private struct MenuHotspot: Identifiable {
     var id: String { title }
 }
 
+private enum DeveloperDestination: String, Identifiable {
+    case physicalMap, voting
+    var id: String { rawValue }
+}
+
 private struct DeveloperMenuView: View {
     let onOpenPhysicalMap: () -> Void
+    let onOpenVoting: () -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -388,6 +386,11 @@ private struct DeveloperMenuView: View {
                         Label("Open Physical Map POC", systemImage: "map.fill")
                     }
                     .accessibilityIdentifier("developer.openPhysicalMap")
+
+                    Button(action: onOpenVoting) {
+                        Label("Open Voting POC", systemImage: "checkmark.bubble.fill")
+                    }
+                    .accessibilityIdentifier("developer.openVoting")
                 }
 
                 Section("Developer shortcut") {
@@ -476,58 +479,44 @@ private struct PhysicalMapPOCView: View {
                 Color(red: 0.025, green: 0.04, blue: 0.055)
                     .ignoresSafeArea()
 
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        VStack(alignment: .leading, spacing: 4) {
+                GeometryReader { geometry in
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
                             Text("PHYSICAL MAP")
-                                .font(.caption.weight(.bold))
-                                .tracking(2)
-                                .foregroundStyle(.cyan)
-
+                                .font(.caption.weight(.bold)).tracking(2).foregroundStyle(.cyan)
                             Text("SFU Student Union Building · Level 2")
-                                .font(.title2.bold())
-
-                            Text("Bundled offline room geometry · SUB / 2000")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .font(.headline).lineLimit(1).minimumScaleFactor(0.7)
+                            POCFloorPlan(
+                                rooms: Self.rooms,
+                                stations: Self.stations,
+                                meetingPoint: Self.meetingPoint,
+                                completedStationIDs: completedStationIDs,
+                                selectedStation: selectedStation,
+                                ownLastCheckpoint: ownLastCheckpoint,
+                                onSelectStation: { selectedStation = $0 }
+                            )
+                            .frame(maxHeight: .infinity)
+                            Text("Your icon marks the last verified checkpoint, not live indoor position.")
+                                .font(.system(size: 9)).foregroundStyle(.secondary)
+                            Text("Room geometry: SFU Companion by Akki Singh / Simon Fraser University.")
+                                .font(.system(size: 9)).foregroundStyle(.secondary)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                        POCFloorPlan(
-                            rooms: Self.rooms,
-                            stations: Self.stations,
-                            meetingPoint: Self.meetingPoint,
-                            completedStationIDs: completedStationIDs,
-                            selectedStation: selectedStation,
-                            ownLastCheckpoint: ownLastCheckpoint,
-                            onSelectStation: { selectedStation = $0 }
-                        )
-                        .frame(height: 430)
-
-                        Label("Your icon marks the last verified checkpoint, not live indoor position.", systemImage: "clock.badge.checkmark")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Label("Room geometry from SFU Companion by Akki Singh; underlying data from Simon Fraser University.", systemImage: "info.circle")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-
-                        checkpointCard
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("ASSIGNED TASKS")
-                                .font(.caption.weight(.bold))
-                                .tracking(1.5)
-                                .foregroundStyle(.secondary)
-
-                            ForEach(Self.stations) { station in
-                                taskRow(station)
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 12) {
+                                checkpointCard
+                                Text("ASSIGNED TASKS")
+                                    .font(.caption.weight(.bold)).tracking(1.5).foregroundStyle(.secondary)
+                                ForEach(Self.stations) { station in taskRow(station) }
                             }
                         }
+                        .frame(width: geometry.size.width * 0.34)
                     }
-                    .padding(16)
-                    .padding(.bottom, 24)
+                    .padding(12)
                 }
             }
+
             .navigationTitle("Map POC")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

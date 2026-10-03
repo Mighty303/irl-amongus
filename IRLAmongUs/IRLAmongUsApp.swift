@@ -1,7 +1,10 @@
 import SwiftUI
+import UIKit
 
 @main
 struct IRLAmongUsApp: App {
+    @UIApplicationDelegateAdaptor(OrientationDelegate.self) private var orientationDelegate
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -9,3 +12,26 @@ struct IRLAmongUsApp: App {
     }
 }
 
+@MainActor
+final class OrientationDelegate: NSObject, UIApplicationDelegate {
+    static let supportedOrientations: UIInterfaceOrientationMask = .landscape
+
+    func application(_ application: UIApplication,
+                     supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Self.supportedOrientations
+    }
+
+    static func requestLandscape() {
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            guard scene.activationState == .foregroundActive else { continue }
+            for window in scene.windows {
+                var controller = window.rootViewController
+                while let current = controller {
+                    current.setNeedsUpdateOfSupportedInterfaceOrientations()
+                    controller = current.presentedViewController
+                }
+            }
+            scene.requestGeometryUpdate(.iOS(interfaceOrientations: supportedOrientations))
+        }
+    }
+}
