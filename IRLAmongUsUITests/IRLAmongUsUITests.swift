@@ -6,11 +6,11 @@ final class IRLAmongUsUITests: XCTestCase {
     }
 
     @MainActor
-    func testLaunchesToCreateGame() throws {
+    func testLaunchesToMainMenu() throws {
         let app = XCUIApplication()
         app.launch()
 
-        XCTAssertTrue(app.buttons["Create Game"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Online"].exists)
     }
 }
-
