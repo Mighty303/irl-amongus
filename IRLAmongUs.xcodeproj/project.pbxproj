@@ -13,6 +13,7 @@
 		B10000000000000000000004 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* Preview Assets.xcassets */; };
 		B10000000000000000000007 /* among-us-theme-song.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* among-us-theme-song.mp3 */; };
 		B10000000000000000000008 /* button-press.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000011 /* button-press.mp3 */; };
+		B10000000000000000000009 /* among-us-killed.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000012 /* among-us-killed.mp3 */; };
 		B10000000000000000000005 /* IRLAmongUsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* IRLAmongUsTests.swift */; };
 		B10000000000000000000006 /* IRLAmongUsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000006 /* IRLAmongUsUITests.swift */; };
 /* End PBXBuildFile section */
@@ -46,6 +47,7 @@
 		C10000000000000000000009 /* IRLAmongUsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = IRLAmongUsUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000010 /* among-us-theme-song.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "among-us-theme-song.mp3"; sourceTree = "<group>"; };
 		C10000000000000000000011 /* button-press.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "button-press.mp3"; sourceTree = "<group>"; };
+		C10000000000000000000012 /* among-us-killed.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "among-us-killed.mp3"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +91,7 @@
 				C10000000000000000000001 /* IRLAmongUsApp.swift */,
 				C10000000000000000000002 /* ContentView.swift */,
 				C10000000000000000000003 /* Assets.xcassets */,
+				G10000000000000000000007 /* Assets */,
 				C10000000000000000000010 /* among-us-theme-song.mp3 */,
 				C10000000000000000000011 /* button-press.mp3 */,
 				G10000000000000000000003 /* Preview Content */,
@@ -128,6 +131,22 @@
 				C10000000000000000000009 /* IRLAmongUsUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000007 /* Assets */ = {
+			isa = PBXGroup;
+			children = (
+				G10000000000000000000008 /* Audio */,
+			);
+			path = Assets;
+			sourceTree = "<group>";
+		};
+		G10000000000000000000008 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				C10000000000000000000012 /* among-us-killed.mp3 */,
+			);
+			path = Audio;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -238,6 +257,7 @@
 				B10000000000000000000004 /* Preview Assets.xcassets in Resources */,
 				B10000000000000000000007 /* among-us-theme-song.mp3 in Resources */,
 				B10000000000000000000008 /* button-press.mp3 in Resources */,
+				B10000000000000000000009 /* among-us-killed.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
