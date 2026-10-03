@@ -368,6 +368,7 @@ private struct PhysicalMapPOCView: View {
     @State private var selectedStation: POCStation?
     @State private var completedStationIDs: Set<String> = ["reactor-a"]
     @State private var ownLastCheckpoint = POCCheckpoint(
+        stationID: "reactor-a",
         stationName: "Reactor A",
         roomLabel: "Room A",
         verifiedAt: Date().addingTimeInterval(-420)
@@ -400,9 +401,14 @@ private struct PhysicalMapPOCView: View {
                             stations: Self.stations,
                             completedStationIDs: completedStationIDs,
                             selectedStation: selectedStation,
+                            ownLastCheckpoint: ownLastCheckpoint,
                             onSelectStation: { selectedStation = $0 }
                         )
                         .frame(height: 430)
+
+                        Label("Your icon marks the last verified checkpoint, not live indoor position.", systemImage: "clock.badge.checkmark")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
 
                         checkpointCard
 
@@ -442,6 +448,7 @@ private struct PhysicalMapPOCView: View {
                 onVerifyCompletion: {
                     completedStationIDs.insert(station.id)
                     ownLastCheckpoint = POCCheckpoint(
+                        stationID: station.id,
                         stationName: station.displayName,
                         roomLabel: station.roomLabel,
                         verifiedAt: .now
@@ -515,6 +522,7 @@ private struct POCFloorPlan: View {
     let stations: [POCStation]
     let completedStationIDs: Set<String>
     let selectedStation: POCStation?
+    let ownLastCheckpoint: POCCheckpoint
     let onSelectStation: (POCStation) -> Void
 
     var body: some View {
@@ -586,6 +594,29 @@ private struct POCFloorPlan: View {
                 .position(x: geometry.size.width * 0.50, y: geometry.size.height * 0.57)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel("Emergency meeting point, central hallway, Level 2")
+
+                if let checkpointStation = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) {
+                    VStack(spacing: 0) {
+                        Image("PlayerMarker")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 58, height: 58)
+                            .shadow(color: .cyan.opacity(0.75), radius: 8)
+
+                        Text("YOU")
+                            .font(.system(size: 9, weight: .black, design: .rounded))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(.cyan, in: Capsule())
+                    }
+                    .position(
+                        x: checkpointStation.position.x * geometry.size.width + 34,
+                        y: checkpointStation.position.y * geometry.size.height - 38
+                    )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("You, last verified at \(ownLastCheckpoint.stationName), \(ownLastCheckpoint.roomLabel), \(ownLastCheckpoint.verifiedAt.formatted(date: .omitted, time: .shortened))")
+                }
             }
             .padding(4)
         }
@@ -655,6 +686,7 @@ private struct POCStation: Identifiable {
 }
 
 private struct POCCheckpoint {
+    let stationID: String
     let stationName: String
     let roomLabel: String
     let verifiedAt: Date

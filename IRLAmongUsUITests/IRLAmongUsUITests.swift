@@ -25,6 +25,7 @@ final class IRLAmongUsUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["PHYSICAL MAP"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Demo Building · Level 2"].exists)
+        XCTAssertTrue(app.staticTexts["YOU"].exists)
 
         let electricalPin = app.buttons["Electrical station, Hallway, assigned"]
         XCTAssertTrue(electricalPin.exists)
