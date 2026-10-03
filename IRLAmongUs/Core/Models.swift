@@ -12,13 +12,33 @@ enum Role: String, Codable {
 }
 
 enum StationKind: String, Codable, CaseIterable, Identifiable {
+    /// `task` stations are plain signs; the server assigns a random mini-game to each at game start.
     case task, meeting, emergency, reactor, electrical
     var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .task: return "Sign (tasks)"
+        case .meeting: return "Meeting point"
+        case .emergency: return "Emergency button"
+        case .reactor: return "Reactor"
+        case .electrical: return "Electrical (lights)"
+        }
+    }
 }
 
 enum TaskType: String, Codable, CaseIterable, Identifiable {
     case wiring, upload, sequence, delivery
     var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .wiring: return "Fix Wiring"
+        case .upload: return "Upload Data"
+        case .sequence: return "Start Reactor Sequence"
+        case .delivery: return "Delivery"
+        }
+    }
 }
 
 struct GameState: Decodable, Equatable {
@@ -60,14 +80,21 @@ struct Settings: Codable, Equatable {
     var revealRoleOnEject: Bool
     var emergencyMeetingsPerPlayer: Int
     var emergencyCooldownSec: Int
-    var killRssiThreshold: Int
-    var reportRssiThreshold: Int
+    /// Approximate meters; the server converts them to RSSI cutoffs (see `BLEDistance`).
+    var killDistanceM: Double
+    var reportDistanceM: Double
+    /// Calibration: smoothed RSSI two phones read 1 m apart.
+    var rssiAt1m: Double
+    var pathLossExponent: Double
     var proximityFreshSec: Int
     var checkpointTtlSec: Int
     var qrFallback: Bool
     var devSkipProximity: Bool
     var devSkipCheckpoint: Bool
     var ghostTasks: Bool
+    var taskTypes: [TaskType]
+    /// Only filled in for the host; blank for everyone else.
+    var forcedImpostorIds: [String]
     var uploadSec: Int
     var sabotageCooldownSec: Int
     var reactorSec: Int
@@ -78,7 +105,6 @@ struct Station: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let kind: StationKind
-    let taskType: TaskType?
     let lat: Double?
     let lng: Double?
     let radiusM: Double
@@ -90,6 +116,8 @@ struct PlayerView: Decodable, Identifiable, Equatable {
     let id: String
     let name: String
     let isHost: Bool
+    /// Server-run test bot. Optional so phones still decode snapshots from servers without bots.
+    let isBot: Bool?
     let connected: Bool
     let alive: Bool
     let ejected: Bool
@@ -169,6 +197,17 @@ struct SabotageView: Decodable, Equatable {
     let kind: String
     let deadline: Double?
     let stations: [FixStation]
+}
+
+/// Log-distance path-loss model, matching the server's `rssiAtDistance`. BLE RSSI is noisy, so these are estimates.
+enum BLEDistance {
+    static func rssi(atMeters d: Double, rssiAt1m: Double, exponent: Double) -> Double {
+        rssiAt1m - 10 * exponent * log10(max(d, 0.1))
+    }
+
+    static func meters(forRSSI rssi: Double, rssiAt1m: Double, exponent: Double) -> Double {
+        pow(10, (rssiAt1m - rssi) / (10 * exponent))
+    }
 }
 
 struct Session: Codable, Equatable {

@@ -18,14 +18,9 @@ struct TaskSheet: View {
                     if isCheckedIn(state: state, stationId: stationId) {
                         game(state: state)
                     } else {
-                        Text("Go to \(station?.name ?? "the station") and scan its sign to start this task.")
+                        Text("Go to \(station?.name ?? "the sign") and scan it to start this task.")
                             .multilineTextAlignment(.center)
-                        if let photoId = station?.photoId, let base = store.serverURL {
-                            AsyncImage(url: base.appendingPathComponent("photos/\(photoId).jpg")) { $0.resizable().scaledToFit() }
-                                placeholder: { ProgressView() }
-                                .frame(maxHeight: 240)
-                            Text("Look for this sign").font(.caption)
-                        }
+                        if let station { SignGuide(station: station) }
                         Button("📷 Scan sign") { scanning = true }.buttonStyle(.borderedProminent)
                     }
                     Spacer()

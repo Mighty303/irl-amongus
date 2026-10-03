@@ -51,7 +51,7 @@ struct MiniMapView: View {
             .sheet(item: $selected) { s in
                 VStack(spacing: 12) {
                     StationRow(station: s)
-                    if let task = myTaskStations[s.id] { Text("Your task here: \(task.type.rawValue)").bold() }
+                    if let task = myTaskStations[s.id] { Text("Your task here: \(task.type.label)").bold() }
                     if let d = store.location.distance(to: s) { Text("\(Int(d)) m away").font(.caption) }
                 }
                 .padding()
