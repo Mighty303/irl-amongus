@@ -73,6 +73,13 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["SFU Student Union Building · Level 2"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["map.ownCheckpoint"].exists)
 
+        let floorPlan = app.descendants(matching: .any)["map.floorPlan"]
+        let player = app.descendants(matching: .any)["map.ownCheckpoint"]
+        XCTAssertEqual(player.frame.midX, floorPlan.frame.midX, accuracy: 20)
+        XCTAssertEqual(player.frame.midY, floorPlan.frame.midY, accuracy: 20)
+
+        // Zoom out to reach a station outside the player-focused opening view.
+        floorPlan.pinch(withScale: 0.45, velocity: -1)
         let electricalPin = app.buttons["Electrical station, SUB 2125 · Community Kitchen, assigned"]
         XCTAssertTrue(electricalPin.exists)
         electricalPin.tap()
@@ -80,6 +87,13 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Electrical"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["SUB 2125 · Community Kitchen"].exists)
         XCTAssertTrue(app.staticTexts["/game/ABCD/station/electrical"].exists)
+
+        app.buttons["Simulate server verification"].tap()
+        XCTAssertTrue(app.buttons["map.resetViewport"].waitForExistence(timeout: 5))
+        app.buttons["map.resetViewport"].tap()
+        XCTAssertTrue(player.label.contains("Electrical"))
+        XCTAssertEqual(player.frame.midX, floorPlan.frame.midX, accuracy: 20)
+        XCTAssertEqual(player.frame.midY, floorPlan.frame.midY, accuracy: 20)
     }
 
     @MainActor
