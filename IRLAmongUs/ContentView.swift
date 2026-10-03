@@ -1322,6 +1322,7 @@ private struct POCFloorPlan: View {
                 .minimumScaleFactor(0.65)
                 .foregroundStyle(.white.opacity(0.72))
                 .frame(width: 54)
+                .scaleEffect(1 / zoomScale)
                 .position(projection.point(room.center))
         }
 
@@ -1349,6 +1350,7 @@ private struct POCFloorPlan: View {
                 }
             }
             .buttonStyle(.plain)
+            .scaleEffect(1 / zoomScale)
             .position(projection.point(station.position))
             .accessibilityLabel("\(station.displayName) station, \(station.roomLabel), \(isCompleted ? "completed" : "assigned")")
         }
@@ -1362,6 +1364,7 @@ private struct POCFloorPlan: View {
         .padding(8)
         .background(.red, in: Circle())
         .overlay(Circle().stroke(.white, lineWidth: 2))
+        .scaleEffect(1 / zoomScale)
         .position(projection.point(meetingPoint))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Emergency meeting point, SUB 2430 public study area, Level 2")
