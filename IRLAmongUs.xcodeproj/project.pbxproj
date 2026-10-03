@@ -14,6 +14,7 @@
 		B10000000000000000000007 /* among-us-theme-song.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000010 /* among-us-theme-song.mp3 */; };
 		B10000000000000000000008 /* button-press.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000011 /* button-press.mp3 */; };
 		B10000000000000000000009 /* among-us-killed.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000012 /* among-us-killed.mp3 */; };
+		B10000000000000000000010 /* among-us-kill.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000013 /* among-us-kill.mp3 */; };
 		B10000000000000000000005 /* IRLAmongUsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* IRLAmongUsTests.swift */; };
 		B10000000000000000000006 /* IRLAmongUsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000006 /* IRLAmongUsUITests.swift */; };
 /* End PBXBuildFile section */
@@ -48,6 +49,7 @@
 		C10000000000000000000010 /* among-us-theme-song.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "among-us-theme-song.mp3"; sourceTree = "<group>"; };
 		C10000000000000000000011 /* button-press.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "button-press.mp3"; sourceTree = "<group>"; };
 		C10000000000000000000012 /* among-us-killed.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "among-us-killed.mp3"; sourceTree = "<group>"; };
+		C10000000000000000000013 /* among-us-kill.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "among-us-kill.mp3"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -144,6 +146,7 @@
 		G10000000000000000000008 /* Audio */ = {
 			isa = PBXGroup;
 			children = (
+				C10000000000000000000013 /* among-us-kill.mp3 */,
 				C10000000000000000000012 /* among-us-killed.mp3 */,
 			);
 			path = Audio;
@@ -258,6 +261,7 @@
 				B10000000000000000000007 /* among-us-theme-song.mp3 in Resources */,
 				B10000000000000000000008 /* button-press.mp3 in Resources */,
 				B10000000000000000000009 /* among-us-killed.mp3 in Resources */,
+				B10000000000000000000010 /* among-us-kill.mp3 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
