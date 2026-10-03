@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 
 struct ContentView: View {
@@ -83,6 +84,8 @@ struct ContentView: View {
 
     @State private var selectedHotspot: MenuHotspot?
     @State private var travelProgress = 0.0
+    @StateObject private var themeAudio = ThemeAudioPlayer()
+    @StateObject private var buttonAudio = ButtonPressAudioPlayer()
 
     var body: some View {
         GeometryReader { geometry in
@@ -147,6 +150,7 @@ struct ContentView: View {
 
                 ForEach(Self.hotspots) { hotspot in
                     Button {
+                        buttonAudio.play()
                         selectedHotspot = hotspot
                     } label: {
                         Color.clear
@@ -164,6 +168,22 @@ struct ContentView: View {
                     .accessibilityLabel(hotspot.title)
                     .accessibilityHint("Opens \(hotspot.title)")
                 }
+
+                Button {
+                    buttonAudio.play()
+                    themeAudio.toggleMuted()
+                } label: {
+                    Image(systemName: themeAudio.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 48, height: 48)
+                        .background(.black.opacity(0.6), in: Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.45), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .position(x: geometry.size.width - 40, y: 56)
+                .accessibilityLabel(themeAudio.isMuted ? "Unmute theme music" : "Mute theme music")
+                .accessibilityHint("Toggles the opening theme music")
             }
         }
         .background(Color.black)
@@ -172,6 +192,7 @@ struct ContentView: View {
         .persistentSystemOverlays(.hidden)
         .preferredColorScheme(.dark)
         .onAppear {
+            themeAudio.play()
             travelProgress = 0
             withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
                 travelProgress = 1
@@ -183,6 +204,72 @@ struct ContentView: View {
                 message: Text(hotspot.message),
                 dismissButton: .default(Text("Back"))
             )
+        }
+    }
+}
+
+@MainActor
+private final class ButtonPressAudioPlayer: ObservableObject {
+    private var player: AVAudioPlayer?
+
+    func play() {
+        if player == nil {
+            guard let url = Bundle.main.url(forResource: "button-press", withExtension: "mp3") else {
+                return
+            }
+
+            do {
+                let player = try AVAudioPlayer(contentsOf: url)
+                player.prepareToPlay()
+                self.player = player
+            } catch {
+                // Button actions still work if audio is unavailable on a device.
+                return
+            }
+        }
+
+        player?.currentTime = 0
+        player?.play()
+    }
+}
+
+@MainActor
+private final class ThemeAudioPlayer: ObservableObject {
+    @Published private(set) var isMuted = false
+
+    private var player: AVAudioPlayer?
+
+    func play() {
+        guard player == nil else {
+            if !isMuted { player?.play() }
+            return
+        }
+
+        guard let url = Bundle.main.url(forResource: "among-us-theme-song", withExtension: "mp3") else {
+            return
+        }
+
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default)
+            try audioSession.setActive(true)
+
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.numberOfLoops = -1
+            player.prepareToPlay()
+            player.play()
+            self.player = player
+        } catch {
+            // The menu remains usable if audio is unavailable on a device.
+        }
+    }
+
+    func toggleMuted() {
+        isMuted.toggle()
+        if isMuted {
+            player?.pause()
+        } else {
+            player?.play()
         }
     }
 }
