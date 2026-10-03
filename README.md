@@ -20,7 +20,7 @@ xcodebuild -project IRLAmongUs.xcodeproj -scheme IRLAmongUs -showdestinations
 ## Voting proof of concept
 
 In a Debug build, shake the phone (Simulator: Device → Shake) and choose **Open Voting POC**.
-The app uses landscape orientation throughout, including the main menu, developer menu, map, and voting demo. It contains ten mock players, including you as Ben and one dead player.
+The Map POC opens in portrait for walking with the phone, with the map above checkpoint and task details. The main menu, developer menu, and voting demo use landscape; closing the map restores landscape. It contains ten mock players, including you as Ben and one dead player.
 Select a living player or Skip Vote, then confirm with the green checkmark or cancel with the red cross.
 Your confirmed vote is final. Bots vote over time, and the 60-second deadline continues while the app is in the background.
 Results reveal colored vote markers and totals; Play Again starts a fresh round.
@@ -32,7 +32,7 @@ No network connection, lobby, discussion phase, or live multiplayer is required.
 For UI automation, `-showDeveloperMenu -disableAudio` opens the menu silently.
 Debug builds also accept `-votingTestDuration <seconds>` (1–60) to shorten test rounds.
 
-Landscape previews: [Main menu](docs/main-menu-landscape.png), [Voting](docs/voting-landscape.png), [Selection](docs/voting-selection.png), [Results](docs/voting-results.png).
+Previews: [Map (portrait)](docs/map-portrait.png), [Main menu](docs/main-menu-landscape.png), [Voting](docs/voting-landscape.png), [Selection](docs/voting-selection.png), [Results](docs/voting-results.png).
 
 Voting artwork is extracted from the user-supplied **Among Us — Voting Screen / Chat** sprite sheet (sheet credit: JJ314).
 The tablet, glass, player cards, stamps, reporter icon, dead-player cross, and voting controls use those sprites.

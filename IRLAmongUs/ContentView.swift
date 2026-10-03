@@ -205,6 +205,7 @@ struct ContentView: View {
             .presentationDetents([.medium])
         }
         .fullScreenCover(item: $developerDestination, onDismiss: {
+            OrientationDelegate.requestLandscape()
             if Self.audioEnabled { themeAudio.play() }
         }) { destination in
             switch destination {
@@ -479,44 +480,58 @@ private struct PhysicalMapPOCView: View {
                 Color(red: 0.025, green: 0.04, blue: 0.055)
                     .ignoresSafeArea()
 
-                GeometryReader { geometry in
-                    HStack(alignment: .top, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 4) {
                             Text("PHYSICAL MAP")
-                                .font(.caption.weight(.bold)).tracking(2).foregroundStyle(.cyan)
-                            Text("SFU Student Union Building · Level 2")
-                                .font(.headline).lineLimit(1).minimumScaleFactor(0.7)
-                            POCFloorPlan(
-                                rooms: Self.rooms,
-                                stations: Self.stations,
-                                meetingPoint: Self.meetingPoint,
-                                completedStationIDs: completedStationIDs,
-                                selectedStation: selectedStation,
-                                ownLastCheckpoint: ownLastCheckpoint,
-                                onSelectStation: { selectedStation = $0 }
-                            )
-                            .frame(maxHeight: .infinity)
-                            Text("Your icon marks the last verified checkpoint, not live indoor position.")
-                                .font(.system(size: 9)).foregroundStyle(.secondary)
-                            Text("Room geometry: SFU Companion by Akki Singh / Simon Fraser University.")
-                                .font(.system(size: 9)).foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .font(.caption.weight(.bold))
+                                .tracking(2)
+                                .foregroundStyle(.cyan)
 
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 12) {
-                                checkpointCard
-                                Text("ASSIGNED TASKS")
-                                    .font(.caption.weight(.bold)).tracking(1.5).foregroundStyle(.secondary)
-                                ForEach(Self.stations) { station in taskRow(station) }
+                            Text("SFU Student Union Building · Level 2")
+                                .font(.title2.bold())
+
+                            Text("Bundled offline room geometry · SUB / 2000")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        POCFloorPlan(
+                            rooms: Self.rooms,
+                            stations: Self.stations,
+                            meetingPoint: Self.meetingPoint,
+                            completedStationIDs: completedStationIDs,
+                            selectedStation: selectedStation,
+                            ownLastCheckpoint: ownLastCheckpoint,
+                            onSelectStation: { selectedStation = $0 }
+                        )
+                        .frame(height: 430)
+
+                        Label("Your icon marks the last verified checkpoint, not live indoor position.", systemImage: "clock.badge.checkmark")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Label("Room geometry from SFU Companion by Akki Singh; underlying data from Simon Fraser University.", systemImage: "info.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        checkpointCard
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("ASSIGNED TASKS")
+                                .font(.caption.weight(.bold))
+                                .tracking(1.5)
+                                .foregroundStyle(.secondary)
+
+                            ForEach(Self.stations) { station in
+                                taskRow(station)
                             }
                         }
-                        .frame(width: geometry.size.width * 0.34)
                     }
-                    .padding(12)
+                    .padding(16)
+                    .padding(.bottom, 24)
                 }
             }
-
             .navigationTitle("Map POC")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -531,6 +546,7 @@ private struct PhysicalMapPOCView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear { OrientationDelegate.requestPortrait() }
         .sheet(item: $selectedStation) { station in
             POCStationDetailView(
                 station: station,

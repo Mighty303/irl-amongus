@@ -61,6 +61,22 @@ final class IRLAmongUsUITests: XCTestCase {
         mapButton.tap()
 
         XCTAssertTrue(app.staticTexts["PHYSICAL MAP"].waitForExistence(timeout: 5))
+        let portrait = NSPredicate { _, _ in
+            app.windows.firstMatch.frame.height > app.windows.firstMatch.frame.width
+        }
+        expectation(for: portrait, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
+        XCUIDevice.shared.orientation = .portrait
+        captureVoting(app, name: "Map portrait")
+        app.buttons["Close physical map"].tap()
+        XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
+        let landscape = NSPredicate { _, _ in
+            app.windows.firstMatch.frame.width > app.windows.firstMatch.frame.height
+        }
+        expectation(for: landscape, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
+        XCUIDevice.shared.orientation = .landscapeLeft
+
     }
 }
 

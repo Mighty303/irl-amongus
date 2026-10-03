@@ -1,8 +1,8 @@
 # Voting POC verification
 
 - Branch starts at `8b0e522` from `poc/physical-map`.
-- The app uses landscape throughout. Main-menu buttons, developer destinations, the map, and voting adapt to the wider layout.
-- Debug and Release simulator builds passed.
+- The Map POC uses portrait for walking. Main-menu buttons, the developer menu, and voting use landscape. A UI test verifies map entry rotates to portrait and closing it restores landscape.
+- Debug and Release simulator builds passed. The portrait-map follow-up passed three focused UI checks: map entry/exit orientation, landscape main menu, and landscape voting selection.
 - Seven unit tests and five UI tests passed on iPhone 16e / iOS 18.6. Main-menu and voting checks also passed on iPhone 16 Pro Max.
 - Voting checks cover select/cancel, confirmation and locking, dead players, skip, a changing countdown, timeout, results, replay, and exit. Unit tests cover deadline boundaries, background time jumps, bot scheduling, and tie/skip/ejection outcomes.
 - Artwork comes from the supplied voting sprite sheet; main-menu buttons reuse the existing menu artwork.

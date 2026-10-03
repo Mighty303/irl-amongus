@@ -14,14 +14,18 @@ struct IRLAmongUsApp: App {
 
 @MainActor
 final class OrientationDelegate: NSObject, UIApplicationDelegate {
-    static let supportedOrientations: UIInterfaceOrientationMask = .landscape
+    static var supportedOrientations: UIInterfaceOrientationMask = .landscape
 
     func application(_ application: UIApplication,
                      supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         Self.supportedOrientations
     }
 
-    static func requestLandscape() {
+    static func requestLandscape() { requestOrientation(.landscape) }
+    static func requestPortrait() { requestOrientation(.portrait) }
+
+    private static func requestOrientation(_ mask: UIInterfaceOrientationMask) {
+        supportedOrientations = mask
         for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
             guard scene.activationState == .foregroundActive else { continue }
             for window in scene.windows {
