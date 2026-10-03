@@ -54,6 +54,9 @@ struct TaskSheet: View {
                        start: { await store.perform("task_start", ["taskId": task.id]) },
                        onDone: complete)
         case .sequence: SequenceGame(onDone: complete)
+        case .unknown:
+            Text("This task needs a newer version of the app.")
+                .font(.headline).foregroundStyle(.white).multilineTextAlignment(.center)
         case .delivery:
             VStack(spacing: 12) {
                 Button(task.step == 0 ? "📦 Pick up package" : "📬 Deliver package") { complete() }
