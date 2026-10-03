@@ -110,7 +110,7 @@ struct PlayingView: View {
                 }
             }
             .sheet(isPresented: $scanningCheckpoint) { CheckpointScannerView(state: state) }
-            .sheet(item: $activeTask) { task in TaskSheet(task: task) }
+            .fullScreenCover(item: $activeTask) { task in TaskSheet(task: task).presentationBackground(.clear) }
             .sheet(isPresented: $showingMap) { MiniMapView(state: state) }
             .sheet(isPresented: $showingMyQR) {
                 VStack(spacing: 16) {

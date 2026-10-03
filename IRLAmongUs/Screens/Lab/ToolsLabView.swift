@@ -103,8 +103,9 @@ private struct BodyPreview: View {
     }
 }
 
-/// Runs a mini-game and shows a "complete" state with a replay button.
+/// Runs a mini-game in the task panel, like a real task, and starts it over after each completion.
 private struct MiniGameHost<Game: View>: View {
+    @Environment(\.dismiss) private var dismiss
     let make: (@escaping () -> Void) -> Game
     @State private var done = false
     @State private var round = 0
@@ -114,14 +115,20 @@ private struct MiniGameHost<Game: View>: View {
     }
 
     var body: some View {
-        VStack(spacing: 24) {
-            if done {
-                Text("✅ Task complete").font(.largeTitle.bold())
-                Button("Play again") { done = false; round += 1 }.buttonStyle(.borderedProminent)
-            } else {
-                make { Haptics.success(); done = true }.id(round)
-            }
+        TaskPanel(completed: done, close: { TaskSound.panelClose.play(); dismiss() }) {
+            make { complete() }.id(round)
         }
-        .padding()
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private func complete() {
+        done = true
+        TaskSound.complete.play()
+        Haptics.success()
+        Task {
+            try? await Task.sleep(for: .milliseconds(1400))
+            done = false
+            round += 1
+        }
     }
 }
