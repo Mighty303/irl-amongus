@@ -18,18 +18,28 @@ struct LobbyView: View {
                     .frame(maxWidth: .infinity)
                 }
 
-                Section("Players (\(state.players.count))") {
+                Section {
                     ForEach(state.players) { p in
                         HStack {
                             Circle().fill(p.connected ? .green : .gray).frame(width: 8, height: 8)
                             Text(p.name + (p.id == state.me.id ? " (you)" : ""))
                             if p.isHost { Image(systemName: "crown.fill").foregroundStyle(.yellow) }
+                            if p.isBot == true { Image(systemName: "cpu").foregroundStyle(.secondary) }
                             Spacer()
                             if state.isHost && p.id != state.me.id {
                                 Button("Kick", role: .destructive) { Task { await store.perform("kick", ["playerId": p.id]) } }
                                     .buttonStyle(.borderless)
                             }
                         }
+                    }
+                    if state.isHost {
+                        Button("Add bot") { Task { await store.perform("add_bot") } }
+                    }
+                } header: {
+                    Text("Players (\(state.players.count))")
+                } footer: {
+                    if state.isHost {
+                        Text("Bots acknowledge their role, gather at meetings and vote skip. They never kill, so pick a human impostor in the settings below.")
                     }
                 }
 

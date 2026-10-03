@@ -116,6 +116,8 @@ struct PlayerView: Decodable, Identifiable, Equatable {
     let id: String
     let name: String
     let isHost: Bool
+    /// Server-run test bot. Optional so phones still decode snapshots from servers without bots.
+    let isBot: Bool?
     let connected: Bool
     let alive: Bool
     let ejected: Bool
