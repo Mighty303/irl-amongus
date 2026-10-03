@@ -1456,7 +1456,9 @@ private struct POCFloorPlan: View {
                     .padding(.vertical, 3)
                     .background(.cyan, in: Capsule())
             }
-            .scaleEffect(1 / zoomScale)
+            // Preserve the accepted size at the default player-focused zoom,
+            // while still letting the crewmate grow and shrink with the map.
+            .scaleEffect(1 / Self.playerZoomScale)
             .position(playerMarkerPosition(for: checkpointStation, projection: projection))
             .accessibilityElement(children: .ignore)
             .accessibilityIdentifier("map.ownCheckpoint")
