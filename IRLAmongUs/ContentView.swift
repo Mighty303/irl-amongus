@@ -82,6 +82,7 @@ struct ContentView: View {
         )
     ]
 
+    @Environment(GameStore.self) private var store
     @State private var selectedHotspot: MenuHotspot?
     @State private var developerDestination: DeveloperDestination?
     @State private var pendingDeveloperDestination: DeveloperDestination?
@@ -196,6 +197,12 @@ struct ContentView: View {
             travelProgress = 0
             travelProgress = 1
         }
+        .onChange(of: store.session, initial: true) { _, session in
+            if session != nil { isShowingLocalLobby = true }
+        }
+        .onChange(of: store.pendingJoinCode, initial: true) { _, code in
+            if code != nil { isShowingLocalLobby = true }
+        }
         .alert(item: $selectedHotspot) { hotspot in
             Alert(
                 title: Text(hotspot.title),
@@ -287,21 +294,31 @@ private struct LocalLobbyView: View {
     let onBack: () -> Void
 
     @State private var lobbyAlert: LobbyAlert?
-    @State private var isShowingGameLobby = false
+    @Environment(GameStore.self) private var store
+    @State private var code = ""
+    @State private var scanning = false
+    @State private var serverStatus: String?
 
     var body: some View {
         Group {
-            if isShowingGameLobby {
-                GameLobbyView(stars: stars, buttonAudio: buttonAudio) {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isShowingGameLobby = false
-                    }
-                }
-                .transition(.opacity)
+            if store.session != nil {
+                GameRootView(lobbyContent: { state in
+                    AnyView(GameLobbyView(stars: stars, buttonAudio: buttonAudio, state: state))
+                })
             } else {
                 localGamePicker
                     .transition(.opacity)
             }
+        }
+        .onChange(of: store.state?.phase, initial: true) { _, phase in
+            if let phase, phase != .LOBBY {
+                OrientationDelegate.requestPortrait()
+            } else {
+                OrientationDelegate.requestLandscape()
+            }
+        }
+        .onChange(of: store.pendingJoinCode, initial: true) { _, pending in
+            if let pending { code = pending; store.pendingJoinCode = nil }
         }
     }
 
@@ -337,6 +354,8 @@ private struct LocalLobbyView: View {
 
                     hostHeader
 
+                    connectionFields
+
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Create")
                             .font(.system(size: 20, weight: .regular, design: .rounded))
@@ -344,47 +363,37 @@ private struct LocalLobbyView: View {
 
                         HStack(spacing: 12) {
                             lobbyButton("Classic") {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    isShowingGameLobby = true
-                                }
+                                Task { await store.createGame() }
                             }
 
                             lobbyButton("Hide n Seek") {
                                 showLobbyMessage(
                                     title: "Hide n Seek",
-                                    message: "A Hide n Seek local lobby is ready to be created."
+                                    message: "Hide n Seek is coming soon. Classic is available now."
                                 )
                             }
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Available Games")
-                            .font(.system(size: 19, weight: .regular, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.8))
-
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(.white, lineWidth: 3)
-
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(.white.opacity(0.85), lineWidth: 1.5)
-                                .padding(6)
-
-                            VStack(spacing: 10) {
-                                Image(systemName: "dot.radiowaves.left.and.right")
-                                    .font(.system(size: 28, weight: .light))
-                                Text("Searching for nearby games…")
-                                    .font(.system(size: 15, design: .rounded))
-                            }
-                            .foregroundStyle(.white.opacity(0.35))
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Join a Game")
+                            .font(.system(size: 19, design: .rounded))
+                        TextField("Room code", text: $code)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                            .textFieldStyle(.roundedBorder)
+                            .accessibilityIdentifier("local.roomCode")
+                        HStack(spacing: 12) {
+                            lobbyButton("Join game") { Task { await store.joinGame(code: code) } }
+                                .disabled(!store.canEnterLobby || !GameStore.isValidRoomCode(code))
+                            lobbyButton("Scan lobby QR") { scanning = true }
+                                .disabled(store.isEnteringLobby)
                         }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("Available Games")
-                        .accessibilityValue("Searching for nearby games")
+                        Text("Use the same server address as the host, then enter the room code or scan their QR. Nearby game discovery is coming soon.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        if store.isEnteringLobby { ProgressView("Connecting…") }
                     }
-                    .frame(height: max(100, geometry.size.height - 380))
 
                     HStack(alignment: .bottom) {
                         Button {
@@ -397,6 +406,7 @@ private struct LocalLobbyView: View {
                         }
                         .buttonStyle(LobbyOutlineButtonStyle())
                         .accessibilityHint("Returns to the main menu")
+                        .disabled(store.isEnteringLobby)
 
                         Spacer()
 
@@ -413,6 +423,20 @@ private struct LocalLobbyView: View {
             .clipped()
         }
         .background(Color.black)
+        .sheet(isPresented: $scanning) {
+            QRScanSheet(title: "Scan lobby QR") { payload in
+                guard case let .join(roomCode, server)? = QRPayload(payload) else { return }
+                if let server { store.serverURLString = server }
+                code = roomCode
+                scanning = false
+            }
+        }
+        .alert("Unable to connect", isPresented: Binding(
+            get: { store.errorMessage != nil },
+            set: { if !$0 { store.errorMessage = nil } }
+        )) {
+            Button("OK") { store.errorMessage = nil }
+        } message: { Text(store.errorMessage ?? "") }
         .alert(item: $lobbyAlert) { alert in
             Alert(
                 title: Text(alert.title),
@@ -420,6 +444,27 @@ private struct LocalLobbyView: View {
                 dismissButton: .default(Text("Back"))
             )
         }
+    }
+
+    private var connectionFields: some View {
+        @Bindable var store = store
+        return VStack(alignment: .leading, spacing: 10) {
+            TextField("Display name", text: $store.playerName)
+                .textInputAutocapitalization(.words)
+                .accessibilityIdentifier("local.playerName")
+            TextField("Server address (http://192.168.x.x:3000)", text: $store.serverURLString)
+                .keyboardType(.URL)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("local.serverURL")
+            Button("Test connection") {
+                serverStatus = "Testing…"
+                Task { serverStatus = await store.checkServer() }
+            }
+            if let serverStatus { Text(serverStatus).font(.caption) }
+        }
+        .textFieldStyle(.roundedBorder)
+        .disabled(store.isEnteringLobby)
     }
 
     private var playerBar: some View {
@@ -435,7 +480,7 @@ private struct LocalLobbyView: View {
                 .frame(width: 22, height: 22)
                 .shadow(color: Color.green.opacity(0.9), radius: 9)
 
-            Text("XXXXXXXXXX")
+            Text(store.playerName.isEmpty ? "Choose your name below" : store.playerName)
                 .font(.system(size: 18, weight: .regular, design: .rounded))
                 .foregroundStyle(.white)
                 .lineLimit(1)
@@ -523,6 +568,7 @@ private struct LocalLobbyView: View {
                 .frame(maxWidth: .infinity, minHeight: 52)
         }
         .buttonStyle(LobbyOutlineButtonStyle())
+        .disabled(title == "Classic" && !store.canEnterLobby)
     }
 
     private func showLobbyMessage(title: String, message: String) {
@@ -533,11 +579,10 @@ private struct LocalLobbyView: View {
 private struct GameLobbyView: View {
     let stars: [Star]
     let buttonAudio: ButtonPressAudioPlayer
-    let onLeave: () -> Void
-
-    @State private var playerCount = 1
-    @State private var isPrivate = true
-    @State private var lobbyAlert: LobbyAlert?
+    let state: GameState
+    @Environment(GameStore.self) private var store
+    @State private var showingSettings = false
+    @State private var showingInvite = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -578,12 +623,17 @@ private struct GameLobbyView: View {
             .clipped()
         }
         .background(Color.black)
-        .alert(item: $lobbyAlert) { alert in
-            Alert(
-                title: Text(alert.title),
-                message: Text(alert.message),
-                dismissButton: .default(Text("OK"))
-            )
+        .sheet(isPresented: $showingSettings) {
+            LobbyView(state: store.state ?? state)
+        }
+        .sheet(isPresented: $showingInvite) {
+            VStack(spacing: 16) {
+                Text(state.code).font(.largeTitle.monospaced().bold())
+                QRCodeImage(payload: QRPayload.join(code: state.code, server: store.serverURLString).string, size: 180)
+                Text("Scan to join this game").font(.caption)
+                Button("Done") { showingInvite = false }
+            }
+            .padding()
         }
     }
 
@@ -591,12 +641,23 @@ private struct GameLobbyView: View {
         ZStack(alignment: .bottomLeading) {
             WaitingRoomScene()
 
-            Text("Waiting for players…")
+            VStack(alignment: .leading, spacing: 6) {
+                Text(state.isHost ? "Waiting for players…" : "Waiting for the host to start…")
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(state.players) { player in
+                            Text("\(player.connected ? "●" : "○") \(player.name)\(player.id == state.me.id ? " (you)" : "")\(player.isHost ? " · Host" : "")")
+                                .font(.caption)
+                        }
+                    }
+                }
+                .frame(maxHeight: 100)
+            }
                 .font(.system(size: 17, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.88))
                 .padding(.horizontal, 15)
                 .padding(.vertical, 9)
-                .background(.black.opacity(0.72), in: Capsule())
+                .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 14))
                 .padding(16)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -616,32 +677,33 @@ private struct GameLobbyView: View {
             HStack(spacing: 12) {
                 Button {
                     buttonAudio.play()
-                    lobbyAlert = LobbyAlert(
-                        title: "Customize",
-                        message: "Color, hats, pets, and name customization will live here."
-                    )
+                    showingSettings = true
                 } label: {
-                    Label("CUSTOMIZE", systemImage: "tshirt.fill")
+                    Label("SETTINGS", systemImage: "gearshape.fill")
                         .frame(maxWidth: .infinity, minHeight: 54)
                 }
                 .buttonStyle(LobbyOutlineButtonStyle())
 
                 Button {
                     buttonAudio.play()
-                    lobbyAlert = LobbyAlert(
-                        title: "Need more players",
-                        message: "Invite at least three more crewmates before starting the game."
-                    )
+                    Task { await store.perform("start_game") }
                 } label: {
                     Text("START")
                         .frame(maxWidth: .infinity, minHeight: 54)
                 }
                 .buttonStyle(LobbyStartButtonStyle())
+                .disabled(!state.isHost || state.players.count < state.settings.minPlayers || !store.isSynced)
             }
+
+            Text(state.isHost
+                 ? "Minimum \(state.settings.minPlayers) players to start"
+                 : "The host will start the game")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             Button {
                 buttonAudio.play()
-                onLeave()
+                store.leave()
             } label: {
                 Text("Leave Game")
                     .font(.system(size: 16, weight: .medium, design: .rounded))
@@ -656,7 +718,7 @@ private struct GameLobbyView: View {
     private var lobbyTopBar: some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
-                Text("THE SKELD")
+                Text(state.mapId.uppercased())
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
                 Text("GAME LOBBY")
@@ -668,14 +730,14 @@ private struct GameLobbyView: View {
 
             Button {
                 buttonAudio.play()
-                isPrivate.toggle()
+                showingInvite = true
             } label: {
-                Image(systemName: isPrivate ? "lock.fill" : "lock.open.fill")
+                Image(systemName: "qrcode")
                     .font(.system(size: 20, weight: .bold))
                     .frame(width: 48, height: 48)
             }
             .buttonStyle(LobbyCircleButtonStyle())
-            .accessibilityLabel(isPrivate ? "Private lobby" : "Public lobby")
+            .accessibilityLabel("Share lobby QR")
         }
     }
 
@@ -684,11 +746,11 @@ private struct GameLobbyView: View {
             Text("CODE")
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.65))
-            Text("IRLUS")
+            Text(state.code)
                 .font(.system(size: 30, weight: .bold, design: .monospaced))
                 .tracking(3)
                 .foregroundStyle(.white)
-            Text(isPrivate ? "Private • share with friends" : "Public • open to join")
+            Text(state.isHost ? "Share code or QR with friends" : "Waiting for the host")
                 .font(.system(size: 12, design: .rounded))
                 .foregroundStyle(.white.opacity(0.62))
         }
@@ -703,12 +765,15 @@ private struct GameLobbyView: View {
             Text("PLAYERS")
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.65))
-            Text("\(playerCount) / 15")
+            Text("\(state.players.count)")
+                .accessibilityIdentifier("lobby.playerCount")
                 .font(.system(size: 27, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
-            Stepper("", value: $playerCount, in: 1...15)
-                .labelsHidden()
-                .tint(.mint)
+            if state.isHost {
+                Button("Add bot") { Task { await store.perform("add_bot") } }
+            } else {
+                Text("Joined").font(.caption)
+            }
         }
         .frame(width: 132, height: 105)
         .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14))

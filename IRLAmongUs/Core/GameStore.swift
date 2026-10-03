@@ -18,12 +18,13 @@ final class GameStore {
     }
 
     // Persisted
-    var serverURLString: String { didSet { UserDefaults.standard.set(serverURLString, forKey: "serverURL") } }
-    var playerName: String { didSet { UserDefaults.standard.set(playerName, forKey: "playerName") } }
+    var serverURLString: String { didSet { preferences.set(serverURLString, forKey: "serverURL") } }
+    var playerName: String { didSet { preferences.set(playerName, forKey: "playerName") } }
     private(set) var session: Session? {
-        didSet { UserDefaults.standard.set(try? JSONEncoder().encode(session), forKey: "session") }
+        didSet { preferences.set(try? JSONEncoder().encode(session), forKey: "session") }
     }
 
+    private(set) var isEnteringLobby = false
     private(set) var state: GameState?
     private(set) var connection: Connection = .disconnected
     /// False between (re)connecting and receiving a fresh snapshot. Actions are blocked until true.
@@ -32,12 +33,14 @@ final class GameStore {
     var alert: Alert?
     /// serverTime - localTime, in ms
     private(set) var clockOffset: Double = 0
-    var signThreshold: Float { didSet { UserDefaults.standard.set(signThreshold, forKey: "signThreshold") } }
+    var signThreshold: Float { didSet { preferences.set(signThreshold, forKey: "signThreshold") } }
 
     let ble = BLEProximity()
     let location = LocationService()
     let signs = SignRecognizer()
 
+    @ObservationIgnored private let preferences: UserDefaults
+    @ObservationIgnored private let httpSession: URLSession
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
     @ObservationIgnored private var pending: [Int: CheckedContinuation<Void, Error>] = [:]
     @ObservationIgnored private var nextRequestId = 1
@@ -45,22 +48,43 @@ final class GameStore {
     @ObservationIgnored private var proximityTask: Task<Void, Never>?
     @ObservationIgnored private var reconnectAttempt = 0
 
-    init() {
-        let defaults = UserDefaults.standard
+    init(defaults: UserDefaults = .standard, httpSession: URLSession = .shared, restoresSession: Bool = true) {
+        self.preferences = defaults
+        self.httpSession = httpSession
         serverURLString = defaults.string(forKey: "serverURL") ?? "http://192.168.1.100:3000"
         playerName = defaults.string(forKey: "playerName") ?? ""
         signThreshold = defaults.object(forKey: "signThreshold") as? Float ?? 0.6
-        if let data = defaults.data(forKey: "session") {
+        if restoresSession, let data = defaults.data(forKey: "session") {
             session = try? JSONDecoder().decode(Session.self, from: data)
         }
         if session != nil { connect() }
     }
 
-    var serverURL: URL? {
-        var text = serverURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+    var serverURL: URL? { Self.validatedServerURL(serverURLString) }
+
+    static func validatedServerURL(_ value: String) -> URL? {
+        var text = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !text.hasSuffix("://") else { return nil }
         while text.hasSuffix("/") { text.removeLast() }
         if !text.contains("://") { text = "https://" + text }
-        return URL(string: text)
+        guard let url = URL(string: text), ["http", "https"].contains(url.scheme),
+              let host = url.host, !host.isEmpty, url.user == nil, url.password == nil,
+              url.query == nil, url.fragment == nil else { return nil }
+        return url
+    }
+
+    static func normalizedRoomCode(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
+
+    static func isValidRoomCode(_ value: String) -> Bool {
+        let code = normalizedRoomCode(value)
+        return code.count == 4 && code.utf8.allSatisfy { (65...90).contains($0) || (48...57).contains($0) }
+    }
+
+    var canEnterLobby: Bool {
+        !playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        serverURL != nil && !isEnteringLobby && session == nil
     }
 
     func serverNow() -> Double { Date().timeIntervalSince1970 * 1000 + clockOffset }
@@ -78,12 +102,21 @@ final class GameStore {
     }
 
     func joinGame(code: String) async {
-        let code = code.trimmingCharacters(in: .whitespaces).uppercased()
+        guard Self.isValidRoomCode(code) else { errorMessage = "Enter a four-character room code."; return }
+        let code = Self.normalizedRoomCode(code)
         await enterLobby(path: "games/\(code)/join", body: ["name": playerName])
     }
 
     private func enterLobby(path: String, body: [String: Any]) async {
-        guard let base = serverURL else { errorMessage = "Invalid server URL"; return }
+        guard !isEnteringLobby, session == nil else { return }
+        guard let base = serverURL else { errorMessage = "Enter a valid HTTP or HTTPS server address."; return }
+        let name = playerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { errorMessage = "Enter your display name."; return }
+        var body = body
+        body["name"] = name
+        isEnteringLobby = true
+        errorMessage = nil
+        defer { isEnteringLobby = false }
         do {
             let response = try await postJSON(base.appendingPathComponent(path), body: body)
             guard let code = response["code"] as? String, let playerId = response["playerId"] as? String,
@@ -100,7 +133,8 @@ final class GameStore {
         do {
             var request = URLRequest(url: base.appendingPathComponent("health"))
             request.timeoutInterval = 5
-            let (data, _) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await httpSession.data(for: request)
+            try validateHTTPResponse(response)
             return String(data: data, encoding: .utf8) ?? "OK"
         } catch {
             return error.localizedDescription
@@ -121,24 +155,38 @@ final class GameStore {
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         request.timeoutInterval = 10
-        let (data, _) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await httpSession.data(for: request)
         let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
         if let error = json["error"] as? String { throw ClientError.server(error) }
+        try validateHTTPResponse(response)
         return json
+    }
+
+    private func validateHTTPResponse(_ response: URLResponse) throws {
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let status = (response as? HTTPURLResponse)?.statusCode
+            throw ClientError.server(status.map { "Server returned HTTP \($0)." } ?? "Invalid server response.")
+        }
     }
 
     /// Handles `irlau://join?...` links (lobby QR scanned with the system camera or in-app).
     func handle(url: URL) {
         guard case let .join(code, server)? = QRPayload(url.absoluteString) else { return }
+        guard session == nil, !isEnteringLobby else {
+            errorMessage = "Leave your current game before joining another lobby."
+            return
+        }
+        guard Self.isValidRoomCode(code) else { errorMessage = "Enter a four-character room code."; return }
         if let server { serverURLString = server }
-        pendingJoinCode = code
+        pendingJoinCode = Self.normalizedRoomCode(code)
     }
 
-    /// Set when a join link arrives; HomeView prefills the code field from it.
+    /// Set when a join link arrives; the LOCAL picker and HomeView prefill the code field from it.
     var pendingJoinCode: String?
 
     func leave() {
         disconnect()
+        alert = nil
         session = nil
         state = nil
         ble.stop()
