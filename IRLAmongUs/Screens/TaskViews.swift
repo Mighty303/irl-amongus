@@ -89,46 +89,6 @@ struct TaskSheet: View {
     }
 }
 
-/// Stay on the screen at the station until the upload finishes. Backgrounding cancels it.
-struct UploadGame: View {
-    @Environment(\.scenePhase) private var scenePhase
-    let seconds: Int
-    /// Tells the server the upload began (it enforces the duration). Returns false if rejected.
-    let start: () async -> Bool
-    let onDone: () -> Void
-    @State private var startedAt: Date?
-    @State private var progress = 0.0
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("Upload data").font(.title2.bold())
-            ProgressView(value: progress)
-            if startedAt == nil {
-                Button("Start upload") { begin() }.buttonStyle(.borderedProminent)
-            } else {
-                Text("Uploading… don't leave this screen").font(.caption)
-            }
-        }
-        .task(id: startedAt) {
-            guard let startedAt else { return }
-            while !Task.isCancelled {
-                progress = min(1, Date().timeIntervalSince(startedAt) / Double(seconds))
-                if progress >= 1 { onDone(); return }
-                try? await Task.sleep(for: .milliseconds(100))
-            }
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active { startedAt = nil; progress = 0 } // server also enforces duration
-        }
-    }
-
-    private func begin() {
-        Task {
-            if await start() { startedAt = Date() }
-        }
-    }
-}
-
 /// Simon says: watch the sequence, then repeat it.
 struct SequenceGame: View {
     let onDone: () -> Void
