@@ -537,82 +537,41 @@ private struct GameLobbyView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let scale = max(geometry.size.width / 828, geometry.size.height / 1792)
+            let size = geometry.size
+            let landscape = size.width > size.height
+            let screenStars = stars.map {
+                Star(x: $0.x / 828 * size.width, y: $0.y / 1792 * size.height,
+                     radius: $0.radius * 0.4, phase: $0.phase, speed: $0.speed)
+            }
 
             ZStack {
                 Color.black
 
-                TwinklingStarfield(stars: stars, scale: scale)
-                    .frame(width: 828 * scale, height: 1792 * scale)
+                TwinklingStarfield(stars: screenStars, scale: 1)
+                    .frame(width: size.width, height: size.height)
                     .allowsHitTesting(false)
 
                 VStack(spacing: 14) {
                     lobbyTopBar
 
-                    ZStack(alignment: .bottomLeading) {
-                        WaitingRoomScene()
-                            .clipShape(RoundedRectangle(cornerRadius: 22))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 22)
-                                    .stroke(.white.opacity(0.75), lineWidth: 3)
-                            )
-
-                        Text("Waiting for players…")
-                            .font(.system(size: 17, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.88))
-                            .padding(.horizontal, 15)
-                            .padding(.vertical, 9)
-                            .background(.black.opacity(0.72), in: Capsule())
-                            .padding(16)
-                    }
-                    .frame(maxHeight: .infinity)
-
-                    HStack(spacing: 12) {
-                        lobbyCode
-                        playersCard
-                    }
-
-                    HStack(spacing: 12) {
-                        Button {
-                            buttonAudio.play()
-                            lobbyAlert = LobbyAlert(
-                                title: "Customize",
-                                message: "Color, hats, pets, and name customization will live here."
-                            )
-                        } label: {
-                            Label("CUSTOMIZE", systemImage: "tshirt.fill")
-                                .frame(maxWidth: .infinity, minHeight: 54)
+                    if landscape {
+                        HStack(spacing: 20) {
+                            waitingRoom
+                            lobbyControls
+                                .frame(width: min(340, size.width * 0.4))
                         }
-                        .buttonStyle(LobbyOutlineButtonStyle())
-
-                        Button {
-                            buttonAudio.play()
-                            lobbyAlert = LobbyAlert(
-                                title: "Need more players",
-                                message: "Invite at least three more crewmates before starting the game."
-                            )
-                        } label: {
-                            Text("START")
-                                .frame(maxWidth: .infinity, minHeight: 54)
-                        }
-                        .buttonStyle(LobbyStartButtonStyle())
+                        .frame(maxHeight: .infinity)
+                    } else {
+                        waitingRoom
+                        lobbyControls
                     }
-
-                    Button {
-                        buttonAudio.play()
-                        onLeave()
-                    } label: {
-                        Text("Leave Game")
-                            .font(.system(size: 16, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.82))
-                            .underline()
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.bottom, 4)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 18)
+                .frame(width: size.width, height: size.height)
             }
+            .frame(width: size.width, height: size.height)
+            .clipped()
         }
         .background(Color.black)
         .alert(item: $lobbyAlert) { alert in
@@ -621,6 +580,72 @@ private struct GameLobbyView: View {
                 message: Text(alert.message),
                 dismissButton: .default(Text("OK"))
             )
+        }
+    }
+
+    private var waitingRoom: some View {
+        ZStack(alignment: .bottomLeading) {
+            WaitingRoomScene()
+
+            Text("Waiting for players…")
+                .font(.system(size: 17, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.88))
+                .padding(.horizontal, 15)
+                .padding(.vertical, 9)
+                .background(.black.opacity(0.72), in: Capsule())
+                .padding(16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: 22))
+        .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.75), lineWidth: 3))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("lobby.waitingRoom")
+    }
+
+    private var lobbyControls: some View {
+        VStack(spacing: 14) {
+            HStack(spacing: 12) {
+                lobbyCode
+                playersCard
+            }
+
+            HStack(spacing: 12) {
+                Button {
+                    buttonAudio.play()
+                    lobbyAlert = LobbyAlert(
+                        title: "Customize",
+                        message: "Color, hats, pets, and name customization will live here."
+                    )
+                } label: {
+                    Label("CUSTOMIZE", systemImage: "tshirt.fill")
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(LobbyOutlineButtonStyle())
+
+                Button {
+                    buttonAudio.play()
+                    lobbyAlert = LobbyAlert(
+                        title: "Need more players",
+                        message: "Invite at least three more crewmates before starting the game."
+                    )
+                } label: {
+                    Text("START")
+                        .frame(maxWidth: .infinity, minHeight: 54)
+                }
+                .buttonStyle(LobbyStartButtonStyle())
+            }
+
+            Button {
+                buttonAudio.play()
+                onLeave()
+            } label: {
+                Text("Leave Game")
+                    .font(.system(size: 16, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .underline()
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 4)
         }
     }
 
@@ -690,103 +715,12 @@ private struct GameLobbyView: View {
 private struct WaitingRoomScene: View {
     var body: some View {
         GeometryReader { geometry in
-            let unit = min(geometry.size.width / 360, geometry.size.height / 470)
-
-            ZStack {
-                LinearGradient(
-                    colors: [Color(red: 0.09, green: 0.15, blue: 0.23), Color(red: 0.02, green: 0.04, blue: 0.08)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-
-                VStack(spacing: 0) {
-                    HStack(spacing: 22 * unit) {
-                        wallLight
-                        Spacer()
-                        wallLight
-                    }
-                    .padding(.horizontal, 32 * unit)
-                    .padding(.top, 24 * unit)
-
-                    Spacer()
-                }
-
-                Path { path in
-                    path.move(to: CGPoint(x: 0, y: geometry.size.height * 0.72))
-                    path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height * 0.62))
-                    path.addLine(to: CGPoint(x: geometry.size.width, y: geometry.size.height))
-                    path.addLine(to: CGPoint(x: 0, y: geometry.size.height))
-                    path.closeSubpath()
-                }
-                .fill(Color(red: 0.17, green: 0.22, blue: 0.29))
-
-                ForEach(0..<5, id: \.self) { index in
-                    Rectangle()
-                        .fill(.black.opacity(0.25))
-                        .frame(width: 2)
-                        .rotationEffect(.degrees(-30))
-                        .offset(x: CGFloat(index - 2) * 92 * unit, y: 110 * unit)
-                }
-
-                VStack {
-                    Spacer()
-                    HStack(spacing: 44 * unit) {
-                        LobbyCrewmate(color: .red)
-                        LobbyLaptop()
-                        LobbyCrewmate(color: Color(red: 0.1, green: 0.82, blue: 0.92))
-                            .opacity(0.18)
-                    }
-                    .padding(.bottom, 45 * unit)
-                }
-            }
-        }
-    }
-
-    private var wallLight: some View {
-        Capsule()
-            .fill(Color(red: 0.25, green: 0.82, blue: 1))
-            .frame(width: 60, height: 7)
-            .shadow(color: Color.cyan.opacity(0.9), radius: 10)
-    }
-}
-
-private struct LobbyCrewmate: View {
-    let color: Color
-
-    var body: some View {
-        ZStack(alignment: .topTrailing) {
-            RoundedRectangle(cornerRadius: 25)
-                .fill(color)
-                .frame(width: 70, height: 94)
-                .overlay(RoundedRectangle(cornerRadius: 25).stroke(.black.opacity(0.58), lineWidth: 5))
-                .offset(y: 12)
-
-            RoundedRectangle(cornerRadius: 14)
-                .fill(LinearGradient(colors: [.white.opacity(0.9), Color(red: 0.22, green: 0.69, blue: 0.86)], startPoint: .top, endPoint: .bottom))
-                .frame(width: 49, height: 29)
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(.black.opacity(0.65), lineWidth: 5))
-                .offset(x: 12, y: 25)
-        }
-        .frame(width: 88, height: 110)
-    }
-}
-
-private struct LobbyLaptop: View {
-    var body: some View {
-        VStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color(red: 0.58, green: 0.66, blue: 0.7))
-                .frame(width: 73, height: 55)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Color(red: 0.25, green: 0.98, blue: 0.54))
-                        .padding(7)
-                )
-                .overlay(RoundedRectangle(cornerRadius: 4).stroke(.black.opacity(0.65), lineWidth: 4))
-            Capsule()
-                .fill(Color(red: 0.48, green: 0.54, blue: 0.58))
-                .frame(width: 95, height: 13)
-                .overlay(Capsule().stroke(.black.opacity(0.6), lineWidth: 3))
+            Image("LobbyRoom")
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: geometry.size.width, height: geometry.size.height)
+                .accessibilityHidden(true)
         }
     }
 }
