@@ -47,7 +47,11 @@ final class GameStore {
 
     init() {
         let defaults = UserDefaults.standard
-        serverURLString = defaults.string(forKey: "serverURL") ?? "http://192.168.1.100:3000"
+        // Saved addresses from local testing (Cloudflare quick tunnels, the old LAN placeholder) are dead;
+        // move them to the hosted server. Any other saved address (e.g. a laptop on purpose) is kept.
+        let saved = defaults.string(forKey: "serverURL")
+        let isStale = saved.map { $0.contains("trycloudflare.com") || $0 == "http://192.168.1.100:3000" } ?? true
+        serverURLString = isStale ? Self.defaultServerURL : saved!
         playerName = defaults.string(forKey: "playerName") ?? ""
         signThreshold = defaults.object(forKey: "signThreshold") as? Float ?? 0.6
         if let data = defaults.data(forKey: "session") {
@@ -55,6 +59,9 @@ final class GameStore {
         }
         if session != nil { connect() }
     }
+
+    /// Hosted game server (Render). Override in the Online game's Server field for a local server.
+    static let defaultServerURL = "https://irl-amongus-server.onrender.com"
 
     var serverURL: URL? {
         var text = serverURLString.trimmingCharacters(in: .whitespacesAndNewlines)

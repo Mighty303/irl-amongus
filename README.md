@@ -50,9 +50,9 @@ The networked game: real roles, BLE proximity kills, sign check-ins, meetings an
 
 ### Run it
 
-1. Start the server: clone the backend repo, then `npm install && npm start`. On campus Wi-Fi or behind a VPN, use `cloudflared tunnel --url http://localhost:3000`.
-2. Open `IRLAmongUs.xcodeproj`, set your signing team, and run on each iPhone.
-3. The app opens on the main menu. **Shake the phone** (Debug builds) to open Developer Mode and choose **Online game (server POC)**: enter the server URL (the scheme is optional; `https://` is assumed), a name, and **Create game**. Other phones scan the lobby QR (it carries the server URL too) or type the code.
+1. Open `IRLAmongUs.xcodeproj`, set your signing team, and run on each iPhone.
+2. The app opens on the main menu. **Shake the phone** (Debug builds) to open Developer Mode and choose **Online game (server POC)**, enter a name and **Create game**. Other phones scan the lobby QR or type the code.
+3. The app uses the hosted server, **https://irl-amongus-server.onrender.com** (Render + Redis), by default. To run your own instead, clone the backend repo, `npm install && npm start`, and enter its URL in the Server field (on campus Wi-Fi or behind a VPN, use `cloudflared tunnel --url http://localhost:3000`).
 
 Testing with one phone: in the backend repo, `npm run bots -- <CODE> 3` fills the lobby with bots. In the lobby host settings, the `DEV:` toggles skip BLE and checkpoint checks for simulator testing.
 
