@@ -56,6 +56,7 @@ struct TaskSheet: View {
         case .sequence: SequenceGame(onDone: complete)
         case .swipe: SwipeCardGame(onDone: complete)
         case .shields: ShieldsGame(onDone: complete)
+        case .o2: O2Game(onDone: complete)
         case .unknown:
             Text("This task needs a newer version of the app.")
                 .font(.headline).foregroundStyle(.white).multilineTextAlignment(.center)

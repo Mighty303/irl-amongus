@@ -24,6 +24,7 @@ struct ToolsLabView: View {
                     }
                     NavigationLink("Swipe Card") { MiniGameHost { SwipeCardGame(onDone: $0) } }
                     NavigationLink("Prime Shields") { MiniGameHost { ShieldsGame(onDone: $0) } }
+                    NavigationLink("Clean O2 Filter") { MiniGameHost { O2Game(onDone: $0) } }
                 }
             }
             .navigationTitle("Tools")
