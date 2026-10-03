@@ -1240,7 +1240,7 @@ private struct POCFloorPlan: View {
                             .stroke(.cyan.opacity(0.55), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                     }
 
-                mapContent(projection: projection)
+                mapContent(projection: projection, zoomScale: visibleScale)
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .scaleEffect(visibleScale)
                     .offset(visibleOffset)
@@ -1298,7 +1298,7 @@ private struct POCFloorPlan: View {
     }
 
     @ViewBuilder
-    private func mapContent(projection: POCMapProjection) -> some View {
+    private func mapContent(projection: POCMapProjection, zoomScale: CGFloat) -> some View {
         Canvas { context, _ in
             for room in rooms {
                 let isHighlighted = selectedStation?.roomID == room.roomID
@@ -1322,6 +1322,7 @@ private struct POCFloorPlan: View {
                 .minimumScaleFactor(0.65)
                 .foregroundStyle(.white.opacity(0.72))
                 .frame(width: 54)
+                .scaleEffect(1 / zoomScale)
                 .position(projection.point(room.center))
         }
 
@@ -1349,6 +1350,7 @@ private struct POCFloorPlan: View {
                 }
             }
             .buttonStyle(.plain)
+            .scaleEffect(1 / zoomScale)
             .position(projection.point(station.position))
             .accessibilityLabel("\(station.displayName) station, \(station.roomLabel), \(isCompleted ? "completed" : "assigned")")
         }
@@ -1362,6 +1364,7 @@ private struct POCFloorPlan: View {
         .padding(8)
         .background(.red, in: Circle())
         .overlay(Circle().stroke(.white, lineWidth: 2))
+        .scaleEffect(1 / zoomScale)
         .position(projection.point(meetingPoint))
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Emergency meeting point, SUB 2430 public study area, Level 2")
@@ -1381,6 +1384,7 @@ private struct POCFloorPlan: View {
                     .padding(.vertical, 3)
                     .background(.cyan, in: Capsule())
             }
+            .scaleEffect(1 / zoomScale)
             .position(playerMarkerPosition(for: checkpointStation, projection: projection))
             .accessibilityElement(children: .ignore)
             .accessibilityIdentifier("map.ownCheckpoint")
