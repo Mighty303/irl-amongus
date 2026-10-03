@@ -43,11 +43,11 @@ struct LobbyView: View {
                                 Button("QR") { qrStation = s }
                             }
                     }
-                    if state.isHost { Button("Add station (photograph a sign)") { addingStation = true } }
+                    if state.isHost { Button("Add a sign (photograph it)") { addingStation = true } }
                 } header: {
-                    Text("Map: \(state.mapId) · \(state.stations.count) stations")
+                    Text("Map: \(state.mapId) · \(state.stations.count) signs")
                 } footer: {
-                    Text("Stations persist on the server, so you only set up a venue once. Needs ≥1 task station. Add a meeting station so meetings wait for everyone to gather. Swipe for the fallback QR.")
+                    Text("Signs are saved on the server, so you set up a venue once. Each game assigns random tasks to the \"Sign (tasks)\" signs; add a meeting point so meetings wait for everyone to gather. Swipe for the fallback QR.")
                 }
 
                 if state.isHost {
@@ -94,7 +94,7 @@ struct StationRow: View {
             }
             VStack(alignment: .leading) {
                 Text(station.name).font(.headline)
-                Text([station.kind.rawValue, station.taskType?.rawValue, station.lat != nil ? "GPS" : nil, station.signText.map { "“\($0)”" }]
+                Text([station.kind.label, station.lat != nil ? "GPS" : nil, station.signText.map { "“\($0)”" }]
                     .compactMap { $0 }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary)
             }

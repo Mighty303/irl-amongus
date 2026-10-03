@@ -12,13 +12,33 @@ enum Role: String, Codable {
 }
 
 enum StationKind: String, Codable, CaseIterable, Identifiable {
+    /// `task` stations are plain signs; the server assigns a random mini-game to each at game start.
     case task, meeting, emergency, reactor, electrical
     var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .task: return "Sign (tasks)"
+        case .meeting: return "Meeting point"
+        case .emergency: return "Emergency button"
+        case .reactor: return "Reactor"
+        case .electrical: return "Electrical (lights)"
+        }
+    }
 }
 
 enum TaskType: String, Codable, CaseIterable, Identifiable {
     case wiring, upload, sequence, delivery
     var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .wiring: return "Fix Wiring"
+        case .upload: return "Upload Data"
+        case .sequence: return "Start Reactor Sequence"
+        case .delivery: return "Delivery"
+        }
+    }
 }
 
 struct GameState: Decodable, Equatable {
@@ -78,7 +98,6 @@ struct Station: Codable, Identifiable, Hashable {
     let id: String
     let name: String
     let kind: StationKind
-    let taskType: TaskType?
     let lat: Double?
     let lng: Double?
     let radiusM: Double

@@ -1,13 +1,13 @@
 import SwiftUI
 
-/// Host walks to a sign, photographs it, and tags it with GPS. That's the whole venue setup.
+/// Host walks to a sign, photographs it, and tags it with GPS. That's the whole venue setup:
+/// the server assigns random tasks to signs at game start.
 struct StationEditorView: View {
     @Environment(GameStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
     @State private var kind: StationKind = .task
-    @State private var taskType: TaskType = .wiring
     @State private var signText = ""
     @State private var tagGPS = true
     @State private var radius: Double = 15
@@ -33,14 +33,9 @@ struct StationEditorView: View {
                     }
                 }
                 Section("Station") {
-                    TextField("Name (e.g. Electrical)", text: $name)
-                    Picker("Kind", selection: $kind) {
-                        ForEach(StationKind.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    if kind == .task {
-                        Picker("Task", selection: $taskType) {
-                            ForEach(TaskType.allCases) { Text($0.rawValue).tag($0) }
-                        }
+                    TextField("Name (e.g. Room 2005 sign)", text: $name)
+                    Picker("Used as", selection: $kind) {
+                        ForEach(StationKind.allCases) { Text($0.label).tag($0) }
                     }
                     TextField("Text on the sign (optional, for OCR)", text: $signText)
                 }
@@ -57,7 +52,7 @@ struct StationEditorView: View {
                     Text("GPS places the pin on the mini-map and enables GPS check-in. Indoors it's rough. Sign recognition is the main check-in method.")
                 }
             }
-            .navigationTitle("New station")
+            .navigationTitle("New sign")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -74,7 +69,6 @@ struct StationEditorView: View {
         Task {
             defer { saving = false }
             var payload: [String: Any] = ["name": name, "kind": kind.rawValue, "radiusM": radius]
-            if kind == .task { payload["taskType"] = taskType.rawValue }
             if !signText.isEmpty { payload["signText"] = signText }
             if tagGPS, let loc = store.location.location {
                 payload["lat"] = loc.coordinate.latitude
