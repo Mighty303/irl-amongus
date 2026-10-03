@@ -56,6 +56,19 @@
 		C10000000000000000000013 /* among-us-kill.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "among-us-kill.mp3"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		S10000000000000000000001 /* Core */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Core;
+			sourceTree = "<group>";
+		};
+		S10000000000000000000002 /* Device */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Device;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
 /* Begin PBXFrameworksBuildPhase section */
 		F10000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
@@ -103,6 +116,8 @@
 				C10000000000000000000010 /* among-us-theme-song.mp3 */,
 				C10000000000000000000011 /* button-press.mp3 */,
 				G10000000000000000000003 /* Preview Content */,
+				S10000000000000000000001 /* Core */,
+				S10000000000000000000002 /* Device */,
 			);
 			path = IRLAmongUs;
 			sourceTree = "<group>";
@@ -172,6 +187,10 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				S10000000000000000000001 /* Core */,
+				S10000000000000000000002 /* Device */,
 			);
 			name = IRLAmongUs;
 			productName = IRLAmongUs;
@@ -454,6 +473,7 @@
 				DEVELOPMENT_TEAM = FW528PK6A5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "IRL Among Us";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -465,7 +485,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.IRLAmongUs;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -481,6 +501,7 @@
 				DEVELOPMENT_TEAM = FW528PK6A5;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "IRL Among Us";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.games";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -492,7 +513,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.example.IRLAmongUs;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 6.0;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
