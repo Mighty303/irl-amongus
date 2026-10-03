@@ -4,10 +4,19 @@ import UIKit
 @main
 struct IRLAmongUsApp: App {
     @UIApplicationDelegateAdaptor(OrientationDelegate.self) private var orientationDelegate
+    @State private var store = GameStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environment(store)
+                .onOpenURL { store.handle(url: $0) }
+                .onChange(of: scenePhase) { _, phase in store.scenePhaseChanged(phase) }
+                .onChange(of: store.session) { _, session in
+                    // Phones stay face-up and awake during play (bodies especially).
+                    UIApplication.shared.isIdleTimerDisabled = session != nil
+                }
         }
     }
 }

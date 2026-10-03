@@ -67,6 +67,11 @@
 			path = Device;
 			sourceTree = "<group>";
 		};
+		S10000000000000000000003 /* Screens */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Screens;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,6 +123,7 @@
 				G10000000000000000000003 /* Preview Content */,
 				S10000000000000000000001 /* Core */,
 				S10000000000000000000002 /* Device */,
+				S10000000000000000000003 /* Screens */,
 			);
 			path = IRLAmongUs;
 			sourceTree = "<group>";
@@ -191,6 +197,7 @@
 			fileSystemSynchronizedGroups = (
 				S10000000000000000000001 /* Core */,
 				S10000000000000000000002 /* Device */,
+				S10000000000000000000003 /* Screens */,
 			);
 			name = IRLAmongUs;
 			productName = IRLAmongUs;

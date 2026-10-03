@@ -210,6 +210,9 @@ struct ContentView: View {
             }, onOpenVoting: {
                 pendingDeveloperDestination = .voting
                 showingDeveloperMenu = false
+            }, onOpenPOC: { destination in
+                pendingDeveloperDestination = .poc(destination)
+                showingDeveloperMenu = false
             })
             .presentationDetents([.medium])
         }
@@ -220,6 +223,7 @@ struct ContentView: View {
             switch destination {
             case .physicalMap: PhysicalMapPOCView()
             case .voting: VotingPOCView()
+            case .poc(let destination): POCDestinationView(destination: destination)
             }
         }
     }
@@ -932,14 +936,23 @@ private struct MenuHotspot: Identifiable {
     var id: String { title }
 }
 
-private enum DeveloperDestination: String, Identifiable {
+private enum DeveloperDestination: Identifiable {
     case physicalMap, voting
-    var id: String { rawValue }
+    case poc(POCDestination)
+
+    var id: String {
+        switch self {
+        case .physicalMap: return "physicalMap"
+        case .voting: return "voting"
+        case .poc(let destination): return "poc.\(destination.rawValue)"
+        }
+    }
 }
 
 private struct DeveloperMenuView: View {
     let onOpenPhysicalMap: () -> Void
     let onOpenVoting: () -> Void
+    let onOpenPOC: (POCDestination) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -956,6 +969,13 @@ private struct DeveloperMenuView: View {
                         Label("Open Voting POC", systemImage: "checkmark.bubble.fill")
                     }
                     .accessibilityIdentifier("developer.openVoting")
+
+                    ForEach(POCDestination.allCases) { destination in
+                        Button { onOpenPOC(destination) } label: {
+                            Label(destination.title, systemImage: destination.systemImage)
+                        }
+                        .accessibilityIdentifier("developer.\(destination.rawValue)")
+                    }
                 }
 
                 Section("Developer shortcut") {
