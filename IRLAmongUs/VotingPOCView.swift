@@ -62,7 +62,7 @@ struct VotingPOCView: View {
                 Image("VotingChat").resizable().scaledToFit().frame(width: 25, height: 28)
                     .accessibilityHidden(true)
                 Button { dismiss() } label: {
-                    Image("VotingExit").resizable().scaledToFit().frame(width: 28, height: 28)
+                    Image("CloseMenuIcon").resizable().scaledToFit().frame(width: 28, height: 28)
                         .frame(width: 44, height: 32)
                 }
                 .buttonStyle(.plain)
@@ -86,7 +86,7 @@ struct VotingPOCView: View {
             } else {
                 HStack(spacing: 8) {
                     Button { round.select(.skip) } label: {
-                        Image("VotingSkip").resizable().scaledToFit()
+                        Image("SkipVoteButton").resizable().scaledToFit()
                             .frame(width: 90, height: 30).frame(height: 44)
                     }
                     .buttonStyle(.plain)
@@ -216,16 +216,21 @@ struct VotingPOCView: View {
                     .font(.system(size: 10, weight: .medium))
             }
             Spacer(minLength: 0)
-            Button("Play Again") { round.restart() }
-                .accessibilityIdentifier("voting.replay")
-                .foregroundStyle(.white)
-            Button("Exit") { dismiss() }
-                .accessibilityIdentifier("voting.resultExit")
-                .foregroundStyle(.white)
+            Button { round.restart() } label: {
+                Image("PlayAgainActionIcon").resizable().scaledToFit().frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Play Again")
+            .accessibilityIdentifier("voting.replay")
+            Button { dismiss() } label: {
+                Image("CloseMenuIcon").resizable().scaledToFit().frame(width: 32, height: 32)
+                    .frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("Exit")
+            .accessibilityIdentifier("voting.resultExit")
         }
         .frame(height: 44)
         .font(.system(size: 14, weight: .bold, design: .rounded))
-        .buttonStyle(.borderedProminent).tint(Color(red: 0.23, green: 0.35, blue: 0.43))
+        .buttonStyle(.plain)
         .controlSize(.regular)
     }
 

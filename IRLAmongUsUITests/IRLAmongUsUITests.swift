@@ -18,8 +18,17 @@ final class IRLAmongUsUITests: XCTestCase {
         captureVoting(app, name: "Main menu landscape")
 
         app.buttons["Local"].tap()
-        XCTAssertTrue(app.alerts["Local"].waitForExistence(timeout: 5))
+
+        XCTAssertTrue(app.staticTexts["HOST"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Create"].exists)
+        XCTAssertTrue(app.buttons["Classic"].exists)
+        XCTAssertTrue(app.buttons["Hide n Seek"].exists)
+        XCTAssertTrue(app.buttons["Back"].exists)
         XCTAssertFalse(app.staticTexts["PHYSICAL MAP"].exists)
+
+        app.buttons["Back"].tap()
+
+        XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
     }
 
     @MainActor

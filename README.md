@@ -35,6 +35,6 @@ Debug builds also accept `-votingTestDuration <seconds>` (1–60) to shorten tes
 Previews: [Map (portrait)](docs/map-portrait.png), [Main menu](docs/main-menu-landscape.png), [Voting](docs/voting-landscape.png), [Selection](docs/voting-selection.png), [Results](docs/voting-results.png).
 
 Voting artwork is extracted from the user-supplied **Among Us — Voting Screen / Chat** sprite sheet (sheet credit: JJ314).
-The tablet, glass, player cards, stamps, reporter icon, dead-player cross, and voting controls use those sprites.
+The tablet, glass, player cards, stamps, reporter icon, dead-player cross, and confirm/cancel controls use those sprites. Menu buttons, account/settings icons, skip, close, and replay reuse the shared assets from main (see [sprite attribution](SPRITE_ASSET_ATTRIBUTION.md)).
 Crewmate suit colors are derived from the supplied red icon while retaining its visor and shading.
 To regenerate the assets, run `python3 scripts/extract-voting-assets.py /path/to/sprite-sheet.png` from the repository root (requires ImageMagick).
