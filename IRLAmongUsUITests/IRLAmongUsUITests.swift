@@ -20,5 +20,9 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Classic"].exists)
         XCTAssertTrue(app.buttons["Hide n Seek"].exists)
         XCTAssertTrue(app.buttons["Back"].exists)
+
+        app.buttons["Back"].tap()
+
+        XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
     }
 }

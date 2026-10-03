@@ -83,7 +83,6 @@ struct ContentView: View {
     ]
 
     @State private var selectedHotspot: MenuHotspot?
-    @State private var travelProgress = 0.0
     @State private var isShowingLocalLobby = false
     @StateObject private var themeAudio = ThemeAudioPlayer()
     @StateObject private var buttonAudio = ButtonPressAudioPlayer()
@@ -146,16 +145,9 @@ struct ContentView: View {
                     )
                     .accessibilityAddTraits(.isHeader)
 
-                Image("RedCrewmate")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 245 * scale, height: 175 * scale)
-                    .rotationEffect(.degrees(-7))
-                    .position(
-                        x: origin.x + (-150 + travelProgress * 1_128) * scale,
-                        y: origin.y + 870 * scale
-                    )
-                    .accessibilityHidden(true)
+                LoopingCrewmate(scale: scale, origin: origin)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .allowsHitTesting(false)
 
                 ForEach(Self.hotspots) { hotspot in
                     Button {
@@ -210,10 +202,6 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             themeAudio.play()
-            travelProgress = 0
-            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
-                travelProgress = 1
-            }
         }
         .alert(item: $selectedHotspot) { hotspot in
             Alert(
@@ -221,6 +209,32 @@ struct ContentView: View {
                 message: Text(hotspot.message),
                 dismissButton: .default(Text("Back"))
             )
+        }
+    }
+}
+
+private struct LoopingCrewmate: View {
+    let scale: Double
+    let origin: CGPoint
+
+    private let duration = 8.0
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 60)) { timeline in
+            let elapsed = timeline.date.timeIntervalSinceReferenceDate
+            let progress = elapsed.truncatingRemainder(dividingBy: duration) / duration
+            let bob = sin(progress * .pi * 4) * 12
+
+            Image("RedCrewmate")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 245 * scale, height: 175 * scale)
+                .rotationEffect(.degrees(-7 + sin(progress * .pi * 4) * 2))
+                .position(
+                    x: origin.x + (-150 + progress * 1_128) * scale,
+                    y: origin.y + (870 + bob) * scale
+                )
+                .accessibilityHidden(true)
         }
     }
 }
