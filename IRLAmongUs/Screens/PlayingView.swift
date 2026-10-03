@@ -158,8 +158,11 @@ struct TaskRow: View {
     }
 
     private var title: String {
-        guard task.type == .delivery else { return task.type.label }
-        return task.step == 0 ? "Delivery: pick up package" : "Delivery: drop off package"
+        switch task.type {
+        case .delivery: return task.step == 0 ? "Delivery: pick up package" : "Delivery: drop off package"
+        case .divert: return task.step == 0 ? "Divert Power" : "Accept Diverted Power"
+        default: return task.type.label
+        }
     }
 }
 
