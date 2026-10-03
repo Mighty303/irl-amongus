@@ -13,17 +13,21 @@ final class IRLAmongUsUITests: XCTestCase {
 
         XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["Online"].exists)
+
+        app.buttons["Local"].tap()
+        XCTAssertTrue(app.alerts["Local"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["PHYSICAL MAP"].exists)
     }
 
     @MainActor
     func testOpensPhysicalMapAndStationDetails() throws {
         let app = XCUIApplication()
         app.launchArguments.append("-disableAudio")
+        app.launchArguments.append("-showDeveloperMenu")
         app.launch()
 
-        let localButton = app.buttons["Local"]
-        XCTAssertTrue(localButton.waitForExistence(timeout: 5))
-        localButton.tap()
+        XCTAssertTrue(app.navigationBars["Developer Mode"].waitForExistence(timeout: 5))
+        app.buttons["developer.openPhysicalMap"].tap()
 
         XCTAssertTrue(app.staticTexts["PHYSICAL MAP"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["SFU Student Union Building · Level 2"].exists)

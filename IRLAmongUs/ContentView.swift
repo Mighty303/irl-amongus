@@ -156,12 +156,7 @@ struct ContentView: View {
                 ForEach(Self.hotspots) { hotspot in
                     Button {
                         buttonAudio.play()
-                        if hotspot.title == "Local" {
-                            themeAudio.pause()
-                            showingPhysicalMap = true
-                        } else {
-                            selectedHotspot = hotspot
-                        }
+                        selectedHotspot = hotspot
                     } label: {
                         Color.clear
                             .contentShape(Rectangle())
@@ -632,9 +627,19 @@ private struct POCFloorPlan: View {
     let ownLastCheckpoint: POCCheckpoint
     let onSelectStation: (POCStation) -> Void
 
+    @State private var zoomScale: CGFloat = 1
+    @GestureState private var gestureZoomScale: CGFloat = 1
+    @State private var panOffset: CGSize = .zero
+    @GestureState private var gesturePanOffset: CGSize = .zero
+
     var body: some View {
         GeometryReader { geometry in
             let projection = POCMapProjection(bounds: POCMapBounds.covering(rooms), size: geometry.size)
+            let visibleScale = min(max(zoomScale * gestureZoomScale, 1), 4)
+            let visibleOffset = CGSize(
+                width: panOffset.width + gesturePanOffset.width,
+                height: panOffset.height + gesturePanOffset.height
+            )
 
             ZStack {
                 RoundedRectangle(cornerRadius: 22)
@@ -644,98 +649,185 @@ private struct POCFloorPlan: View {
                             .stroke(.cyan.opacity(0.55), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                     }
 
-                Canvas { context, _ in
-                    for room in rooms {
-                        let isHighlighted = selectedStation?.roomID == room.roomID
-                        let isCorridor = room.roomType.localizedCaseInsensitiveContains("corridor")
-                        let path = room.path(using: projection)
-                        let fill = isHighlighted
-                            ? Color.orange.opacity(0.42)
-                            : isCorridor ? Color.cyan.opacity(0.10) : Color.white.opacity(0.12)
-                        let stroke = isHighlighted ? Color.orange : Color.white.opacity(0.34)
+                mapContent(projection: projection)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .scaleEffect(visibleScale)
+                    .offset(visibleOffset)
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(panGesture(in: geometry.size))
+                    .simultaneousGesture(zoomGesture(in: geometry.size))
 
-                        context.fill(path, with: .color(fill))
-                        context.stroke(path, with: .color(stroke), lineWidth: isHighlighted ? 2.5 : 0.8)
-                    }
-                }
-
-                ForEach(rooms.filter(shouldShowLabel)) { room in
-                    Text(room.mapLabel)
-                        .font(.system(size: 7, weight: .bold, design: .rounded))
-                        .multilineTextAlignment(.center)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.65)
-                        .foregroundStyle(.white.opacity(0.72))
-                        .frame(width: 54)
-                        .position(projection.point(room.center))
-                }
-
-                ForEach(stations) { station in
-                    let isCompleted = completedStationIDs.contains(station.id)
-
-                    Button {
-                        onSelectStation(station)
-                    } label: {
-                        VStack(spacing: 2) {
-                            Image(systemName: isCompleted ? "checkmark" : "wrench.and.screwdriver.fill")
-                                .font(.caption.weight(.black))
-                                .foregroundStyle(.black)
-                                .frame(width: 32, height: 32)
-                                .background(isCompleted ? Color.green : Color.orange, in: Circle())
-                                .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
-                                .shadow(color: (isCompleted ? Color.green : Color.orange).opacity(0.45), radius: 7)
-
-                            Text(station.roomID)
-                                .font(.system(size: 8, weight: .black, design: .rounded))
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button {
+                            resetViewport()
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .font(.subheadline.weight(.bold))
                                 .foregroundStyle(.white)
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(.black.opacity(0.76), in: Capsule())
+                                .frame(width: 36, height: 36)
+                                .background(.black.opacity(0.72), in: Circle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("map.resetViewport")
+                        .accessibilityLabel("Reset map position and zoom")
                     }
-                    .buttonStyle(.plain)
-                    .position(projection.point(station.position))
-                    .accessibilityLabel("\(station.displayName) station, \(station.roomLabel), \(isCompleted ? "completed" : "assigned")")
-                }
 
-                VStack(spacing: 2) {
-                    Image(systemName: "megaphone.fill")
-                    Text("MEETING")
-                        .font(.system(size: 8, weight: .black))
-                }
-                .foregroundStyle(.white)
-                .padding(8)
-                .background(.red, in: Circle())
-                .overlay(Circle().stroke(.white, lineWidth: 2))
-                .position(projection.point(meetingPoint))
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Emergency meeting point, SUB 2430 public study area, Level 2")
+                    Spacer()
 
-                if let checkpointStation = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) {
-                    VStack(spacing: 0) {
-                        Image("PlayerMarker")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 58, height: 58)
-                            .shadow(color: .cyan.opacity(0.75), radius: 8)
-
-                        Text("YOU")
-                            .font(.system(size: 9, weight: .black, design: .rounded))
-                            .foregroundStyle(.black)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(.cyan, in: Capsule())
+                    HStack {
+                        Label("Drag to move · Pinch to zoom", systemImage: "hand.draw.fill")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.86))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 6)
+                            .background(.black.opacity(0.7), in: Capsule())
+                            .allowsHitTesting(false)
+                        Spacer()
                     }
-                    .position(playerMarkerPosition(for: checkpointStation, projection: projection))
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityIdentifier("map.ownCheckpoint")
-                    .accessibilityLabel("You, last verified at \(ownLastCheckpoint.stationName), \(ownLastCheckpoint.roomLabel), \(ownLastCheckpoint.verifiedAt.formatted(date: .omitted, time: .shortened))")
                 }
+                .padding(12)
             }
-            .padding(4)
+            .clipShape(RoundedRectangle(cornerRadius: 22))
         }
         .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("map.floorPlan")
         .accessibilityLabel("Simon Fraser University Student Union Building Level 2 floor map")
+        .accessibilityHint("Drag to move the map and pinch to zoom")
+    }
+
+    @ViewBuilder
+    private func mapContent(projection: POCMapProjection) -> some View {
+        Canvas { context, _ in
+            for room in rooms {
+                let isHighlighted = selectedStation?.roomID == room.roomID
+                let isCorridor = room.roomType.localizedCaseInsensitiveContains("corridor")
+                let path = room.path(using: projection)
+                let fill = isHighlighted
+                    ? Color.orange.opacity(0.42)
+                    : isCorridor ? Color.cyan.opacity(0.10) : Color.white.opacity(0.12)
+                let stroke = isHighlighted ? Color.orange : Color.white.opacity(0.34)
+
+                context.fill(path, with: .color(fill))
+                context.stroke(path, with: .color(stroke), lineWidth: isHighlighted ? 2.5 : 0.8)
+            }
+        }
+
+        ForEach(rooms.filter(shouldShowLabel)) { room in
+            Text(room.mapLabel)
+                .font(.system(size: 7, weight: .bold, design: .rounded))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.65)
+                .foregroundStyle(.white.opacity(0.72))
+                .frame(width: 54)
+                .position(projection.point(room.center))
+        }
+
+        ForEach(stations) { station in
+            let isCompleted = completedStationIDs.contains(station.id)
+
+            Button {
+                onSelectStation(station)
+            } label: {
+                VStack(spacing: 2) {
+                    Image(systemName: isCompleted ? "checkmark" : "wrench.and.screwdriver.fill")
+                        .font(.caption.weight(.black))
+                        .foregroundStyle(.black)
+                        .frame(width: 32, height: 32)
+                        .background(isCompleted ? Color.green : Color.orange, in: Circle())
+                        .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
+                        .shadow(color: (isCompleted ? Color.green : Color.orange).opacity(0.45), radius: 7)
+
+                    Text(station.roomID)
+                        .font(.system(size: 8, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.black.opacity(0.76), in: Capsule())
+                }
+            }
+            .buttonStyle(.plain)
+            .position(projection.point(station.position))
+            .accessibilityLabel("\(station.displayName) station, \(station.roomLabel), \(isCompleted ? "completed" : "assigned")")
+        }
+
+        VStack(spacing: 2) {
+            Image(systemName: "megaphone.fill")
+            Text("MEETING")
+                .font(.system(size: 8, weight: .black))
+        }
+        .foregroundStyle(.white)
+        .padding(8)
+        .background(.red, in: Circle())
+        .overlay(Circle().stroke(.white, lineWidth: 2))
+        .position(projection.point(meetingPoint))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Emergency meeting point, SUB 2430 public study area, Level 2")
+
+        if let checkpointStation = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) {
+            VStack(spacing: 0) {
+                Image("PlayerMarker")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 58, height: 58)
+                    .shadow(color: .cyan.opacity(0.75), radius: 8)
+
+                Text("YOU")
+                    .font(.system(size: 9, weight: .black, design: .rounded))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(.cyan, in: Capsule())
+            }
+            .position(playerMarkerPosition(for: checkpointStation, projection: projection))
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("map.ownCheckpoint")
+            .accessibilityLabel("You, last verified at \(ownLastCheckpoint.stationName), \(ownLastCheckpoint.roomLabel), \(ownLastCheckpoint.verifiedAt.formatted(date: .omitted, time: .shortened))")
+        }
+    }
+
+    private func panGesture(in size: CGSize) -> some Gesture {
+        DragGesture(minimumDistance: 8)
+            .updating($gesturePanOffset) { value, state, _ in
+                state = value.translation
+            }
+            .onEnded { value in
+                let proposed = CGSize(
+                    width: panOffset.width + value.translation.width,
+                    height: panOffset.height + value.translation.height
+                )
+                panOffset = constrainedOffset(proposed, in: size, scale: zoomScale)
+            }
+    }
+
+    private func zoomGesture(in size: CGSize) -> some Gesture {
+        MagnificationGesture()
+            .updating($gestureZoomScale) { value, state, _ in
+                state = value
+            }
+            .onEnded { value in
+                zoomScale = min(max(zoomScale * value, 1), 4)
+                panOffset = constrainedOffset(panOffset, in: size, scale: zoomScale)
+            }
+    }
+
+    private func constrainedOffset(_ proposed: CGSize, in size: CGSize, scale: CGFloat) -> CGSize {
+        let horizontalLimit = max(48, (size.width * (scale - 1) / 2) + 36)
+        let verticalLimit = max(48, (size.height * (scale - 1) / 2) + 36)
+
+        return CGSize(
+            width: min(max(proposed.width, -horizontalLimit), horizontalLimit),
+            height: min(max(proposed.height, -verticalLimit), verticalLimit)
+        )
+    }
+
+    private func resetViewport() {
+        withAnimation(.snappy) {
+            zoomScale = 1
+            panOffset = .zero
+        }
     }
 
     private func shouldShowLabel(_ room: POCRoom) -> Bool {
