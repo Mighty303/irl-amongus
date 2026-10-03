@@ -21,11 +21,11 @@ struct HomeView: View {
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                     Button("Join game") { run { await store.joinGame(code: code) } }
-                        .disabled(code.count != 4 || store.playerName.isEmpty || busy)
+                        .disabled(!GameStore.isValidRoomCode(code) || !store.canEnterLobby || busy)
                 }
                 Section("Host") {
                     Button("Create game") { run { await store.createGame() } }
-                        .disabled(store.playerName.isEmpty || busy)
+                        .disabled(!store.canEnterLobby || busy)
                 }
                 Section {
                     TextField(GameStore.defaultServerURL, text: $store.serverURLString)
