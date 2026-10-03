@@ -62,6 +62,11 @@
 			path = Core;
 			sourceTree = "<group>";
 		};
+		S10000000000000000000002 /* Device */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Device;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -112,6 +117,7 @@
 				C10000000000000000000011 /* button-press.mp3 */,
 				G10000000000000000000003 /* Preview Content */,
 				S10000000000000000000001 /* Core */,
+				S10000000000000000000002 /* Device */,
 			);
 			path = IRLAmongUs;
 			sourceTree = "<group>";
@@ -184,6 +190,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				S10000000000000000000001 /* Core */,
+				S10000000000000000000002 /* Device */,
 			);
 			name = IRLAmongUs;
 			productName = IRLAmongUs;
