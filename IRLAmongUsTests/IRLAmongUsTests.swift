@@ -1,8 +1,15 @@
+import AVFoundation
 import Foundation
 import Testing
 @testable import IRLAmongUs
 
 struct IRLAmongUsTests {
+    @Test func playerSpawningAudioIsBundledAndDecodable() throws {
+        let url = try #require(Bundle.main.url(forResource: "player-spawning", withExtension: "mp3"))
+        let player = try AVAudioPlayer(contentsOf: url)
+        #expect(player.duration > 0)
+    }
+
     @MainActor
     @Test func appStartsWithContentView() {
         _ = ContentView()

@@ -583,6 +583,8 @@ private struct GameLobbyView: View {
     @Environment(GameStore.self) private var store
     @State private var showingSettings = false
     @State private var showingInvite = false
+    @StateObject private var spawningAudio = PlayerSpawningAudioPlayer()
+    @State private var knownPlayerIDs: Set<String> = []
 
     var body: some View {
         GeometryReader { geometry in
@@ -623,6 +625,11 @@ private struct GameLobbyView: View {
             .clipped()
         }
         .background(Color.black)
+        .onChange(of: Set(state.players.map(\.id)), initial: true) { _, playerIDs in
+            let hasNewPlayers = !playerIDs.subtracting(knownPlayerIDs).isEmpty
+            knownPlayerIDs = playerIDs
+            if hasNewPlayers { spawningAudio.play() }
+        }
         .sheet(isPresented: $showingSettings) {
             LobbyView(state: store.state ?? state)
         }
