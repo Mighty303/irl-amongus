@@ -60,7 +60,7 @@ Testing with one phone: in the backend repo, `npm run bots -- <CODE> 3` fills th
 
 Developer Mode (shake) also has test benches for each device component:
 - **Sign recognition test**: capture reference photos, then point the camera around to see live match distances, OCR text and per-frame timing.
-- **Bluetooth proximity test**: run on two iPhones; shows each phone's token, live RSSI, peak readings and an "in kill range" indicator with an adjustable threshold.
+- **Bluetooth proximity test**: run on two iPhones; shows each phone's token, live RSSI and estimated distance, an "in kill range" indicator for a range in meters, and 1 m calibration you can apply to your lobby.
 - **GPS, QR, haptics & mini-games**: GPS (fix accuracy, indoor floor, pins with live distance and inside/outside geofence), QR scanner/generator, haptics, the task mini-games and a body-screen preview.
 
 ### Server
@@ -76,10 +76,11 @@ Hosting, storage (Redis), live-game restore and the WebSocket protocol are docum
 | Authoritative state machine | `LOBBY → ROLE_REVEAL → PLAYING → MEETING (gathering → discussion) → VOTING → RESULT → PLAYING / GAME_OVER`; every action is phase-checked | `server/src/game.ts` |
 | Hidden information | Each player gets their own redacted snapshot: no other roles, no unreported deaths, no locations, no "who did which task" | `Game.viewFor` |
 | Real-time sync / reconnect | WebSocket pushes full snapshots + events. On foreground the app reconnects, and actions stay disabled until a fresh snapshot arrives | `Core/GameStore.swift` |
-| BLE proximity kills | Phones advertise a per-game random token and stream RSSI sightings. The **server** decides who's in kill / report range (either direction, freshness window, host-tunable dBm thresholds) | `Device/BLEProximity.swift`, `Game.isNear` |
+| BLE proximity kills | Phones advertise a per-game random token and stream RSSI sightings. The **server** decides who's in kill / report range (either direction, freshness window); the host sets the range in meters, converted to RSSI with a log-distance model | `Device/BLEProximity.swift`, `Game.isNear` |
 | Bodies & reporting | Victim's phone becomes a red BODY screen and keeps advertising; nearby living players get REPORT. REPORT also works on the body phone itself | `Screens/BodyView.swift` |
-| Signage checkpoints | Host photographs signs + tags GPS. Players prove presence by pointing the camera at the sign (Vision feature print + optional OCR text), with a QR fallback or server-validated GPS geofence | `Device/SignRecognizer.swift`, `Screens/CheckpointScannerView.swift` |
-| Tasks | Wiring, Upload (server enforces on-site duration), Sequence, Delivery (two stations in order). Impostors get fake tasks that never move the bar | `Screens/TaskViews.swift` |
+| Signage checkpoints | Host photographs signs + tags GPS; a sign is just a place. Players are guided by the sign's photo, distance and a compass arrow, then prove presence by pointing the camera at it (Vision feature print + optional OCR text), with a QR fallback or server-validated GPS geofence | `Device/SignRecognizer.swift`, `Screens/SignGuide.swift`, `Screens/CheckpointScannerView.swift` |
+| Tasks | Each game assigns every player random signs, each with a random mini-game from the host's rotation: Wiring, Upload (server enforces on-site duration), Sequence, Delivery (carry to a second sign). Impostors get fake tasks that never move the bar | `Screens/TaskViews.swift` |
+| Host tuning | Force a specific impostor (testing), every timer, mini-games in rotation, kill/report range in approximate meters with 1 m calibration | `Screens/LobbyView.swift` |
 | Meetings / voting | Body report or emergency button station; gather check-in at the meeting point; discussion → hidden voting → tally, ties, skip, optional role reveal | `Screens/MeetingView.swift` |
 | Sabotage | Reactor (two stations within 10s, timer → impostors win) and Lights (crew screens dim until Electrical) | `PlayingView.swift` |
 | Win conditions | Tasks complete, impostors ejected, impostors ≥ crew, reactor meltdown | `Game.checkWin` |
@@ -88,7 +89,7 @@ Hosting, storage (Redis), live-game restore and the WebSocket protocol are docum
 
 ### Things to validate on real phones
 
-1. **BLE RSSI threshold.** On two phones, open the **Bluetooth proximity test**, hold them at "kill distance", note the smoothed dBm, and set the host's *Kill RSSI ≥* just below it. Default is -65.
+1. **Bluetooth range.** On two phones, open the **Bluetooth proximity test**, hold them 1 m apart and tap *Set 1 m from the closest phone*, then walk apart and check the distance estimates (raise the indoor factor if they read too close). As host, *Apply to my lobby*, then pick the kill/report distance in meters in the lobby.
 2. **Sign recognition threshold.** In the **Sign recognition test**, capture a few signs and compare the distance on the right sign with other signs and surroundings, then tune the slider (the game's scanner has the same slider). Entering the sign's text on the station makes OCR match too, which is often more reliable.
 3. **Indoor GPS** will be rough. Treat it as a map aid, not proof of presence.
 
