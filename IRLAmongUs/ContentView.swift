@@ -1240,7 +1240,7 @@ private struct POCFloorPlan: View {
                             .stroke(.cyan.opacity(0.55), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
                     }
 
-                mapContent(projection: projection)
+                mapContent(projection: projection, zoomScale: visibleScale)
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .scaleEffect(visibleScale)
                     .offset(visibleOffset)
@@ -1298,7 +1298,7 @@ private struct POCFloorPlan: View {
     }
 
     @ViewBuilder
-    private func mapContent(projection: POCMapProjection) -> some View {
+    private func mapContent(projection: POCMapProjection, zoomScale: CGFloat) -> some View {
         Canvas { context, _ in
             for room in rooms {
                 let isHighlighted = selectedStation?.roomID == room.roomID
@@ -1381,6 +1381,7 @@ private struct POCFloorPlan: View {
                     .padding(.vertical, 3)
                     .background(.cyan, in: Capsule())
             }
+            .scaleEffect(1 / zoomScale)
             .position(playerMarkerPosition(for: checkpointStation, projection: projection))
             .accessibilityElement(children: .ignore)
             .accessibilityIdentifier("map.ownCheckpoint")
