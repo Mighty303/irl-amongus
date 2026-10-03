@@ -22,6 +22,7 @@ struct ToolsLabView: View {
                     NavigationLink("Upload Data (8s, cancels if app leaves foreground)") {
                         MiniGameHost { UploadGame(seconds: 8, start: { true }, onDone: $0) }
                     }
+                    NavigationLink("Swipe Card") { MiniGameHost { SwipeCardGame(onDone: $0) } }
                 }
             }
             .navigationTitle("Tools")
