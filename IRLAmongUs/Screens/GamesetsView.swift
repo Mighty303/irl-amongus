@@ -150,7 +150,7 @@ struct GamesetDetailView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 8))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(station.signText.map { "Reads “\($0)”" } ?? station.name).font(.headline).lineLimit(1)
-                                Text([station.kind == .task ? nil : station.kind.label, pinLabel(station)]
+                                Text([station.kind == .task ? nil : station.kind.label, station.pinLabel(store.campus)]
                                     .compactMap { $0 }.joined(separator: " · "))
                                     .font(.caption).foregroundStyle(station.lat == nil ? Color.orange : Color.secondary)
                             }
@@ -199,12 +199,28 @@ struct GamesetDetailView: View {
 
             Section {
                 ForEach(SpecialSignSlot.all) { slot in
-                    let set = slot.station(in: stations) != nil
-                    LabeledContent {
-                        Text(set ? "Set" : slot.required ? "Needed to start" : "Optional")
-                            .foregroundStyle(set ? .green : slot.required ? .red : .secondary)
-                    } label: {
-                        Label(slot.title, systemImage: slot.kind.icon)
+                    if let station = slot.station(in: stations) {
+                        // Set: tap to move its pin, like the signs above.
+                        Button { whenUnlocked { moving = station } } label: {
+                            LabeledContent {
+                                HStack(spacing: 8) {
+                                    Text(station.pinLabel(store.campus))
+                                        .foregroundStyle(station.lat == nil ? Color.orange : Color.green)
+                                    Image(systemName: "mappin.and.ellipse").foregroundStyle(.secondary)
+                                }
+                            } label: {
+                                Label(slot.title, systemImage: slot.kind.icon)
+                            }
+                        }
+                        .foregroundStyle(.primary)
+                        .accessibilityHint("Move this sign's map pin and floor")
+                    } else {
+                        LabeledContent {
+                            Text(slot.required ? "Needed to start" : "Optional")
+                                .foregroundStyle(slot.required ? .red : .secondary)
+                        } label: {
+                            Label(slot.title, systemImage: slot.kind.icon)
+                        }
                     }
                 }
                 if store.canEditGamesets {
@@ -213,7 +229,7 @@ struct GamesetDetailView: View {
             } header: {
                 Text("Special signs")
             } footer: {
-                Text("Include the red button so the game can start with no setup. A lobby keeps its own special signs for any the saved game doesn't have.")
+                Text("Include the red button so the game can start with no setup. Tap a set sign to move its pin. A lobby keeps its own special signs for any the saved game doesn't have.")
             }
         }
         .navigationTitle(gameset?.name ?? initialName)
@@ -243,15 +259,15 @@ struct GamesetDetailView: View {
                     await store.editGamesets("gamesets/\(gamesetId)/stations/\(station.id)/delete")
                     await refresh()
                 },
+                move: { station, placement in await move(station, placement) },
                 close: { addingSpecial = false }
             )
             .presentationBackground(.clear)
         }
-        .sheet(item: $moving) { station in
-            SignPlacementEditor(gamesetId: gamesetId, station: station,
-                                others: stations.filter { $0.id != station.id }) {
-                Task { await refresh() }
-            }
+        .fullScreenCover(item: $moving, onDismiss: { Task { await refresh() } }) { station in
+            SignPinPanel(station: station, others: stations.filter { $0.id != station.id },
+                         save: { await move(station, $0) }, close: { moving = nil })
+                .presentationBackground(.clear)
         }
         .onChange(of: importItems) { _, items in
             guard !items.isEmpty else { return }
@@ -270,11 +286,10 @@ struct GamesetDetailView: View {
         if let latest = try? await store.gameset(gamesetId) { gameset = latest }
     }
 
-    /// Where the sign's pin is: building and floor, or that it has none yet.
-    private func pinLabel(_ station: Station) -> String {
-        guard station.lat != nil else { return "No map pin" }
-        guard let b = station.buildingId, let building = store.campus.building(b) else { return "Map pin" }
-        return "\(building.id) · \(building.floor(station.floorId)?.name ?? "no floor")"
+    private func move(_ station: Station, _ placement: [String: Any]) async -> Bool {
+        let ok = await store.editGamesets("gamesets/\(gamesetId)/stations/\(station.id)/update", placement) != nil
+        await refresh()
+        return ok
     }
 
     /// Each photo: upload it, read the sign's text, and add it with the photo's own GPS location.

@@ -26,8 +26,14 @@ struct CampusBuilding: Identifiable, Equatable {
     func floor(_ id: String?) -> CampusFloor? { floors.first { $0.id == id } }
     func floorIndex(_ id: String?) -> Int? { floors.firstIndex { $0.id == id } }
 
-    /// The floor shown when nothing says otherwise: the one with the most rooms (usually the main floor).
-    var mainFloor: CampusFloor { floors.max { $0.rooms.count < $1.rooms.count } ?? floors[0] }
+    /// Where games are usually played, when that isn't the floor with the most rooms.
+    static let preferredFloors = ["ASB": "09"] // 9000 Level
+
+    /// The floor shown when nothing says otherwise: the preferred one, else the one with the most rooms
+    /// (usually the main floor).
+    var mainFloor: CampusFloor {
+        floor(Self.preferredFloors[id]) ?? floors.max { $0.rooms.count < $1.rooms.count } ?? floors[0]
+    }
 
     func contains(_ c: CLLocationCoordinate2D, marginM: Double = 0) -> Bool {
         let dLat = marginM / 111_320, dLng = marginM / (111_320 * cos(c.latitude * .pi / 180))

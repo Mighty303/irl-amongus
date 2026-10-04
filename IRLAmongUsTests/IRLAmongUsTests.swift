@@ -886,3 +886,17 @@ struct DeathSoundTests {
         #expect(result12)
     }
 }
+
+struct CampusDefaultFloorTests {
+    @Test func asbOpensOnLevel9000AndOthersOnTheirBusiestFloor() {
+        func floor(_ id: String, rooms: Int) -> CampusFloor {
+            CampusFloor(id: id, name: id, order: Double(id) ?? 0,
+                        rooms: (0..<rooms).map { POCRoom(id: "\(id)-\($0)", label: "", roomID: "\($0)", roomType: "",
+                                                         priority: 0, rings: [], center: .zero) })
+        }
+        let bounds = POCMapBounds(minX: 0, maxX: 1, minY: 0, maxY: 1)
+        let floors = [floor("08", rooms: 1), floor("09", rooms: 2), floor("10", rooms: 3)]
+        #expect(CampusBuilding(id: "ASB", name: "ASB", bounds: bounds, floors: floors).mainFloor.id == "09")
+        #expect(CampusBuilding(id: "AQ", name: "AQ", bounds: bounds, floors: floors).mainFloor.id == "10")
+    }
+}
