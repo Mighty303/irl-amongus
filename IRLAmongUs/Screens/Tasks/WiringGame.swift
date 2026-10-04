@@ -28,13 +28,16 @@ struct WiringGame: View {
             ZStack {
                 Image("TaskWiresBack")
                 ForEach(0..<4, id: \.self) { slot in
-                    stub(color: slot, at: Self.slotY[slot], leftSide: false, showsEnd: true)
+                    stub(color: slot, leftSide: false, showsEnd: true).at(482, Self.slotY[slot])
                 }
                 ForEach(0..<4, id: \.self) { slot in
                     wire(slot)
-                    stub(color: left[slot], at: Self.slotY[slot], leftSide: true, showsEnd: end(of: slot) == nil)
-                        .contentShape(Rectangle().inset(by: -20))
+                    // Gesture before positioning: a positioned view fills the whole stage.
+                    stub(color: left[slot], leftSide: true, showsEnd: end(of: slot) == nil)
+                        .frame(width: 100, height: 80)
+                        .contentShape(Rectangle())
                         .gesture(dragGesture(slot))
+                        .at(22, Self.slotY[slot])
                 }
             }
             .coordinateSpace(name: "wires")
@@ -63,9 +66,8 @@ struct WiringGame: View {
     }
 
     /// The colored wire stub sticking out of a slot, with its copper end and symbol.
-    private func stub(color: Int, at y: CGFloat, leftSide: Bool, showsEnd: Bool) -> some View {
-        let x: CGFloat = leftSide ? 22 : 482
-        return ZStack {
+    private func stub(color: Int, leftSide: Bool, showsEnd: Bool) -> some View {
+        ZStack {
             Rectangle().fill(Self.colors[color]).frame(width: 44, height: 18)
                 .overlay(Rectangle().stroke(.black.opacity(0.6), lineWidth: 2))
             Image(systemName: Self.symbols[color]).font(.system(size: 11, weight: .black)).foregroundStyle(.black.opacity(0.7))
@@ -76,7 +78,6 @@ struct WiringGame: View {
                 .offset(x: leftSide ? 26 : -26)
                 .opacity(showsEnd ? 1 : 0)
         }
-        .at(x, y)
     }
 
     private func dragGesture(_ slot: Int) -> some Gesture {
