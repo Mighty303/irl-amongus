@@ -34,8 +34,8 @@ final class GameStore {
     var killPresentation: KillPresentation?
     /// You just killed someone: a quick slash across your screen (changes with each kill).
     var killSlash: UUID?
-    /// Where you were when you were killed (x = longitude, y = latitude): your body stays there on your map,
-    /// and the map stops following you, until someone finds it.
+    /// Where you were when you were killed (x = longitude, y = latitude): your body stays there on your map
+    /// until someone finds it, while you go and do your tasks as a ghost.
     private(set) var deathSpot: CGPoint?
     var bodyReportPresentation: BodyReportPresentation?
     private(set) var bodyReportBackdrop: GameState?
