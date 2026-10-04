@@ -12,12 +12,11 @@ final class IRLAmongUsUITests: XCTestCase {
         app.launchArguments = ["-disableAudio", "-playerName", "", "-serverURL", "ftp://invalid", "-session", ""]
         app.launch()
         app.buttons["Local"].tap()
-        let name = app.textFields["local.playerName"]
-        XCTAssertTrue(name.waitForExistence(timeout: 5))
-        app.swipeUp()
-        XCTAssertFalse(app.buttons["Classic"].isEnabled)
+        XCTAssertTrue(app.staticTexts["local.username"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["local.createGame"].isEnabled)
+        app.buttons["local.joinTab"].tap()
         XCTAssertTrue(app.textFields["local.roomCode"].exists)
-        XCTAssertFalse(app.buttons["Join game"].isEnabled)
+        XCTAssertFalse(app.buttons["local.joinGame"].isEnabled)
         XCTAssertFalse(app.staticTexts["IRLUS"].exists)
         captureVoting(app, name: "LOCAL server setup")
     }
@@ -32,9 +31,8 @@ final class IRLAmongUsUITests: XCTestCase {
         app.launchArguments = ["-disableAudio", "-playerName", "Ben", "-serverURL", server, "-session", ""]
         app.launch()
         app.buttons["Local"].tap()
-        XCTAssertTrue(app.buttons["Classic"].waitForExistence(timeout: 5))
-        app.swipeUp()
-        app.buttons["Classic"].tap()
+        XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
+        app.buttons["local.createGame"].tap()
         let room = app.descendants(matching: .any)["lobby.waitingRoom"].firstMatch
         XCTAssertTrue(room.waitForExistence(timeout: 10))
         let screen = app.windows.firstMatch.frame
@@ -68,11 +66,10 @@ final class IRLAmongUsUITests: XCTestCase {
         expectation(for: portrait, evaluatedWith: nil)
         waitForExpectations(timeout: 5)
         app.buttons["Leave Game"].tap()
-        XCTAssertTrue(app.buttons["Classic"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
         let landscape = NSPredicate { _, _ in app.windows.firstMatch.frame.width > app.windows.firstMatch.frame.height }
         expectation(for: landscape, evaluatedWith: nil)
         waitForExpectations(timeout: 5)
-        app.swipeUp()
         app.buttons["Back"].tap()
         XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
     }
@@ -91,20 +88,60 @@ final class IRLAmongUsUITests: XCTestCase {
 
         app.buttons["Local"].tap()
 
-        XCTAssertTrue(app.staticTexts["HOST"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Create"].exists)
-        XCTAssertTrue(app.buttons["Classic"].exists)
+        XCTAssertTrue(app.staticTexts["LOCAL"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["local.createTab"].exists)
+        XCTAssertTrue(app.buttons["local.createGame"].exists)
         XCTAssertFalse(app.buttons["Hide n Seek"].exists)
         XCTAssertTrue(app.buttons["Back"].exists)
-        XCTAssertTrue(app.textFields["local.playerName"].exists)
+        XCTAssertTrue(app.staticTexts["local.username"].exists)
+        XCTAssertTrue(app.buttons["local.editName"].exists)
         XCTAssertFalse(app.textFields["local.serverURL"].exists, "The hosted server is fixed; no address field")
-        app.swipeUp()
-        XCTAssertTrue(app.buttons["Join game"].exists)
+        app.buttons["local.joinTab"].tap()
+        XCTAssertTrue(app.buttons["local.joinGame"].exists)
         XCTAssertFalse(app.staticTexts["PHYSICAL MAP"].exists)
 
         app.buttons["Back"].tap()
 
         XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testLocalPickerFitsAndEditsUsername() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-playerName", "Martin", "-session", ""]
+        app.launch()
+        app.buttons["Local"].tap()
+        let username = app.staticTexts["local.username"]
+        XCTAssertTrue(username.waitForExistence(timeout: 5))
+        XCTAssertEqual(username.label, "Martin")
+        let screen = app.windows.firstMatch.frame
+        for id in ["local.editName", "local.createTab", "local.joinTab", "local.createGame"] {
+            let button = app.buttons[id]
+            XCTAssertTrue(button.isHittable, "\(id) must be visible without scrolling")
+            XCTAssertTrue(screen.contains(button.frame), "\(id) must fit inside the screen")
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+        }
+        captureVoting(app, name: "LOCAL compact create")
+        app.buttons["local.editName"].tap()
+        let field = app.textFields["local.playerName"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText("\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}Alex")
+        app.navigationBars.buttons["Done"].tap()
+        XCTAssertTrue(username.waitForExistence(timeout: 5))
+        XCTAssertEqual(username.label, "Alex")
+        app.buttons["local.joinTab"].tap()
+        for element in [app.textFields["local.roomCode"], app.buttons["local.joinGame"], app.buttons["Scan lobby QR"]] {
+            XCTAssertTrue(screen.contains(element.frame))
+            XCTAssertGreaterThanOrEqual(element.frame.height, 44)
+        }
+        XCTAssertTrue(app.textFields["local.roomCode"].isHittable)
+        XCTAssertTrue(app.buttons["Scan lobby QR"].isHittable)
+        XCTAssertFalse(app.buttons["local.joinGame"].isEnabled)
+        captureVoting(app, name: "LOCAL compact join")
+        app.buttons["local.createTab"].tap()
+        XCTAssertTrue(app.buttons["local.createGame"].isHittable)
     }
 
     @MainActor
@@ -319,9 +356,8 @@ extension IRLAmongUsUITests {
         app.launchArguments = ["-disableAudio", "-playerName", "Ben", "-serverURL", server, "-session", ""]
         app.launch()
         app.buttons["Local"].tap()
-        XCTAssertTrue(app.buttons["Classic"].waitForExistence(timeout: 5))
-        app.swipeUp()
-        app.buttons["Classic"].tap()
+        XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
+        app.buttons["local.createGame"].tap()
         XCTAssertTrue(app.buttons["Add bot"].waitForExistence(timeout: 10))
         app.buttons["Add bot"].tap()
         let ready = NSPredicate { _, _ in app.buttons["START"].isEnabled }
@@ -341,13 +377,13 @@ extension IRLAmongUsUITests {
         let (data, _) = try await URLSession.shared.data(from: URL(string: server + "/events")!)
         let events = try JSONSerialization.jsonObject(with: data) as! [[String: Any]]
         let kills = events.filter { $0["action"] as? String == "kill" }
-        XCTAssertEqual(kills.count, 1)
-        XCTAssertEqual((kills.first?["payload"] as? [String: Any])?["targetId"] as? String, "bot")
-    }
         let cooldownUpdates = events.filter { $0["action"] as? String == "update_settings" }
         XCTAssertEqual(cooldownUpdates.count, 1)
         XCTAssertEqual((cooldownUpdates.first?["payload"] as? [String: Any])?["killCooldownSec"] as? Int, 10)
         XCTAssertTrue((kill.value as? String)?.hasPrefix("Cooldown") == true)
         let cooldownSeconds = Int((kill.value as? String ?? "").split(separator: " ").dropFirst().first ?? "")
         XCTAssertTrue((1...10).contains(cooldownSeconds ?? 0))
+        XCTAssertEqual(kills.count, 1)
+        XCTAssertEqual((kills.first?["payload"] as? [String: Any])?["targetId"] as? String, "bot")
+    }
 }

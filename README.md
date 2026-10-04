@@ -107,10 +107,12 @@ Original artwork previews (before the automatic map transition): [Shhh](docs/rol
 
 ## LOCAL server lobby
 
-Open **LOCAL**, enter your display name and the POC server address, then choose
-**Classic** to create a room. Other phones use the same address and enter the
-four-character room code, or scan the host's **Share lobby QR**. Join links from
-the system camera also open LOCAL with the room code filled in.
+Open **LOCAL** to see your username in the player panel. Use **Edit name** (the
+pencil button) to change it, then select **Create game** to host a Classic room.
+The **Join game** tab accepts a room code or lets you scan the host's **Share
+lobby QR**. Both tabs fit smaller landscape phones without scrolling at standard
+text sizes. The app uses the hosted server by default. Join links from the system
+camera also open the Join tab with the room code filled in.
 
 The landscape waiting room shows the server's room code and live player roster.
 The host can **Add bot**, open **SETTINGS** to configure rules and venue signs,

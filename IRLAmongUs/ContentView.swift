@@ -310,6 +310,10 @@ private struct LocalLobbyView: View {
     @State private var scanning = false
     @State private var scannedLobbyPayload: String?
     @State private var showingJoinName = false
+    @State private var joining = false
+    @State private var showingNameEditor = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
 
     var body: some View {
         Group {
@@ -332,6 +336,7 @@ private struct LocalLobbyView: View {
         .onChange(of: store.pendingJoinCode, initial: true) { _, pending in
             if let pending {
                 code = pending
+                joining = true
                 store.pendingJoinCode = nil
                 showingJoinName = store.playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }
@@ -364,81 +369,16 @@ private struct LocalLobbyView: View {
                     .clipped()
                     .allowsHitTesting(false)
 
-                ScrollView {
-                VStack(spacing: 24) {
-                    hostHeader
-
-                    connectionFields
-
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Create")
-                            .font(.system(size: 20, weight: .regular, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.82))
-
-                        HStack(spacing: 12) {
-                            lobbyButton("Classic") {
-                                Task { await store.createGame() }
-                            }
-                        }
+                if dynamicTypeSize.isAccessibilitySize {
+                    ScrollView {
+                        pickerContent(compact: false)
+                            .frame(minHeight: geometry.size.height - 24)
+                            .padding(12)
                     }
-
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Join a Game")
-                            .font(.system(size: 19, design: .rounded))
-                        TextField(
-                            "Room code",
-                            text: $code,
-                            prompt: Text("Room code").foregroundStyle(.white.opacity(0.75))
-                        )
-                            .font(.system(size: 24, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white)
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                            .textFieldStyle(.plain)
-                            .padding(.horizontal, 18)
-                            .frame(minHeight: 64)
-                            .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 12))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 12)
-                                    .strokeBorder(.white, lineWidth: 3)
-                                    .allowsHitTesting(false)
-                            }
-                            .accessibilityIdentifier("local.roomCode")
-                        HStack(spacing: 24) {
-                            lobbyButton("Join game") { Task { await store.joinGame(code: code) } }
-                                .disabled(!store.canEnterLobby || !GameStore.isValidRoomCode(code))
-                            lobbyButton("Scan lobby QR") { scanning = true }
-                                .disabled(store.isEnteringLobby)
-                        }
-                        .padding(.top, 12)
-                        Text("Use the same server address as the host, then enter the room code or scan their QR. Nearby game discovery is coming soon.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        if store.isEnteringLobby { ProgressView("Connecting…") }
-                    }
-
-                    HStack(alignment: .bottom) {
-                        Button {
-                            buttonAudio.play()
-                            onBack()
-                        } label: {
-                            Text("Back")
-                                .font(.system(size: 20, weight: .regular, design: .rounded))
-                                .frame(width: 112, height: 50)
-                        }
-                        .buttonStyle(LobbyOutlineButtonStyle())
-                        .accessibilityHint("Returns to the main menu")
-                        .disabled(store.isEnteringLobby)
-
-                        Spacer()
-
-                        Text("v1.0 (build 1)")
-                            .font(.system(size: 13, weight: .regular, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 18)
+                } else {
+                    pickerContent(compact: geometry.size.height < 340)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 12)
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -454,6 +394,9 @@ private struct LocalLobbyView: View {
                 scannedLobbyPayload = payload
                 scanning = false
             }
+        }
+        .sheet(isPresented: $showingNameEditor) {
+            LocalPlayerNameEditor()
         }
         .sheet(isPresented: $showingJoinName) {
             LobbyJoinNameSheet(code: code)
@@ -473,83 +416,265 @@ private struct LocalLobbyView: View {
         }
     }
 
-    private var connectionFields: some View {
-        @Bindable var store = store
-        return VStack(alignment: .leading, spacing: 10) {
-            TextField("Display name", text: $store.playerName)
-                .textInputAutocapitalization(.words)
-                .accessibilityIdentifier("local.playerName")
+    private var panelColor: Color { Color(red: 0.07, green: 0.12, blue: 0.19) }
+    private var accentColor: Color { Color(red: 0.60, green: 0.90, blue: 0.80) }
+
+    private func pickerContent(compact: Bool) -> some View {
+        VStack(spacing: 8) {
+            HStack {
+                Button {
+                    buttonAudio.play()
+                    onBack()
+                } label: {
+                    Label("Back", systemImage: "chevron.left")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .frame(minWidth: 68, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityHint("Returns to the main menu")
+                Spacer()
+                Text("LOCAL")
+                    .font(.system(size: 25, weight: .medium, design: .rounded))
+                    .tracking(3)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer()
+                Button {
+                    buttonAudio.play()
+                    showLobbyMessage(
+                        title: "Local Play",
+                        message: "Create a Classic game and share its room code or QR. To join, enter the host’s code or scan their lobby QR. Everyone uses the hosted game server. Nearby discovery is coming soon."
+                    )
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 26))
+                        .frame(width: 68, height: 44)
+                }
+                .accessibilityLabel("Local play help")
+            }
+            .buttonStyle(.plain)
+            .disabled(store.isEnteringLobby)
+
+            GeometryReader { geometry in
+                HStack(spacing: 16) {
+                    playerPanel(compact: compact)
+                        .frame(width: min(220, max(160, geometry.size.width * 0.30)))
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 4) {
+                            modeTab("Create game", join: false)
+                            modeTab("Join game", join: true)
+                        }
+                        .padding(4)
+                        .background(panelColor, in: RoundedRectangle(cornerRadius: 10))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.3)))
+                        actionPanel(compact: compact)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+            }
+            .frame(minHeight: compact ? 212 : 242)
+
+            HStack {
+                if store.isEnteringLobby {
+                    ProgressView("Connecting…")
+                } else {
+                    Label("Play together in person", systemImage: "person.2.fill")
+                }
+                Spacer()
+                Text("v1.0 (build 1)")
+            }
+            .font(.system(size: 11, design: .rounded))
+            .foregroundStyle(.white.opacity(0.65))
+            .frame(minHeight: 16)
         }
-        .textFieldStyle(.roundedBorder)
+        .foregroundStyle(.white)
+    }
+
+    private func playerPanel(compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image("RedCrewmate")
+                .resizable()
+                .scaledToFit()
+                .frame(height: compact ? 44 : 64)
+                .frame(maxWidth: .infinity)
+                .accessibilityHidden(true)
+            Text("YOUR USERNAME")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .tracking(1.5)
+                .foregroundStyle(Color(red: 0.69, green: 0.82, blue: 0.92))
+            Text(store.playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Enter name" : store.playerName)
+                .font(.system(size: 23, weight: .bold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                .padding(.horizontal, 10)
+                .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.3)))
+                .accessibilityIdentifier("local.username")
+            Button {
+                buttonAudio.play()
+                showingNameEditor = true
+            } label: {
+                Label("Edit name", systemImage: "pencil")
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.25)))
+            .accessibilityIdentifier("local.editName")
+            .disabled(store.isEnteringLobby)
+            Spacer(minLength: 0)
+            if !compact {
+                Text("Visible to your crew")
+                    .font(.system(size: 10, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.65))
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .padding(12)
+        .frame(maxHeight: .infinity)
+        .background(
+            LinearGradient(colors: [Color(red: 0.10, green: 0.18, blue: 0.27), panelColor], startPoint: .top, endPoint: .bottom),
+            in: RoundedRectangle(cornerRadius: 12)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 0.46, green: 0.59, blue: 0.71)))
+    }
+
+    private func modeTab(_ title: String, join: Bool) -> some View {
+        Button {
+            buttonAudio.play()
+            joining = join
+        } label: {
+            Text(title)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+                .foregroundStyle(joining == join ? Color.black : .white)
+                .background(joining == join ? Color(red: 0.83, green: 0.91, blue: 0.96) : .clear, in: RoundedRectangle(cornerRadius: 7))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(join ? "local.joinTab" : "local.createTab")
+        .accessibilityAddTraits(joining == join ? .isSelected : [])
         .disabled(store.isEnteringLobby)
     }
 
-    private var hostHeader: some View {
-        HStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(red: 0.22, green: 0.31, blue: 0.48), .black],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-
-                Image("RedCrewmate")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 94, height: 72)
+    @ViewBuilder
+    private func actionPanel(compact: Bool) -> some View {
+        VStack(alignment: .leading, spacing: compact ? 6 : 10) {
+            Text(joining ? "Find your crew." : "Gather your crew.")
+                .font(.system(size: compact ? 21 : 25, weight: .bold, design: .rounded))
+                .accessibilityAddTraits(.isHeader)
+            Text(joining ? "Enter the host’s code or scan their QR." : "Create a lobby, then share its code or QR.")
+                .font(.system(size: 12, design: .rounded))
+                .foregroundStyle(.white.opacity(0.65))
+            if joining {
+                TextField("Room code", text: $code)
+                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .submitLabel(.go)
+                    .onSubmit {
+                        guard store.canEnterLobby && GameStore.isValidRoomCode(code) else { return }
+                        Task { await store.joinGame(code: code) }
+                    }
+                    .padding(.horizontal, 12)
+                    .frame(minHeight: 44)
+                    .background(panelColor, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.4)))
+                    .accessibilityIdentifier("local.roomCode")
+                    .disabled(store.isEnteringLobby)
+                HStack(spacing: 8) {
+                    actionButton("Join game", symbol: "arrow.right", primary: true) {
+                        Task { await store.joinGame(code: code) }
+                    }
+                    .accessibilityIdentifier("local.joinGame")
+                    .disabled(!store.canEnterLobby || !GameStore.isValidRoomCode(code))
+                    actionButton("Scan QR", symbol: "qrcode.viewfinder", primary: false) { scanning = true }
+                        .accessibilityLabel("Scan lobby QR")
+                        .disabled(store.isEnteringLobby)
+                }
+            } else {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Classic").font(.system(size: 14, weight: .semibold, design: .rounded))
+                        Text("Tasks, impostors & meetings")
+                            .font(.system(size: 11, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.65))
+                    }
+                    Spacer()
+                    Image(systemName: "checkmark").foregroundStyle(accentColor)
+                }
+                .padding(.horizontal, 12)
+                .frame(minHeight: 48)
+                .background(panelColor, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.3)))
+                actionButton("Create game", symbol: "arrow.right", primary: true) {
+                    Task { await store.createGame() }
+                }
+                .accessibilityIdentifier("local.createGame")
+                .disabled(!store.canEnterLobby)
             }
-            .frame(width: 108, height: 108)
-            .clipShape(Circle())
-            .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1))
-            .accessibilityHidden(true)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("HOST")
-                    .font(.system(size: 46, weight: .ultraLight, design: .rounded))
-                    .foregroundStyle(.white)
-                    .accessibilityAddTraits(.isHeader)
-
-                Rectangle()
-                    .fill(.white)
-                    .frame(height: 3)
-            }
-
-            Spacer(minLength: 0)
-
-            Button {
-                buttonAudio.play()
-                showLobbyMessage(
-                    title: "Local Play",
-                    message: "Create a game or select an available game to join players nearby."
-                )
-            } label: {
-                Image(systemName: "questionmark")
-                    .font(.system(size: 29, weight: .semibold, design: .rounded))
-                    .frame(width: 52, height: 52)
-            }
-            .buttonStyle(LobbyCircleButtonStyle())
-            .accessibilityLabel("Local play help")
         }
     }
 
-    private func lobbyButton(_ title: String, action: @escaping () -> Void) -> some View {
+    private func actionButton(_ title: String, symbol: String, primary: Bool, action: @escaping () -> Void) -> some View {
         Button {
             buttonAudio.play()
             action()
         } label: {
-            Text(title)
-                .font(.system(size: 18, weight: .regular, design: .rounded))
-                .frame(maxWidth: .infinity, minHeight: 52)
+            Label(title, systemImage: symbol)
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(LobbyOutlineButtonStyle())
-        .disabled(title == "Classic" && !store.canEnterLobby)
+        .buttonStyle(.plain)
+        .foregroundStyle(primary ? Color(red: 0.03, green: 0.11, blue: 0.09) : .white)
+        .background(primary ? accentColor : panelColor, in: RoundedRectangle(cornerRadius: 8))
+        .opacity(store.isEnteringLobby ? 0.5 : 1)
     }
 
     private func showLobbyMessage(title: String, message: String) {
         lobbyAlert = LobbyAlert(title: title, message: message)
+    }
+}
+
+/// Editing in a sheet keeps the landscape picker intact while the keyboard is visible.
+private struct LocalPlayerNameEditor: View {
+    @Environment(GameStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Your username") {
+                    TextField("Display name", text: $name)
+                        .textInputAutocapitalization(.words)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("local.playerName")
+                        .focused($focused)
+                        .submitLabel(.done)
+                        .onSubmit(save)
+                }
+            }
+            .navigationTitle("Edit name")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("Done", action: save) }
+            }
+            .onAppear {
+                name = store.playerName
+                focused = true
+            }
+        }
+    }
+
+    private func save() {
+        store.playerName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        dismiss()
     }
 }
 
