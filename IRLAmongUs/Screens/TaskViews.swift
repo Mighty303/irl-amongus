@@ -54,6 +54,24 @@ struct TaskSheet: View {
                        start: { await store.perform("task_start", ["taskId": task.id]) },
                        onDone: complete)
         case .sequence: SequenceGame(onDone: complete)
+        case .swipe: SwipeCardGame(onDone: complete)
+        case .shields: ShieldsGame(onDone: complete)
+        case .o2: O2Game(onDone: complete)
+        case .scan:
+            ScanGame(seconds: state.settings.scanSec ?? 10, playerName: state.me.name,
+                     start: { await store.perform("task_start", ["taskId": task.id]) },
+                     onDone: complete)
+        case .divert:
+            if task.step == 0 {
+                VStack(spacing: 8) {
+                    DivertPowerGame(onDone: complete)
+                    if let dest = state.station(task.steps.last) {
+                        Text("Then accept the power at \(dest.name)").font(.caption.bold()).foregroundStyle(.white)
+                    }
+                }
+            } else {
+                AcceptPowerGame(onDone: complete)
+            }
         case .unknown:
             Text("This task needs a newer version of the app.")
                 .font(.headline).foregroundStyle(.white).multilineTextAlignment(.center)

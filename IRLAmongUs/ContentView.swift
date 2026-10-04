@@ -217,6 +217,9 @@ struct ContentView: View {
             }, onOpenVoting: {
                 pendingDeveloperDestination = .voting
                 showingDeveloperMenu = false
+            }, onOpenRoles: {
+                pendingDeveloperDestination = .roles
+                showingDeveloperMenu = false
             }, onOpenPOC: { destination in
                 pendingDeveloperDestination = .poc(destination)
                 showingDeveloperMenu = false
@@ -230,6 +233,7 @@ struct ContentView: View {
             switch destination {
             case .physicalMap: PhysicalMapPOCView()
             case .voting: VotingPOCView()
+            case .roles: RoleRevealPOCView()
             case .poc(let destination): POCDestinationView(destination: destination)
             }
         }
@@ -297,6 +301,8 @@ private struct LocalLobbyView: View {
     @Environment(GameStore.self) private var store
     @State private var code = ""
     @State private var scanning = false
+    @State private var scannedLobbyPayload: String?
+    @State private var showingJoinName = false
     @State private var serverStatus: String?
 
     var body: some View {
@@ -318,7 +324,11 @@ private struct LocalLobbyView: View {
             }
         }
         .onChange(of: store.pendingJoinCode, initial: true) { _, pending in
-            if let pending { code = pending; store.pendingJoinCode = nil }
+            if let pending {
+                code = pending
+                store.pendingJoinCode = nil
+                showingJoinName = store.playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
         }
     }
 
@@ -423,13 +433,18 @@ private struct LocalLobbyView: View {
             .clipped()
         }
         .background(Color.black)
-        .sheet(isPresented: $scanning) {
+        .sheet(isPresented: $scanning, onDismiss: {
+            guard let payload = scannedLobbyPayload else { return }
+            scannedLobbyPayload = nil
+            Task { await store.handleLobbyQRCode(payload) }
+        }) {
             QRScanSheet(title: "Scan lobby QR") { payload in
-                guard case let .join(roomCode, server)? = QRPayload(payload) else { return }
-                if let server { store.serverURLString = server }
-                code = roomCode
+                scannedLobbyPayload = payload
                 scanning = false
             }
+        }
+        .sheet(isPresented: $showingJoinName) {
+            LobbyJoinNameSheet(code: code)
         }
         .alert("Unable to connect", isPresented: Binding(
             get: { store.errorMessage != nil },
@@ -1097,13 +1112,14 @@ private struct MenuHotspot: Identifiable {
 }
 
 private enum DeveloperDestination: Identifiable {
-    case physicalMap, voting
+    case physicalMap, voting, roles
     case poc(POCDestination)
 
     var id: String {
         switch self {
         case .physicalMap: return "physicalMap"
         case .voting: return "voting"
+        case .roles: return "roles"
         case .poc(let destination): return "poc.\(destination.rawValue)"
         }
     }
@@ -1112,6 +1128,7 @@ private enum DeveloperDestination: Identifiable {
 private struct DeveloperMenuView: View {
     let onOpenPhysicalMap: () -> Void
     let onOpenVoting: () -> Void
+    let onOpenRoles: () -> Void
     let onOpenPOC: (POCDestination) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -1129,6 +1146,11 @@ private struct DeveloperMenuView: View {
                         Label("Open Voting POC", systemImage: "checkmark.bubble.fill")
                     }
                     .accessibilityIdentifier("developer.openVoting")
+
+                    Button(action: onOpenRoles) {
+                        Label("Open Role Reveal POC", systemImage: "person.fill.questionmark")
+                    }
+                    .accessibilityIdentifier("developer.openRoles")
 
                     ForEach(POCDestination.allCases) { destination in
                         Button { onOpenPOC(destination) } label: {
@@ -1544,7 +1566,9 @@ private struct POCFloorPlan: View {
                     .padding(.vertical, 3)
                     .background(.cyan, in: Capsule())
             }
-            .scaleEffect(1 / zoomScale)
+            // Preserve the accepted size at the default player-focused zoom,
+            // while still letting the crewmate grow and shrink with the map.
+            .scaleEffect(1 / Self.playerZoomScale)
             .position(playerMarkerPosition(for: checkpointStation, projection: projection))
             .accessibilityElement(children: .ignore)
             .accessibilityIdentifier("map.ownCheckpoint")

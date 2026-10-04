@@ -250,3 +250,36 @@ extension IRLAmongUsUITests {
         XCTAssertFalse(app.buttons["voting.player.dale"].isEnabled)
     }
 }
+
+
+extension IRLAmongUsUITests {
+    @MainActor
+    func testRoleRevealIntroReplayAndBothRoles() {
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launchArguments += ["-disableAudio", "-showDeveloperMenu"]
+        app.launch()
+        let open = app.buttons["developer.openRoles"]
+        XCTAssertTrue(open.waitForExistence(timeout: 5))
+        if !open.isHittable { app.swipeUp() }
+        open.tap()
+        XCTAssertTrue(app.buttons["roles.crewmate"].waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(app.windows.firstMatch.frame.width, app.windows.firstMatch.frame.height)
+        app.buttons["roles.crewmate"].tap()
+        XCTAssertTrue(app.otherElements["roles.intro"].waitForExistence(timeout: 2))
+        captureVoting(app, name: "Role Shhh intro")
+        XCTAssertTrue(app.buttons["roles.replay"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["There is 1 Impostor among us"].exists)
+        captureVoting(app, name: "Crewmate role reveal")
+        app.buttons["roles.switch"].tap()
+        XCTAssertTrue(app.otherElements["roles.intro"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["roles.replay"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.staticTexts["There is 1 Impostor among us"].exists)
+        captureVoting(app, name: "Impostor role reveal")
+        app.buttons["roles.replay"].tap()
+        XCTAssertTrue(app.otherElements["roles.intro"].waitForExistence(timeout: 2))
+        app.buttons["roles.close"].tap()
+        XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(app.windows.firstMatch.frame.width, app.windows.firstMatch.frame.height)
+    }
+}

@@ -22,6 +22,14 @@ struct ToolsLabView: View {
                     NavigationLink("Upload Data (8s, cancels if app leaves foreground)") {
                         MiniGameHost { UploadGame(seconds: 8, start: { true }, onDone: $0) }
                     }
+                    NavigationLink("Swipe Card") { MiniGameHost { SwipeCardGame(onDone: $0) } }
+                    NavigationLink("Prime Shields") { MiniGameHost { ShieldsGame(onDone: $0) } }
+                    NavigationLink("Clean O2 Filter") { MiniGameHost { O2Game(onDone: $0) } }
+                    NavigationLink("Submit Scan (10s, stand still)") {
+                        MiniGameHost { ScanGame(seconds: 10, playerName: "Red", start: { true }, onDone: $0) }
+                    }
+                    NavigationLink("Divert Power") { MiniGameHost { DivertPowerGame(onDone: $0) } }
+                    NavigationLink("Accept Diverted Power") { MiniGameHost { AcceptPowerGame(onDone: $0) } }
                 }
             }
             .navigationTitle("Tools")

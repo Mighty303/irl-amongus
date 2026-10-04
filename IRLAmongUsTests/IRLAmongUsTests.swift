@@ -182,15 +182,60 @@ struct LocalServerLobbyTests {
         store.leave()
     }
 
-    @Test func joinLinkPrefillsAndPreservesActiveServer() async {
+    @Test func joinLinkAutomaticallyJoinsAndPreservesActiveServer() async {
         let store = makeStore()
-        store.handle(url: URL(string: QRPayload.join(code: "abcd", server: "http://success.invalid").string)!)
+        await store.handle(url: URL(string: QRPayload.join(code: "abcd", server: "http://success.invalid").string)!)
         #expect(store.pendingJoinCode == "ABCD")
-        await store.createGame()
-        store.handle(url: URL(string: QRPayload.join(code: "EFGH", server: "http://other.invalid").string)!)
+        #expect(store.session?.code == "ABCD")
+        await store.handle(url: URL(string: QRPayload.join(code: "EFGH", server: "http://other.invalid").string)!)
         #expect(store.serverURLString == "http://success.invalid")
         #expect(store.errorMessage == "Leave your current game before joining another lobby.")
         store.leave()
+    }
+
+    @Test func scannedInviteJoinsAutomatically() async {
+        let store = makeStore(host: "http-error")
+        await store.handleLobbyQRCode(QRPayload.join(code: " abcd ", server: "http://success.invalid").string)
+        #expect(store.serverURLString == "http://success.invalid")
+        #expect(store.session?.code == "ABCD")
+        #expect(store.errorMessage == nil)
+        store.leave()
+    }
+
+    @Test func scannedInviteKeepsLobbyUntilNameIsEntered() async {
+        let store = makeStore()
+        store.playerName = "  "
+        await store.handleLobbyQRCode(QRPayload.join(code: "abcd", server: "http://success.invalid").string)
+        #expect(store.pendingJoinCode == "ABCD")
+        #expect(store.session == nil)
+        #expect(store.errorMessage == nil)
+        store.playerName = "Ben"
+        await store.joinGame(code: store.pendingJoinCode!)
+        #expect(store.session?.code == "ABCD")
+        store.leave()
+    }
+
+    @Test func scannedInviteReportsWrongCodesAndInvalidServers() async {
+        let store = makeStore()
+        for payload in ["not a QR invite", QRPayload.station(id: "wiring").string, QRPayload.player(qrToken: "ben").string] {
+            await store.handleLobbyQRCode(payload)
+            #expect(store.errorMessage?.contains("Scan a lobby invite QR code") == true)
+            #expect(store.session == nil)
+        }
+        await store.handleLobbyQRCode(QRPayload.join(code: "../../games", server: nil).string)
+        #expect(store.errorMessage == "Enter a four-character room code.")
+        await store.handleLobbyQRCode(QRPayload.join(code: "ABCD", server: "ftp://invalid").string)
+        #expect(store.errorMessage == "This lobby QR contains an invalid server address.")
+        #expect(store.serverURLString == "http://success.invalid")
+        #expect(store.pendingJoinCode == nil)
+    }
+
+    @Test func scannedInviteReportsServerFailures() async {
+        let store = makeStore()
+        await store.handleLobbyQRCode(QRPayload.join(code: "ABCD", server: "http://room-error.invalid").string)
+        #expect(store.errorMessage == "Room is full")
+        #expect(store.session == nil)
+        #expect(!store.isEnteringLobby)
     }
 
     @Test func rejectsBlankNameAndInvalidCode() async {
@@ -272,5 +317,14 @@ struct TaskTypeDecodingTests {
             #"{"id":"t1","type":"hoverboard","steps":["s1"],"step":0,"completed":false,"startedAt":null}"#.utf8))
         #expect(task.type == .unknown)
         #expect(!TaskType.allCases.contains(.unknown))
+    }
+}
+
+struct MiniGameRandomnessTests {
+    @Test func wiringIsShuffledDifferentlyAndNeverStartsSolved() {
+        let deals = (0..<500).map { _ in WiringGame.shuffledColors() }
+        #expect(!deals.contains([0, 1, 2, 3]))
+        #expect(deals.allSatisfy { $0.sorted() == [0, 1, 2, 3] })
+        #expect(Set(deals).count == 23, "every non-solved order shows up")
     }
 }

@@ -28,13 +28,13 @@ enum StationKind: String, Codable, CaseIterable, Identifiable {
 }
 
 enum TaskType: String, Codable, CaseIterable, Identifiable {
-    case wiring, upload, sequence, delivery
+    case wiring, upload, sequence, delivery, swipe, shields, o2, scan, divert
     /// A mini-game from a newer server than this app. Decoding it this way keeps the rest of the
     /// game state readable instead of failing the whole snapshot.
     case unknown
 
     /// The mini-games this app can play (the lobby toggles).
-    static let allCases: [TaskType] = [.wiring, .upload, .sequence, .delivery]
+    static let allCases: [TaskType] = [.wiring, .upload, .sequence, .delivery, .swipe, .shields, .o2, .scan, .divert]
 
     init(from decoder: Decoder) throws {
         self = TaskType(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
@@ -48,6 +48,11 @@ enum TaskType: String, Codable, CaseIterable, Identifiable {
         case .upload: return "Upload Data"
         case .sequence: return "Start Reactor Sequence"
         case .delivery: return "Delivery"
+        case .swipe: return "Swipe Card"
+        case .shields: return "Prime Shields"
+        case .o2: return "Clean O2 Filter"
+        case .scan: return "Submit Scan"
+        case .divert: return "Divert Power"
         case .unknown: return "New task (update the app)"
         }
     }
@@ -108,6 +113,8 @@ struct Settings: Codable, Equatable {
     /// Only filled in for the host; blank for everyone else.
     var forcedImpostorIds: [String]
     var uploadSec: Int
+    /// Optional so phones still decode snapshots from servers without Submit Scan.
+    var scanSec: Int?
     var sabotageCooldownSec: Int
     var reactorSec: Int
     var reactorWindowSec: Int
