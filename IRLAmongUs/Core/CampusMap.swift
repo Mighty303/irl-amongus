@@ -51,8 +51,6 @@ final class CampusMap {
     private(set) var buildings: [CampusBuilding]
     private(set) var isFullCampus = false
     private(set) var loading = false
-    /// Floors the player picked on a map, by building. Otherwise maps choose from context.
-    var floorChoice: [String: String] = [:]
 
     @ObservationIgnored private var indexes: [String: FloorPlanIndex] = [:]
     @ObservationIgnored private let defaults: UserDefaults
@@ -122,16 +120,9 @@ final class CampusMap {
         }
     }
 
-    /// The floor a map shows for a building: the player's pick, else `hint` (e.g. where you are), else the main floor.
+    /// The floor a map shows for a building: `hint` (e.g. the play area's floor), else the main floor.
     func displayedFloor(_ building: CampusBuilding, hint: String? = nil) -> CampusFloor {
-        building.floor(floorChoice[building.id]) ?? building.floor(hint) ?? building.mainFloor
-    }
-
-    /// Step the shown floor of a building up (+1) or down (-1).
-    func stepFloor(_ building: CampusBuilding, by step: Int, hint: String? = nil) {
-        let current = building.floorIndex(displayedFloor(building, hint: hint).id) ?? 0
-        let next = min(max(current + step, 0), building.floors.count - 1)
-        floorChoice[building.id] = building.floors[next].id
+        building.floor(hint) ?? building.mainFloor
     }
 
     private func area(_ b: CampusBuilding) -> CGFloat { (b.bounds.maxX - b.bounds.minX) * (b.bounds.maxY - b.bounds.minY) }

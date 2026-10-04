@@ -56,14 +56,6 @@ struct LiveMapView: View {
                     onSelectStation: { _ in },
                     players: store.liveDots(state: state, campus: campus)
                 )
-                .overlay(alignment: .bottomTrailing) {
-                    if let building = campus.focus, building.floors.count > 1, let floor = campus.floors[building.id] {
-                        CampusFloorControl(building: building, floor: floor) { step in
-                            store.campus.stepFloor(building, by: step, hint: store.shownFloorHint(building, stations: state.stations, playArea: state.playArea))
-                        }
-                        .padding(12)
-                    }
-                }
                 .frame(width: landscape ? min(geo.size.height, geo.size.width * 0.56) : nil,
                        height: landscape ? nil : min(geo.size.width, geo.size.height * 0.5))
                 TimelineView(.periodic(from: .now, by: 1)) { _ in

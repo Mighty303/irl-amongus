@@ -3,6 +3,10 @@ import SwiftUI
 /// The in-game map: zoomed in to a little more than a room across, and locked on the player, who stays
 /// in the middle while the floor plan glides underneath. Pinch changes how much it shows (within limits);
 /// there's no panning. Task signs off the edge get an arrow with their distance.
+///
+/// Fog of war, like Among Us vision: you see out to `visionM`, and walls block the view, so other rooms
+/// are dark. Other players only show where you can see them; your task signs, the red button and the
+/// special signs stay visible on top so you can find them.
 struct FollowFloorMap: View {
     let rooms: [POCRoom]
     /// This player's task pins (`.task`, tappable) and every other sign.
@@ -14,6 +18,8 @@ struct FollowFloorMap: View {
     let center: CGPoint
     /// Whether `center` is a live estimate (YOU marker) or just a fallback spot.
     let centerIsPlayer: Bool
+    /// How far you can see, meters; nil = no fog (ghosts, or no position yet).
+    var visionM: Double? = nil
     let onSelectStation: (POCStation) -> Void
 
     /// Meters across the shorter side: a little over a room's width.
@@ -36,6 +42,7 @@ struct FollowFloorMap: View {
             let projection = LocalProjection(anchor: a, pointsPerMeter: ppm, origin: CGPoint(x: big.width / 2, y: big.height / 2))
             let pc = projection.point(center)
             let slide = CGSize(width: big.width / 2 - pc.x, height: big.height / 2 - pc.y)
+            let sight = visionM.map { Vision(center: center, radiusM: $0, rooms: rooms) }
 
             ZStack {
                 RoundedRectangle(cornerRadius: 22).fill(Color(red: 0.06, green: 0.09, blue: 0.11))
@@ -59,8 +66,22 @@ struct FollowFloorMap: View {
                     }
                     .frame(width: big.width, height: big.height)
 
-                    ForEach(players.filter { !$0.isMe || !centerIsPlayer }) { player in
+                    // Other signs sit under the fog; other players only appear where you can see them.
+                    ForEach(stations.filter { $0.style == .sign }) { station in
+                        pin(station).position(projection.point(station.position))
+                    }
+                    ForEach(players.filter { ($0.isMe ? !centerIsPlayer : true) && (sight?.canSee($0.position) ?? true) }) { player in
                         dot(player, at: projection.point(player.position), ppm: ppm)
+                    }
+                    if let sight {
+                        Canvas { context, canvasSize in
+                            var fog = Path(CGRect(origin: .zero, size: canvasSize))
+                            fog.addPath(sight.path(around: pc, pointsPerMeter: ppm))
+                            context.addFilter(.blur(radius: 5))
+                            context.fill(fog, with: .color(.black.opacity(0.82)), style: FillStyle(eoFill: true))
+                        }
+                        .frame(width: big.width, height: big.height)
+                        .allowsHitTesting(false)
                     }
                     if let me = players.first(where: \.isMe), centerIsPlayer {
                         // Your uncertainty circle; the YOU marker itself sits fixed in the middle.
@@ -77,7 +98,7 @@ struct FollowFloorMap: View {
                             .position(projection.point(meetingPoint))
                             .accessibilityLabel("Meeting point")
                     }
-                    ForEach(stations) { station in
+                    ForEach(stations.filter { $0.style != .sign }) { station in
                         pin(station).position(projection.point(station.position))
                     }
                 }
@@ -217,6 +238,85 @@ struct FollowFloorMap: View {
                 .accessibilityLabel("\(station.displayName), \(Int(meters.rounded())) meters away")
             }
         }
+    }
+}
+
+/// What the player can see: rays out to the vision radius, each stopped by the first wall (room edge)
+/// it meets. Worked out in meters around the player.
+struct Vision {
+    /// Ray end points, meters east/north of the player, all the way round.
+    let outline: [CGPoint]
+    private let center: CGPoint
+    private let kx: Double
+    private static let rays = 240
+
+    init(center: CGPoint, radiusM: Double, rooms: [POCRoom]) {
+        let kx = cos(Double(center.y) * .pi / 180) * 111_320
+        self.center = center
+        self.kx = kx
+        func local(_ c: CGPoint) -> CGPoint {
+            CGPoint(x: Double(c.x - center.x) * kx, y: Double(c.y - center.y) * 111_320)
+        }
+        // Walls near enough to matter, each stretched 15 cm at both ends so neighbouring rooms'
+        // edges overlap and rays can't slip through the hairline gaps between them.
+        var walls: [(CGPoint, CGPoint)] = []
+        let reach = radiusM + 2
+        for room in rooms {
+            for ring in room.rings where ring.count > 1 {
+                let pts = ring.map(local)
+                for i in pts.indices {
+                    var a = pts[i], b = pts[(i + 1) % pts.count]
+                    if min(a.x, b.x) > reach || max(a.x, b.x) < -reach || min(a.y, b.y) > reach || max(a.y, b.y) < -reach { continue }
+                    let len = hypot(b.x - a.x, b.y - a.y)
+                    guard len > 0.01 else { continue }
+                    let ux = (b.x - a.x) / len * 0.15, uy = (b.y - a.y) / len * 0.15
+                    a = CGPoint(x: a.x - ux, y: a.y - uy)
+                    b = CGPoint(x: b.x + ux, y: b.y + uy)
+                    walls.append((a, b))
+                }
+            }
+        }
+        outline = (0..<Self.rays).map { i in
+            let angle = Double(i) / Double(Self.rays) * 2 * .pi
+            let dx = cos(angle), dy = sin(angle)
+            var nearest = radiusM
+            for (a, b) in walls {
+                // Ray (t·d) against segment a + u·(b − a).
+                let ex = Double(b.x - a.x), ey = Double(b.y - a.y)
+                let denom = dx * ey - dy * ex
+                guard abs(denom) > 1e-9 else { continue }
+                let ax = Double(a.x), ay = Double(a.y)
+                let t = (ax * ey - ay * ex) / denom
+                let u = (ax * dy - ay * dx) / denom
+                // Ignore walls right on top of us (standing on a line), so we never see nothing at all.
+                if t > 0.2, u >= 0, u <= 1, t < nearest { nearest = t }
+            }
+            return CGPoint(x: dx * nearest, y: dy * nearest)
+        }
+    }
+
+    /// The visible area in view points, around the player's point `pc`.
+    func path(around pc: CGPoint, pointsPerMeter ppm: CGFloat) -> Path {
+        var path = Path()
+        for (i, p) in outline.enumerated() {
+            let q = CGPoint(x: pc.x + p.x * ppm, y: pc.y - p.y * ppm)
+            if i == 0 { path.move(to: q) } else { path.addLine(to: q) }
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    /// Whether a spot (x = longitude, y = latitude) is in view.
+    func canSee(_ c: CGPoint) -> Bool {
+        let p = CGPoint(x: Double(c.x - center.x) * kx, y: Double(c.y - center.y) * 111_320)
+        var inside = false
+        var j = outline.count - 1
+        for i in outline.indices {
+            let a = outline[i], b = outline[j]
+            if (a.y > p.y) != (b.y > p.y), p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x { inside.toggle() }
+            j = i
+        }
+        return inside
     }
 }
 

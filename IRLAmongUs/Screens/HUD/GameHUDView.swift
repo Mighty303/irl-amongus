@@ -248,7 +248,7 @@ struct HUDMapSquare: View {
     }
 
     var body: some View {
-        // The SFU buildings around the signs and players, each on one floor (switchable).
+        // The SFU buildings around the signs and players, on the floor picked at setup (the play area).
         let campus = store.campusView(points: state.locatedStationPoints + store.livePositions.map { CGPoint(x: $0.lng, y: $0.lat) },
                                       stations: state.stations, playArea: state.playArea)
         let pins = taskPins(campus)
@@ -264,28 +264,33 @@ struct HUDMapSquare: View {
                 players: store.liveDots(state: state, campus: campus),
                 center: center,
                 centerIsPlayer: isPlayer,
+                visionM: isPlayer ? visionM : nil,
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }
                 }
             )
-            .overlay(alignment: .topLeading) {
-                if let building = campus.focus, building.floors.count > 1, let floor = campus.floors[building.id] {
-                    CampusFloorControl(building: building, floor: floor) { step in
-                        store.campus.stepFloor(building, by: step, hint: store.shownFloorHint(building, stations: state.stations, playArea: state.playArea))
-                    }
-                    .padding(12)
+            .overlay(alignment: .top) {
+                if lightsOut {
+                    Label("LIGHTS OUT", systemImage: "lightbulb.slash.fill")
+                        .font(.system(size: 11, weight: .black, design: .rounded)).foregroundStyle(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(.black.opacity(0.75), in: Capsule())
+                        .padding(10)
                 }
-            }
-            if lightsOut {
-                // Lights sabotage: crewmates lose the map until someone fixes Electrical.
-                RoundedRectangle(cornerRadius: 22).fill(.black.opacity(0.88))
-                    .overlay(Text("Lights out").font(.headline).foregroundStyle(.white.opacity(0.6)))
             }
         }
     }
 
     private var lightsOut: Bool {
         state.sabotage?.kind == "lights" && state.me.role != .impostor && state.me.alive
+    }
+
+    /// How far you see on the map, like Among Us: impostors a little further, crewmates almost nothing
+    /// while the lights are out, ghosts everything.
+    private var visionM: Double? {
+        if !state.me.alive { return nil }
+        if lightsOut { return 3 }
+        return state.me.role == .impostor ? 14 : 10
     }
 
     private func taskPins(_ campus: CampusView) -> [Pin] {
