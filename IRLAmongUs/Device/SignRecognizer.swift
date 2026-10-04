@@ -6,7 +6,7 @@ import Vision
 /// Two independent signals:
 ///  1. Image similarity: a Vision feature print of each station's reference photo is compared to the
 ///     camera frame. Lower distance = more similar. The threshold needs tuning on real signs.
-///  2. Text: if the host entered the sign's text (e.g. "AQ 3005"), OCR finding it counts as a match.
+///  2. Text: the sign's text (read when it was photographed, e.g. "AQ 3005"): OCR finding all its words counts.
 ///
 /// Thread-safe: `match` is called from the camera queue while `prepare` may run on another task.
 final class SignRecognizer: @unchecked Sendable {
@@ -22,33 +22,46 @@ final class SignRecognizer: @unchecked Sendable {
         let recognizedText: [String]
     }
 
+    /// A sign's reference photo as two feature prints: the whole photo, and its centered square (where
+    /// the sign is). The square makes a portrait photo and a landscape camera frame comparable.
+    private struct Reference {
+        let full: VNFeaturePrintObservation
+        let square: VNFeaturePrintObservation
+    }
+
     private let lock = NSLock()
-    private var prints: [String: VNFeaturePrintObservation] = [:]
-    private var preparedPhotoIds: Set<String> = []
-    private var signTexts: [String: String] = [:]
+    private var prints: [String: Reference] = [:]
+    /// Processed photos by photo id, so the same photo under a new station id (another lobby, a saved
+    /// game loaded again) is reused instead of skipped.
+    private var printsByPhoto: [String: Reference] = [:]
+    /// The words of each station's sign text (lowercased).
+    private var signWords: [String: [String]] = [:]
 
     var loadedCount: Int { lock.withLock { prints.count } }
 
     /// Download reference photos for any station we haven't processed yet and compute feature prints.
     func prepare(stations: [Station], serverURL: URL) async {
         lock.withLock {
-            signTexts = Dictionary(uniqueKeysWithValues: stations.compactMap { s in
-                s.signText.map { (s.id, $0.lowercased()) }
+            signWords = Dictionary(uniqueKeysWithValues: stations.compactMap { s in
+                s.signText.flatMap { text in Self.words(text).nilIfEmpty.map { (s.id, $0) } }
             })
             let ids = Set(stations.map(\.id))
             prints = prints.filter { ids.contains($0.key) }
         }
         for station in stations {
-            guard let photoId = station.photoId,
-                  !lock.withLock({ preparedPhotoIds.contains(photoId) }) else { continue }
+            guard let photoId = station.photoId else { continue }
+            if let cached = lock.withLock({ printsByPhoto[photoId] }) {
+                lock.withLock { prints[station.id] = cached }
+                continue
+            }
             let url = serverURL.appendingPathComponent("photos/\(photoId).jpg")
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 guard let image = UIImage(data: data)?.cgImage else { continue }
-                let print = try Self.featurePrint(cgImage: image)
+                let reference = try Self.reference(cgImage: image)
                 lock.withLock {
-                    prints[station.id] = print
-                    preparedPhotoIds.insert(photoId)
+                    prints[station.id] = reference
+                    printsByPhoto[photoId] = reference
                 }
             } catch {
                 Swift.print("Failed to prepare sign for \(station.name): \(error)")
@@ -58,29 +71,34 @@ final class SignRecognizer: @unchecked Sendable {
 
     /// Register a reference directly (offline test lab). `text` enables OCR matching for this id.
     func setReference(id: String, image: CGImage, text: String?) throws {
-        let print = try Self.featurePrint(cgImage: image)
+        let reference = try Self.reference(cgImage: image)
         lock.withLock {
-            prints[id] = print
-            let t = text?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
-            signTexts[id] = t.isEmpty ? nil : t
+            prints[id] = reference
+            signWords[id] = text.map(Self.words)?.nilIfEmpty
         }
     }
 
     func removeReference(id: String) {
         lock.withLock {
             prints[id] = nil
-            signTexts[id] = nil
+            signWords[id] = nil
         }
     }
 
     func analyze(_ buffer: CVPixelBuffer, threshold: Float, useText: Bool = true) -> FrameResult {
-        let (refs, texts) = lock.withLock { (prints, signTexts) }
+        let (refs, texts) = lock.withLock { (prints, signWords) }
         var distances: [String: Float] = [:]
-        if let framePrint = try? Self.featurePrint(pixelBuffer: buffer) {
-            for (stationId, ref) in refs {
+        let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
+        let full = try? Self.featurePrint(pixelBuffer: buffer, region: nil)
+        let square = try? Self.featurePrint(pixelBuffer: buffer, region: Self.centerSquare(width: width, height: height))
+        for (stationId, ref) in refs {
+            // Whichever comparison is closer: whole frame to whole photo, or centered square to square.
+            var best: Float?
+            for (frame, photo) in [(full, ref.full), (square, ref.square)] {
                 var d: Float = 0
-                if (try? framePrint.computeDistance(&d, to: ref)) != nil { distances[stationId] = d }
+                if let frame, (try? frame.computeDistance(&d, to: photo)) != nil { best = min(best ?? d, d) }
             }
+            if let best { distances[stationId] = best }
         }
         var lines: [String] = []
         if useText, !texts.isEmpty {
@@ -90,8 +108,10 @@ final class SignRecognizer: @unchecked Sendable {
             lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
         }
 
-        let joined = lines.joined(separator: " ").lowercased()
-        if let textHit = texts.first(where: { !$0.value.isEmpty && joined.contains($0.value) }) {
+        // Text match: every word of the sign's text appears somewhere in view, in any order (signs read
+        // over two lines often come back in a different order).
+        let seen = Set(Self.words(lines.joined(separator: " ")))
+        if let textHit = texts.first(where: { !$0.value.isEmpty && $0.value.allSatisfy(seen.contains) }) {
             return FrameResult(best: Match(stationId: textHit.key, distance: nil, byText: true), distances: distances, recognizedText: lines)
         }
         if let (id, d) = distances.min(by: { $0.value < $1.value }), d <= threshold {
@@ -100,17 +120,44 @@ final class SignRecognizer: @unchecked Sendable {
         return FrameResult(best: nil, distances: distances, recognizedText: lines)
     }
 
-    private static func featurePrint(cgImage: CGImage) throws -> VNFeaturePrintObservation {
+    /// Lowercased words of a sign's text: letters and digits, punctuation dropped.
+    static func words(_ text: String) -> [String] {
+        text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+    }
+
+    /// The centered square of an image, in Vision's normalized coordinates.
+    private static func centerSquare(width: Int, height: Int) -> CGRect {
+        guard width > 0, height > 0 else { return CGRect(x: 0, y: 0, width: 1, height: 1) }
+        if width >= height {
+            let side = CGFloat(height) / CGFloat(width)
+            return CGRect(x: (1 - side) / 2, y: 0, width: side, height: 1)
+        }
+        let side = CGFloat(width) / CGFloat(height)
+        return CGRect(x: 0, y: (1 - side) / 2, width: 1, height: side)
+    }
+
+    private static func reference(cgImage: CGImage) throws -> Reference {
+        Reference(full: try featurePrint(cgImage: cgImage, region: nil),
+                  square: try featurePrint(cgImage: cgImage, region: centerSquare(width: cgImage.width, height: cgImage.height)))
+    }
+
+    private static func featurePrint(cgImage: CGImage, region: CGRect?) throws -> VNFeaturePrintObservation {
         let request = VNGenerateImageFeaturePrintRequest()
+        if let region { request.regionOfInterest = region }
         try VNImageRequestHandler(cgImage: cgImage).perform([request])
         guard let result = request.results?.first else { throw CocoaError(.featureUnsupported) }
         return result
     }
 
-    private static func featurePrint(pixelBuffer: CVPixelBuffer) throws -> VNFeaturePrintObservation {
+    private static func featurePrint(pixelBuffer: CVPixelBuffer, region: CGRect?) throws -> VNFeaturePrintObservation {
         let request = VNGenerateImageFeaturePrintRequest()
+        if let region { request.regionOfInterest = region }
         try VNImageRequestHandler(cvPixelBuffer: pixelBuffer).perform([request])
         guard let result = request.results?.first else { throw CocoaError(.featureUnsupported) }
         return result
     }
+}
+
+private extension Array {
+    var nilIfEmpty: [Element]? { isEmpty ? nil : self }
 }

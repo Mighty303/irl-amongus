@@ -30,6 +30,8 @@ struct SignScanPanel: View {
             }
             .signPanel(closeLabel: "Stop scanning", close: close)
         }
+        // In case the first download of the sign photos failed; photos already processed are reused.
+        .onAppear { store.prepareSigns() }
     }
 
     private func content(compact: Bool) -> some View {
@@ -89,6 +91,9 @@ struct SignScanPanel: View {
                 .foregroundStyle(SignPanel.ready)
         } else if let candidate, let station = state.station(candidate.id) {
             Label("Recognizing \(station.signText ?? station.name)…", systemImage: "viewfinder")
+                .font(.system(size: 15, weight: .black, design: .rounded))
+        } else if store.signs.loadedCount == 0, state.stations.contains(where: { $0.photoId != nil }) {
+            Label("Loading the sign photos…", systemImage: "arrow.down.circle")
                 .font(.system(size: 15, weight: .black, design: .rounded))
         } else {
             VStack(alignment: .leading, spacing: 6) {
