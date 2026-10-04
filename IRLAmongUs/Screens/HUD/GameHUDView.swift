@@ -128,7 +128,6 @@ struct GameHUDView: View {
         HUDActionsPanel(state: state,
                         selectTask: { panel = .detail(taskId: $0) },
                         scan: { scanTarget = nil; scanning = true },
-                        showCams: { showingCams = true },
                         showDiagnostics: { showingDiagnostics = true },
                         showMyQR: { showingMyQR = true },
                         scanPlayer: { scanningPlayer = true })
@@ -401,7 +400,6 @@ struct HUDActionsPanel: View {
     let state: GameState
     let selectTask: (String) -> Void
     let scan: () -> Void
-    let showCams: () -> Void
     let showDiagnostics: () -> Void
     let showMyQR: () -> Void
     let scanPlayer: () -> Void
@@ -544,7 +542,6 @@ struct HUDActionsPanel: View {
             HStack(alignment: .bottom, spacing: 8) {
                 sabotageButton(size: button * 0.72)
                 reportButton(size: button * 0.72)
-                if state.me.canWatchCams == true { camsButton(size: button * 0.72) }
                 Spacer(minLength: 4)
                 MapKillButton(state: state, size: button)
                 HUDScanButton(size: button, action: scan)
@@ -557,21 +554,10 @@ struct HUDActionsPanel: View {
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if state.me.alive, state.me.canWatchCams == true { camsButton(size: button * 0.86) }
                 if state.me.alive { reportButton(size: button * 0.86) }
                 if state.me.alive || state.settings.ghostTasks { HUDScanButton(size: button, action: scan) }
             }
         }
-    }
-
-    /// Among Us's Security button: every other player's camera, while checked in at the Security sign.
-    private func camsButton(size: CGFloat) -> some View {
-        Button(action: showCams) {
-            Image("SecurityActionIcon").resizable().scaledToFit().frame(width: size, height: size)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Security cameras")
-        .accessibilityIdentifier("hud.cams")
     }
 
     private func reportButton(size: CGFloat) -> some View {
