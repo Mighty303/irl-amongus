@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Import the Among Us game sounds (meetings, voting, ejection, sabotage, players leaving).
+"""Import the Among Us game sounds (meetings, voting, ejection, sabotage, players leaving, the impostor's kill).
 
 Usage: python3 scripts/import-game-sounds.py
 
@@ -28,6 +28,7 @@ SOUNDS = {
     'SoundPanelAppear': ('general', 'Panel_GenericAppear.wav'),
     'SoundPanelDisappear': ('general', 'Panel_GenericDisappear.wav'),
     'SoundPlayerLeft': ('player', 'playerdisconnect.wav'),
+    'SoundImpostorKill': ('player', 'impostor_kill.wav'),
 }
 ASSETS = Path(__file__).resolve().parents[1] / 'IRLAmongUs/Assets.xcassets/Sounds'
 

@@ -13,6 +13,8 @@ enum GameSoundEffect: String {
     case panelAppear = "SoundPanelAppear"
     case panelDisappear = "SoundPanelDisappear"
     case playerLeft = "SoundPlayerLeft"
+    /// The impostor's kill, straight from the game: what the killer hears with the slash.
+    case impostorKill = "SoundImpostorKill"
 
     @MainActor private static var players: [GameSoundEffect: AVAudioPlayer] = [:]
 

@@ -286,6 +286,8 @@ struct Me: Decodable, Equatable {
     let camWanted: Bool?
     /// Just scanned the Admin sign: may open the admin map. Optional for older servers.
     let canViewAdmin: Bool?
+    /// Unfound bodies within sight range, where they fell. Optional for older servers.
+    var bodies: [BodySpot]? = nil
 }
 
 struct GameTask: Decodable, Identifiable, Equatable {
@@ -326,6 +328,15 @@ struct VoteResult: Decodable, Equatable {
     let ejectedRole: Role?
     /// Impostors left after this vote (only when roles are revealed on ejection). Optional for older servers.
     let impostorsRemaining: Int?
+}
+
+/// Where an unfound body lies (the ghost is free to walk off; the living report it by standing here).
+struct BodySpot: Decodable, Equatable {
+    let playerId: String
+    let lat: Double
+    let lng: Double
+    let buildingId: String?
+    let floorId: String?
 }
 
 /// Someone on the Admin map: where they are, without who (the server sends no names).

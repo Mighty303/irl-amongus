@@ -34,6 +34,12 @@ struct GameRootView: View {
             if let alert = store.alert {
                 AlertOverlay(alert: alert) { store.alert = nil }
             }
+
+            // You killed someone: a slash across your screen (they get the kill animation).
+            if let slash = store.killSlash {
+                KillSlashView { if store.killSlash == slash { store.killSlash = nil } }
+                    .id(slash)
+            }
         }
         .onChange(of: store.state?.phase, initial: true) { _, _ in
             guard store.killPresentation == nil && store.bodyReportPresentation == nil else { return }

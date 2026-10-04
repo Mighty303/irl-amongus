@@ -28,6 +28,8 @@ struct FollowFloorMap: View {
     var isGhost = false
     /// A reactor or O2 sabotage: the arrows point at its signs and flash red, like Among Us.
     var crisis = false
+    /// Unfound bodies, in their colours: yours (always shown) and others' when your vision reaches them.
+    var bodies: [MapBody] = []
     let onSelectStation: (POCStation) -> Void
 
     /// Meters across the shorter side: a little over a room's width. Fixed for the living, so nobody can
@@ -102,6 +104,15 @@ struct FollowFloorMap: View {
                     }
                     ForEach(stations.filter { $0.style != .sign }) { station in
                         pin(station).position(projection.point(station.position))
+                    }
+                    ForEach(bodies.filter { $0.mine || (sight?.canSee($0.position) ?? true) }) { body in
+                        Image(uiImage: BodyReportArtwork.corpse(color: body.color))
+                            .resizable().interpolation(.high).scaledToFit()
+                            .frame(width: 56, height: 36)
+                            .shadow(color: .black.opacity(0.7), radius: 3)
+                            .position(projection.point(body.position))
+                            .allowsHitTesting(false)
+                            .accessibilityLabel(body.mine ? "Your body" : "A body")
                     }
                 }
                 .frame(width: big.width, height: big.height)
@@ -370,4 +381,13 @@ struct MapArrow: View {
         }
         .accessibilityHidden(true)
     }
+}
+
+/// A body on the map (x = longitude, y = latitude), in the dead player's colour.
+struct MapBody: Identifiable {
+    let id: String
+    let position: CGPoint
+    let color: PlayerColor
+    /// Your own: always shown. Others' only where you can see.
+    var mine = false
 }

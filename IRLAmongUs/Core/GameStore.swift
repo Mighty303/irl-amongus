@@ -32,6 +32,11 @@ final class GameStore {
     var errorMessage: String?
     var alert: Alert?
     var killPresentation: KillPresentation?
+    /// You just killed someone: a quick slash across your screen (changes with each kill).
+    var killSlash: UUID?
+    /// Where you were when you were killed (x = longitude, y = latitude): your body stays there on your map
+    /// until someone finds it, while you go and do your tasks as a ghost.
+    private(set) var deathSpot: CGPoint?
     var bodyReportPresentation: BodyReportPresentation?
     private(set) var bodyReportBackdrop: GameState?
     /// serverTime - localTime, in ms
@@ -86,8 +91,6 @@ final class GameStore {
     @ObservationIgnored private var deathSound = DeathSoundState()
     @ObservationIgnored private var killPresentationState = KillPresentationState()
     @ObservationIgnored private var bodyReportState = BodyReportState()
-    @ObservationIgnored private var awaitingKillAck = false
-    @ObservationIgnored private var pendingKillVictims = Set<String>()
     @ObservationIgnored private var initializedCooldownForLobby: String? {
         didSet { preferences.set(initializedCooldownForLobby, forKey: "initializedKillCooldownLobby") }
     }
@@ -572,8 +575,10 @@ final class GameStore {
             killAudio.play(.victim)
         }
         if old?.me.alive == true && !newState.me.alive && newState.me.isBody {
+            deathSpot = positions.estimate.map { CGPoint(x: $0.lng, y: $0.lat) }
             presentKill(victimID: newState.me.id, killerID: newState.me.killedBy)
         }
+        if !newState.me.isBody { deathSpot = nil }
         connection = .connected
         isSynced = true
         reconnectAttempt = 0
@@ -648,10 +653,8 @@ final class GameStore {
         case "PLAYER_KILLED":
             if let victimID = data["victimId"] as? String {
                 let killerID = data["killerId"] as? String
-                if awaitingKillAck && (killerID == nil || killerID == session?.playerId) {
-                    pendingKillVictims.insert(victimID)
-                }
-                if victimID == session?.playerId || killerID == session?.playerId {
+                // Only the victim sees the kill animation; the killer gets a slash (`killSlash`).
+                if victimID == session?.playerId {
                     presentKill(victimID: victimID, killerID: killerID)
                 }
             }
@@ -762,13 +765,6 @@ final class GameStore {
     func send(_ action: String, _ payload: [String: Any] = [:]) async throws {
         guard let socket, isSynced else { throw ClientError.server("Not connected. Reconnecting…") }
         let isKill = action == "kill"
-        if isKill {
-            awaitingKillAck = true
-            pendingKillVictims.removeAll()
-        }
-        defer {
-            if isKill { awaitingKillAck = false; pendingKillVictims.removeAll() }
-        }
         let id = nextRequestId
         nextRequestId += 1
         let data = try JSONSerialization.data(withJSONObject: ["id": id, "action": action, "payload": payload])
@@ -784,11 +780,10 @@ final class GameStore {
             }
         }
         if isKill {
-            killAudio.play(.killer)
-            // Direct and QR kills share this path; old servers identify QR victims in the event.
-            let victimID = payload["targetId"] as? String
-                ?? (pendingKillVictims.count == 1 ? pendingKillVictims.first : nil)
-            if let victimID { presentKill(victimID: victimID, killerID: session?.playerId) }
+            // The killer: Among Us's impostor kill sound and a slash across the screen (the victim gets the animation).
+            GameSoundEffect.impostorKill.play()
+            killSlash = UUID()
+            Haptics.heavy()
         }
     }
 

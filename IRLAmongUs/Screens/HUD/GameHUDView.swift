@@ -20,6 +20,8 @@ struct GameHUDView: View {
     @State private var panel: Panel = .actions
     @State private var scanning = false
     @State private var showingCams = false
+    /// Killed: the "stay still" notice, shown once the kill animation's done.
+    @State private var bodyNotice: UUID?
     @State private var showingAdmin = false
     @State private var spectating = false
     /// The sign a tapped task needs; nil when scanning from the big button (any sign).
@@ -84,6 +86,14 @@ struct GameHUDView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: spectating)
+        .overlay {
+            if let id = bodyNotice {
+                BodyNotice { if bodyNotice == id { bodyNotice = nil } }.id(id)
+            }
+        }
+        .onChange(of: state.me.isBody && store.killPresentation == nil, initial: true) { _, show in
+            if show { bodyNotice = UUID() }
+        }
         .onChange(of: state.me.alive) { _, alive in if alive { spectating = false } }
         .onChange(of: state.me.canWatchCams) { _, can in
             // Walked away from Security long enough for the check-in to lapse.
@@ -336,6 +346,7 @@ struct HUDMapSquare: View {
                 myFaceURL: store.faceURL(state.player(state.me.id)?.faceId),
                 isGhost: !state.me.alive,
                 crisis: crisis,
+                bodies: mapBodies,
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }
                     else { selectSign(station.id.hasPrefix("sab-") ? String(station.id.dropFirst(4)) : station.id) }
@@ -362,7 +373,7 @@ struct HUDMapSquare: View {
             }
             .overlay(alignment: .bottom) {
                 if !state.me.alive {
-                    Text(state.me.isBody ? "YOU WERE KILLED · stay put until your body is found" : "YOU ARE DEAD · finish your tasks")
+                    Text("YOU ARE DEAD · finish your tasks")
                         .font(.system(size: 11, weight: .black, design: .rounded)).foregroundStyle(.white)
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(.black.opacity(0.75), in: Capsule())
@@ -466,6 +477,19 @@ struct HUDMapSquare: View {
 
     /// What the map keeps in the middle: your live position, else your last check-in, else the red
     /// button or the play area's building.
+    /// Unfound bodies in their colours: yours where you fell, and the ones near you (the map shows those in sight).
+    private var mapBodies: [MapBody] {
+        var bodies = (state.me.bodies ?? []).map { spot in
+            MapBody(id: spot.playerId, position: CGPoint(x: spot.lng, y: spot.lat),
+                    color: PlayerColor.rosterColor(for: spot.playerId, in: state.players) ?? .red)
+        }
+        if state.me.isBody, let spot = store.deathSpot {
+            bodies.append(MapBody(id: state.me.id, position: spot,
+                                  color: PlayerColor.rosterColor(for: state.me.id, in: state.players) ?? .red, mine: true))
+        }
+        return bodies
+    }
+
     private func mapCenter(_ campus: CampusView) -> (CGPoint, Bool) {
         if let position = LocalMapTracking.coordinate(local: store.positions.estimate,
                 positions: store.livePositions, playerID: state.me.id, serverNow: store.serverNow()) {
@@ -641,32 +665,16 @@ struct HUDActionsPanel: View {
                 Text(state.me.alive
                      ? "Point the camera at a task's sign to check in and start it."
                      : state.me.isBody
-                     ? "You were killed. Stay where you are, quietly, until your body is found; then finish your tasks as a ghost."
+                     ? "You were killed. Your body stays where you fell until someone finds it; go and finish your tasks as a ghost."
                      : "You're a ghost: you can't report or vote, but your tasks still count. Tap Spectate on the map to watch everyone.")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if state.me.alive { reportButton(size: button * 0.86) }
-                // Whoever finds you can report your body right here on your phone.
-                if state.me.isBody { reportMyBodyButton(size: button * 0.86) }
-                if !state.me.isBody, state.me.alive || state.settings.ghostTasks { HUDScanButton(size: button, action: scan) }
+                // Your body stays where you fell (others report it there); you're free to do your tasks.
+                if state.me.alive || state.settings.ghostTasks { HUDScanButton(size: button, action: scan) }
             }
         }
-    }
-
-    /// On a body's phone: the person who found it reports here.
-    private func reportMyBodyButton(size: CGFloat) -> some View {
-        Button {
-            Task { await store.perform("report_body", ["method": "self"]) }
-        } label: {
-            VStack(spacing: 0) {
-                Image("ReportActionIcon").resizable().scaledToFit().frame(width: size, height: size)
-                TaskText("FOUND ME", size: 9)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Report this body (for whoever found it)")
-        .accessibilityIdentifier("hud.reportSelf")
     }
 
     private func reportButton(size: CGFloat) -> some View {
@@ -1064,5 +1072,34 @@ struct CrisisText: View {
                 .padding(.horizontal, 10)
         }
         .accessibilityIdentifier("hud.crisis")
+    }
+}
+
+/// After you're killed, once the kill animation's over: "You were killed" and that your body stays where you
+/// fell while you go do your tasks, in Among Us text over the screen, blinking three times, then gone.
+struct BodyNotice: View {
+    var onFinished: () -> Void = {}
+    @State private var visible = false
+
+    var body: some View {
+        VStack(spacing: 6) {
+            AmongUsText("You were killed", size: 32, color: Color(red: 1, green: 0.2, blue: 0.2))
+            AmongUsText("Your body stays here until it's found. Go do your tasks!", size: 20)
+        }
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 20)
+        .opacity(visible ? 1 : 0)
+        .allowsHitTesting(false)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("hud.bodyNotice")
+        .task {
+            for _ in 0..<3 {
+                visible = true
+                try? await Task.sleep(for: .milliseconds(900))
+                visible = false
+                try? await Task.sleep(for: .milliseconds(350))
+            }
+            if !Task.isCancelled { onFinished() }
+        }
     }
 }
