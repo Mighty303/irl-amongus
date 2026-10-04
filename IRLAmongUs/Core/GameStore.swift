@@ -60,6 +60,8 @@ final class GameStore {
     /// AR position mode's camera tracking.
     @ObservationIgnored private let arTracker = ARPositionTracker()
     @ObservationIgnored private var localTrackingOn = false
+    /// The live map (testing) is open: track this phone even in a lobby with sharing off.
+    var liveMapOpen = false { didSet { updateLocalTracking() } }
     /// Every SFU Burnaby building's floor plans, so play can happen anywhere on campus.
     let campus = CampusMap()
     /// Security cameras: the latest frame from each player's front camera, while you're watching.
@@ -110,7 +112,7 @@ final class GameStore {
         preferredFaceId = defaults.string(forKey: "preferredFaceId")
         signThreshold = defaults.object(forKey: "signThreshold") as? Float ?? 0.6
         demoModeEnabled = defaults.bool(forKey: "demoModeEnabled")
-        positionMode = defaults.string(forKey: "positionMode").flatMap(PositionMode.init(rawValue:)) ?? .steps
+        positionMode = defaults.string(forKey: "positionMode").flatMap(PositionMode.init(rawValue:)) ?? .ar
         if restoresSession, let data = defaults.data(forKey: "session") {
             session = try? JSONDecoder().decode(Session.self, from: data)
         }
@@ -581,13 +583,7 @@ final class GameStore {
         if newState.me.canWatchCams != true, isWatchingCams { isWatchingCams = false; camFeeds = [:] }
         updateCameraStream()
         // The local map follows movement even when position sharing is disabled.
-        localTrackingOn = LocalMapTracking.isEnabled(phase: newState.phase, sharing: newState.settings.livePositions == true)
-        if localTrackingOn {
-            positions.start()
-        } else {
-            positions.stop()
-        }
-        updateARTracking()
+        updateLocalTracking()
         if newState.settings.livePositions != true { livePositions = [] }
         // Everyone starts the game at the red button: the first fix, before any sign is scanned.
         // (Not in GPS mode, which is kept as it originally was for comparison.)
@@ -799,6 +795,27 @@ final class GameStore {
         if await perform("cam_watch", ["on": true]) { return true }
         isWatchingCams = false
         return false
+    }
+
+    private func updateLocalTracking() {
+        guard let state else { return }
+        localTrackingOn = (liveMapOpen && state.phase != .GAME_OVER)
+            || LocalMapTracking.isEnabled(phase: state.phase, sharing: state.settings.livePositions == true)
+        if localTrackingOn {
+            location.start()
+            positions.start()
+        } else {
+            positions.stop()
+        }
+        updateARTracking()
+    }
+
+    /// Testing: put this phone at the red button now (as the game's start does).
+    func startAtRedButton() {
+        guard let button = state?.stations.first(where: { $0.kind == .emergency }),
+              let lat = button.lat, let lng = button.lng else { return }
+        positions.fix(lat: lat, lng: lng, name: "Red button (manual)", buildingId: button.buildingId,
+                      floorId: button.floorId, accuracyM: PositionEstimator.startFixM)
     }
 
     /// AR position mode runs the back camera whenever the map is tracking, except while another camera

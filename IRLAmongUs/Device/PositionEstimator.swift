@@ -37,10 +37,11 @@ enum PositionMode: String, CaseIterable, Identifiable {
 /// A small filter in local meters: a position plus one uncertainty radius.
 /// - **Sign check-ins** are exact fixes: scanning a sign puts you at that sign, within a few meters.
 /// - **The red button** is where everyone starts, so the game's start is a fix there too.
-/// - **Steps** (CMPedometer) move the estimate along the way the player faces while the phone is held in
-///   front of them, at any tilt from flat to nearly upright (as when looking at the map). With the phone in
-///   a pocket the direction is unknown, so steps only grow the radius: you can't be further from the last
-///   fix than you've walked.
+/// - **Steps** are detected one by one from the phone's motion (the pedometer only reports every few
+///   seconds, so it just calibrates stride length) and move the estimate the way the player faces while the
+///   phone is held in front of them, at any tilt from flat to nearly upright. Just after lowering the phone,
+///   the last way it faced is used; with no direction at all (in a pocket), steps only grow the radius: you
+///   can't be further from the last fix than you've walked. (GPS mode keeps the original pedometer steps.)
 /// - **GPS** pulls the estimate in proportion to how good the fix claims to be. Fixes that disagree
 ///   wildly with everything else are mostly ignored rather than trusted (indoor GPS jumps). Indoors, once
 ///   a sign has placed you, GPS is ignored altogether: steps from that sign beat it (except in `PositionMode.gps`).
@@ -86,6 +87,10 @@ final class PositionEstimator {
         var compassUsable = false
         var phoneHeldUp = false
         var stepsAvailable = CMPedometer.isStepCountingAvailable()
+        /// Step length in use (meters), calibrated by the pedometer.
+        var strideM = PositionEstimator.defaultStrideM
+        /// How the last step was steered: "compass", "compass (unsure)", "last facing", or "no direction".
+        var lastStepDirection: String?
         var lastFixName: String?
         var lastFixAt: Date?
         var altitudeSinceFixM: Double?
@@ -132,13 +137,16 @@ final class PositionEstimator {
     /// The game's play area: assumed until a sign check-in says otherwise.
     @ObservationIgnored var playArea: CampusPlace?
     /// Which way to work out position (Settings).
-    @ObservationIgnored var mode: PositionMode = .steps
+    @ObservationIgnored var mode: PositionMode = .ar
     @ObservationIgnored private var arTrackingAt: Date?
     @ObservationIgnored private var lastARMoveAt: Date?
     /// True north minus magnetic north, degrees, from Core Location (the motion sensors only know magnetic north).
     @ObservationIgnored private var declination = 0.0
     /// Which way is up on the screen as the player sees it, in the phone's own axes (refreshed every second).
     @ObservationIgnored private var screenUp = (x: 0.0, y: 1.0)
+    /// Steps and AR modes: steps detected as they happen, and the way the player last faced.
+    @ObservationIgnored private var stepDetector = StepDetector()
+    @ObservationIgnored private var facing: (degrees: Double, trusted: Bool, at: Date)?
 
     // Tuning. Indoor GPS radii are optimistic and successive fixes share the same error, so they're
     // inflated and thinned out; the pedometer's step length is decent, the phone's heading less so.
@@ -148,7 +156,12 @@ final class PositionEstimator {
     private static let gpsInflation = 1.5
     private static let gpsMinGap: TimeInterval = 2.5
     private static let compassStepError = 0.3
+    /// Compass says it's disturbed (common indoors), or the phone was just lowered: still the best guess.
+    private static let unsureStepError = 0.5
     private static let pocketStepError = 0.9
+    static let defaultStrideM = 0.7
+    /// How long after lowering the phone its last facing still steers steps.
+    private static let facingMemory: TimeInterval = 5
     private static let minAccuracyM = 2.0
     private static let maxAccuracyM = 250.0
     private static let floorHeightM = 4.0
@@ -166,7 +179,8 @@ final class PositionEstimator {
             }
         }
         if motion.isDeviceMotionAvailable {
-            motion.deviceMotionUpdateInterval = 0.1
+            // Fast enough to see each step's bounce.
+            motion.deviceMotionUpdateInterval = 1.0 / 50
             // A magnetic reference frame fills in `magneticField`, so the heading works at any tilt.
             let magnetic = CMMotionManager.availableAttitudeReferenceFrames().contains(.xMagneticNorthZVertical)
             motion.startDeviceMotionUpdates(using: magnetic ? .xMagneticNorthZVertical : .xArbitraryZVertical, to: .main) { [weak self] data, _ in
@@ -198,6 +212,8 @@ final class PositionEstimator {
         timer = nil
         lastPedometerDistance = nil
         lastPedometerSteps = nil
+        stepDetector = StepDetector()
+        facing = nil
     }
 
     /// Forget everything (leaving a game).
@@ -247,7 +263,8 @@ final class PositionEstimator {
         lastGPSProcessedAt = Date()
         lastGPSTimestamp = location.timestamp
         // Indoors GPS is off by tens of meters and drags a good step-counted track around with it.
-        diagnostics.gpsIgnoredIndoors = mode != .gps && diagnostics.lastFixAt != nil && estimate?.buildingId != nil
+        // Once there's any estimate (GPS's own first guess, the red button or a sign), steps beat it indoors.
+        diagnostics.gpsIgnoredIndoors = mode != .gps && hasState && estimate?.buildingId != nil
         if diagnostics.gpsIgnoredIndoors {
             diagnostics.gpsWeight = 0
             diagnostics.gpsOutlier = false
@@ -314,6 +331,14 @@ final class PositionEstimator {
             diagnostics.phoneHeldUp = heldUp
             direction = heldUp ? recentHeading?.degrees : nil
             compassTrusted = recentHeading.map { $0.accuracy <= 35 } ?? false
+        }
+        if let direction { facing = (direction, compassTrusted, Date()) }
+        if mode != .gps {
+            let n = max((g.x * g.x + g.y * g.y + g.z * g.z).squareRoot(), 0.5)
+            let a = data.userAcceleration
+            // Acceleration along "up", in g: each step is one bounce.
+            let vertical = -(a.x * g.x + a.y * g.y + a.z * g.z) / n
+            if stepDetector.add(vertical, at: data.timestamp) { step() }
         }
         let usable = direction != nil && compassTrusted
         diagnostics.compassUsable = usable
@@ -384,6 +409,13 @@ final class PositionEstimator {
             lastPedometerSteps = steps
             headingSum = (0, 0, 0, 0)
         }
+        if mode != .gps {
+            // Steps are counted one by one in `useMotion`; the pedometer's own distance gives the stride.
+            if data.distance != nil, steps >= 10 {
+                diagnostics.strideM = min(max(total / Double(steps), 0.45), 0.95)
+            }
+            return
+        }
         guard let lastDistance = lastPedometerDistance, let lastSteps = lastPedometerSteps else { return }
         let walked = max(0, total - lastDistance)
         guard walked > 0.05 else { return }
@@ -405,6 +437,34 @@ final class PositionEstimator {
         } else {
             // Direction unknown: the true position is somewhere within `walked` of the old one.
             variance = pow(sigma + Self.pocketStepError * walked, 2)
+        }
+        publish()
+    }
+
+    /// Steps and AR modes: one step, the way the player faces (or faced a moment ago).
+    private func step() {
+        let stride = diagnostics.strideM
+        lastStepAt = Date()
+        diagnostics.stepsSinceFix += 1
+        diagnostics.metersSinceFix += stride
+        guard hasState else { return }
+        // The camera already measured this walk.
+        if mode == .ar, let arTrackingAt, Date().timeIntervalSince(arTrackingAt) < 3 { return }
+        let sigma = variance.squareRoot()
+        let age = facing.map { Date().timeIntervalSince($0.at) } ?? .infinity
+        if let facing, age < Self.facingMemory {
+            let radians = facing.degrees * .pi / 180
+            x += stride * sin(radians)
+            y += stride * cos(radians)
+            let current = age < 0.5
+            let error = current && facing.trusted ? Self.compassStepError : Self.unsureStepError
+            variance = pow(sigma + error * stride, 2)
+            lastCompassMoveAt = Date()
+            diagnostics.lastStepDirection = !current ? "last facing" : facing.trusted ? "compass" : "compass (unsure)"
+        } else {
+            // Direction unknown: the true position is somewhere within the steps walked of the old one.
+            variance = pow(sigma + Self.pocketStepError * stride, 2)
+            diagnostics.lastStepDirection = "no direction"
         }
         publish()
     }
@@ -611,5 +671,31 @@ struct FloorPlanIndex {
             j = i
         }
         return inside
+    }
+}
+
+/// Spots steps one at a time from vertical acceleration (in g, gravity removed): each step is a bounce up
+/// past a threshold. Smoothed so hand jitter doesn't count, with a short refractory time so one bounce is
+/// one step, and it re-arms only once the bounce has come back down.
+struct StepDetector {
+    private var smoothed = 0.0
+    private var armed = true
+    private var lastStepAt: TimeInterval = -.infinity
+
+    static let threshold = 0.09
+    static let rearm = 0.0
+    static let minInterval: TimeInterval = 0.3
+
+    /// True when this sample completes a step.
+    mutating func add(_ vertical: Double, at time: TimeInterval) -> Bool {
+        smoothed += 0.3 * (vertical - smoothed)
+        if !armed {
+            if smoothed < Self.rearm { armed = true }
+            return false
+        }
+        guard smoothed > Self.threshold, time - lastStepAt >= Self.minInterval else { return false }
+        armed = false
+        lastStepAt = time
+        return true
     }
 }
