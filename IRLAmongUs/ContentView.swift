@@ -829,10 +829,11 @@ private struct LobbyPlayerStage: View {
             ForEach(Array(players.enumerated()), id: \.element.id) { index, player in
                 if visiblePlayerIDs.contains(player.id) {
                     let anchor = Self.anchors[index % Self.anchors.count]
+                    let playerColor = player.color ?? PlayerColor.allCases[index % PlayerColor.allCases.count]
 
                     VStack(spacing: 2) {
                         ZStack(alignment: .topTrailing) {
-                            Image("LobbyPlayer")
+                            Image(playerColor.lobbyAssetName)
                                 .resizable()
                                 .interpolation(.high)
                                 .scaledToFit()
@@ -861,7 +862,7 @@ private struct LobbyPlayerStage: View {
                     .transition(.scale(scale: 0.05, anchor: .bottom).combined(with: .opacity))
                     .accessibilityElement(children: .ignore)
                     .accessibilityIdentifier("lobby.playerSprite.\(index)")
-                    .accessibilityLabel("\(player.name) player icon\(player.isHost ? ", host" : "")")
+                    .accessibilityLabel("\(player.name) \(playerColor.rawValue) player icon\(player.isHost ? ", host" : "")")
                 }
             }
         }

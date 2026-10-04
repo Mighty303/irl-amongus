@@ -47,4 +47,8 @@ The source repository does not declare a license. Among Us and its original
 artwork belong to Innersloth; confirm the applicable permissions before
 redistributing the extracted sprite.
 
+The `LobbyPlayer<Color>.imageset` variants recolor only the suit pixels from
+that crop while preserving its original silhouette, visor, outline, and floor
+shadow. Regenerate them with `python3 scripts/generate-lobby-player-colors.py`.
+
 - Role-reveal audio (`RoleRevealSound`): original `Roundstart_MAIN.wav` from [Among Us — General Sounds](https://sounds.spriters-resource.com/pc_computer/amongus/asset/431696/), uploaded by imJJ. Bundled without re-encoding.
