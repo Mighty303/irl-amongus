@@ -17,7 +17,11 @@ struct RoleRevealView: View {
                     Color.black.ignoresSafeArea()
                     if let role = state.me.role {
                         if revealed {
-                            RoleRevealArtwork(role: role, impostorCount: state.settings.impostors)
+                            RoleRevealArtwork(
+                                role: role,
+                                impostorCount: state.settings.impostors,
+                                players: RoleRevealPlayer.lineup(from: state.players, localID: state.me.id, role: role)
+                            )
                             VStack {
                                 Spacer()
                                 let partners = state.players.filter { $0.role == .impostor && $0.id != state.me.id }

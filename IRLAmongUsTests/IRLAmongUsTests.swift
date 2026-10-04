@@ -5,6 +5,24 @@ import UIKit
 @testable import IRLAmongUs
 
 struct IRLAmongUsTests {
+    @Test func roleRevealLineupUsesRosterColorsAndHidesCrewFromImpostors() {
+        func player(_ id: String, color: PlayerColor?, role: Role?) -> PlayerView {
+            PlayerView(id: id, name: id, color: color, faceId: nil, isHost: false, isBot: nil,
+                       connected: true, alive: true, ejected: false, role: role, hasVoted: false)
+        }
+        let roster = [player("crew", color: .cyan, role: .crewmate),
+                      player("partner", color: .purple, role: .impostor),
+                      player("me", color: nil, role: nil),
+                      player("hidden", color: .yellow, role: nil)]
+        let crew = RoleRevealPlayer.lineup(from: roster, localID: "me", role: .crewmate)
+        #expect(crew.map(\.id) == ["me", "crew", "partner", "hidden"])
+        #expect(crew.map(\.color) == [.green, .cyan, .purple, .yellow])
+        let impostors = RoleRevealPlayer.lineup(from: roster, localID: "me", role: .impostor)
+        #expect(impostors.map(\.id) == ["me", "partner"])
+        #expect(impostors.map(\.color) == [.green, .purple])
+        #expect(RoleRevealPlayer.lineup(from: [], localID: "me", role: .crewmate).isEmpty)
+    }
+
     @Test func killAudioIsBundledAndDecodable() throws {
         for sound in KillSound.allCases {
             let url = try #require(Bundle.main.url(forResource: sound.rawValue, withExtension: "mp3"))

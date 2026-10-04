@@ -101,6 +101,8 @@ the game's mini-map still uses MapKit (the SFU SUB floor plan from the Physical 
 
 Shake the phone to open Developer Mode, then choose **Open Role Reveal**. Choose **Crewmate** or **Impostor** to play the bundled Shhh intro followed by the role screen. The role remains visible for three seconds, then opens the portrait Map automatically. The reveal has no exit or replay controls. This preview uses landscape and runs offline. It does not assign roles or contact the game server.
 
+The crewmate reveal shows the full roster, with your sprite in front. The impostor reveal shows only you and your fellow impostors, with names. Both use the players' lobby colors. The offline preview includes ten sample crewmates or two impostors.
+
 Asset sources are recorded in [sprite attribution](SPRITE_ASSET_ATTRIBUTION.md).
 
 Original artwork previews (before the automatic map transition): [Shhh](docs/role-shhh.png), [Crewmate](docs/role-crewmate.png), [Impostor](docs/role-impostor.png).
