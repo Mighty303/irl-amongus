@@ -155,6 +155,36 @@ final class GameStore {
         }
     }
 
+    struct SignSet: Decodable, Identifiable, Equatable {
+        let name: String
+        let signs: Int
+        let savedAt: Double
+        var id: String { name }
+    }
+
+    /// Saved sign sets (already-photographed signs) a host can load for a quick demo lobby.
+    func signSets() async throws -> [SignSet] {
+        guard let base = serverURL else { throw ClientError.server("Invalid server URL") }
+        let (data, response) = try await httpSession.data(from: base.appendingPathComponent("sign-sets"))
+        try validateHTTPResponse(response)
+        return try JSONDecoder().decode([SignSet].self, from: data)
+    }
+
+    /// Host: save the lobby's signs under `name`, or load a saved set into the lobby. Returns the sign count.
+    func signSet(_ action: String, name: String) async -> Int? {
+        guard let base = serverURL, let session else { return nil }
+        do {
+            let response = try await postJSON(
+                base.appendingPathComponent("games/\(session.code)/sign-sets/\(action)"),
+                body: ["playerId": session.playerId, "token": session.token, "name": name]
+            )
+            return response["signs"] as? Int ?? 0
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     func uploadPhoto(_ image: UIImage) async throws -> String {
         guard let base = serverURL else { throw ClientError.server("Invalid server URL") }
         let jpeg = image.resized(maxDimension: 800).jpegData(compressionQuality: 0.8) ?? Data()

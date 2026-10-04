@@ -561,6 +561,7 @@ private struct GameLobbyView: View {
     @State private var showingSettings = false
     @State private var showingInvite = false
     @State private var showingCustomize = false
+    @State private var showingMySigns = false
     @StateObject private var spawningAudio = PlayerSpawningAudioPlayer()
     @State private var knownPlayerIDs: Set<String> = []
     @State private var visiblePlayerIDs: Set<String> = []
@@ -626,6 +627,9 @@ private struct GameLobbyView: View {
         .sheet(isPresented: $showingSettings) {
             LobbyView(state: store.state ?? state)
         }
+        .sheet(isPresented: $showingMySigns) {
+            MySignsView()
+        }
         .sheet(isPresented: $showingInvite) {
             VStack(spacing: 16) {
                 Text(state.code).font(.largeTitle.monospaced().bold())
@@ -643,12 +647,17 @@ private struct GameLobbyView: View {
             LobbyPlayerStage(players: state.players, visiblePlayerIDs: visiblePlayerIDs)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(state.isHost ? "Waiting for players…" : "Waiting for the host to start…")
+                Text(!state.playersMissingSigns.isEmpty ? "Waiting for everyone's signs…"
+                     : state.isHost ? "Waiting for players…" : "Waiting for the host to start…")
                 ScrollView {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(state.players) { player in
-                            Text("\(player.connected ? "●" : "○") \(player.name)\(player.id == state.me.id ? " (you)" : "")\(player.isHost ? " · Host" : "")")
-                                .font(.caption)
+                            HStack {
+                                Text("\(player.connected ? "●" : "○") \(player.name)\(player.id == state.me.id ? " (you)" : "")\(player.isHost ? " · Host" : "")")
+                                Spacer(minLength: 8)
+                                signStatus(for: player)
+                            }
+                            .font(.caption)
                         }
                     }
                 }
@@ -687,6 +696,8 @@ private struct GameLobbyView: View {
                 playersCard
             }
 
+            if state.requiredSigns > 0 { mySignsCard }
+
             HStack(spacing: 12) {
                 Button {
                     buttonAudio.play()
@@ -705,12 +716,11 @@ private struct GameLobbyView: View {
                         .frame(maxWidth: .infinity, minHeight: 54)
                 }
                 .buttonStyle(LobbyStartButtonStyle())
-                .disabled(!state.isHost || state.players.count < state.settings.minPlayers || !store.isSynced)
+                .disabled(!state.isHost || state.players.count < state.settings.minPlayers
+                          || !state.playersMissingSigns.isEmpty || !store.isSynced)
             }
 
-            Text(state.isHost
-                 ? "Minimum \(state.settings.minPlayers) players to start"
-                 : "The host will start the game")
+            Text(startCaption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -726,6 +736,80 @@ private struct GameLobbyView: View {
             .buttonStyle(.plain)
             .padding(.bottom, 4)
         }
+    }
+
+    private var startCaption: String {
+        let missing = state.playersMissingSigns
+        if !missing.isEmpty {
+            let names = missing.map { $0.id == state.me.id ? "you" : $0.name }.joined(separator: ", ")
+            return "Waiting on \(missing.count) player\(missing.count == 1 ? "" : "s") to add signs (\(names))"
+        }
+        return state.isHost ? "Minimum \(state.settings.minPlayers) players to start" : "The host will start the game"
+    }
+
+    @ViewBuilder
+    private func signStatus(for player: PlayerView) -> some View {
+        let required = state.requiredSigns
+        if player.isBot == true {
+            Text("bot").foregroundStyle(.white.opacity(0.55))
+        } else if required > 0 {
+            let count = min(state.signs(addedBy: player.id).count, required)
+            Text(count >= required ? "\(count)/\(required) ✓" : "\(count)/\(required)")
+                .fontWeight(.heavy)
+                .foregroundStyle(count >= required ? Self.signsReady : Self.signsMissing)
+        }
+    }
+
+    private static let signsReady = Color(red: 0.56, green: 0.84, blue: 0.69)
+    private static let signsMissing = Color(red: 0.96, green: 0.78, blue: 0.30)
+
+    /// Every player photographs `requiredSigns` signs before the host can start.
+    private var mySignsCard: some View {
+        let required = state.requiredSigns
+        let count = min(state.mySigns.count, required)
+        let done = count >= required
+        let accent = done ? Self.signsReady : Self.signsMissing
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("MY SIGNS")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+                    (Text("\(count)") + Text("/\(required)").foregroundColor(.white.opacity(0.5)))
+                        .font(.system(size: 20, weight: .heavy, design: .rounded))
+                        .foregroundStyle(.white)
+                    if done {
+                        Text("READY")
+                            .font(.system(size: 12, weight: .heavy, design: .rounded))
+                            .foregroundStyle(accent)
+                    }
+                }
+                HStack(spacing: 5) {
+                    ForEach(0..<required, id: \.self) { index in
+                        Capsule().fill(index < count ? accent : Color(white: 0.3)).frame(height: 6)
+                    }
+                }
+            }
+            if done {
+                Button { buttonAudio.play(); showingMySigns = true } label: {
+                    Text("EDIT").font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .padding(.horizontal, 16).frame(minHeight: 44)
+                }
+                .buttonStyle(LobbyOutlineButtonStyle())
+            } else {
+                Button { buttonAudio.play(); showingMySigns = true } label: {
+                    Label("ADD SIGNS", systemImage: "plus")
+                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .padding(.horizontal, 14).frame(minHeight: 44)
+                }
+                .buttonStyle(LobbyFilledButtonStyle())
+            }
+        }
+        .padding(.vertical, 9).padding(.leading, 12).padding(.trailing, 10)
+        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(accent, lineWidth: 2))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("lobby.mySigns")
     }
 
     private var lobbyTopBar: some View {

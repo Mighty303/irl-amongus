@@ -4,6 +4,7 @@ struct LobbyView: View {
     @Environment(GameStore.self) private var store
     let state: GameState
     @State private var addingStation = false
+    @State private var addingMySign = false
     @State private var qrStation: Station?
 
     var body: some View {
@@ -43,11 +44,29 @@ struct LobbyView: View {
                     }
                 }
 
+                if state.requiredSigns > 0 {
+                    let required = state.requiredSigns
+                    let mine = state.mySigns
+                    Section {
+                        ForEach(mine) { StationRow(station: $0) }
+                        if mine.count < required {
+                            Button("Add a sign (\(mine.count + 1) of \(required))") { addingMySign = true }
+                        }
+                    } header: {
+                        Text("My signs (\(min(mine.count, required))/\(required))")
+                    } footer: {
+                        let missing = state.playersMissingSigns
+                        Text(missing.isEmpty
+                             ? "Everyone's signs are in."
+                             : "Waiting on \(missing.map(\.name).joined(separator: ", ")) to add signs. Each player photographs \(required) signs; together they become the task stations.")
+                    }
+                }
+
                 Section {
                     ForEach(state.stations) { s in
                         StationRow(station: s)
                             .swipeActions {
-                                if state.isHost {
+                                if state.isHost || s.addedBy == state.me.id {
                                     Button("Delete", role: .destructive) { Task { await store.perform("delete_station", ["stationId": s.id]) } }
                                 }
                                 Button("QR") { qrStation = s }
@@ -62,9 +81,11 @@ struct LobbyView: View {
 
                 if state.isHost {
                     SettingsSection(settings: state.settings, players: state.players)
+                    SignSetsSection(state: state)
                     Section {
                         Button("Start game") { Task { await store.perform("start_game") } }
                             .font(.headline)
+                            .disabled(!state.playersMissingSigns.isEmpty)
                     }
                 } else {
                     Section { Text("Waiting for the host to start…").foregroundStyle(.secondary) }
@@ -77,6 +98,10 @@ struct LobbyView: View {
             }
             .navigationTitle("Lobby")
             .sheet(isPresented: $addingStation) { StationEditorView() }
+            .sheet(isPresented: $addingMySign) {
+                StationEditorView(signOnly: true, title: "Sign \(state.mySigns.count + 1) of \(state.requiredSigns)",
+                                  fallbackName: "Sign \(state.mySigns.count + 1)")
+            }
             .sheet(item: $qrStation) { s in
                 VStack(spacing: 16) {
                     Text(s.name).font(.title.bold())
@@ -118,7 +143,7 @@ private struct SettingsSection: View {
     let players: [PlayerView]
 
     var body: some View {
-        Section("Players & tasks") {
+        Section {
             stepper("Impostors", \.impostors, "impostors", 1...3)
             Picker("Impostor", selection: Binding(
                 get: { settings.forcedImpostorIds.first ?? "" },
@@ -128,6 +153,11 @@ private struct SettingsSection: View {
                 ForEach(players) { Text($0.name).tag($0.id) }
             }
             stepper("Min players", \.minPlayers, "minPlayers", 2...12)
+            if let signsPerPlayer = settings.signsPerPlayer {
+                Stepper("Signs per player: \(signsPerPlayer)",
+                        value: Binding(get: { signsPerPlayer }, set: { store.updateSetting("signsPerPlayer", $0) }),
+                        in: 0...10)
+            }
             stepper("Tasks per player", \.tasksPerPlayer, "tasksPerPlayer", 1...8)
             ForEach(TaskType.allCases) { type in
                 Toggle(type.label, isOn: Binding(
@@ -139,6 +169,10 @@ private struct SettingsSection: View {
                     }
                 ))
             }
+        } header: {
+            Text("Players & tasks")
+        } footer: {
+            Text("Signs per player: how many signs each player must photograph in the lobby before START unlocks (0 = no requirement). Bots don't add signs; everyone's signs become the task stations.")
         }
         Section {
             meters("Kill distance", \.killDistanceM, "killDistanceM")
@@ -193,5 +227,86 @@ private struct SettingsSection: View {
 
     private func toggle(_ label: String, _ path: KeyPath<Settings, Bool>, _ key: String) -> some View {
         Toggle(label, isOn: Binding(get: { settings[keyPath: path] }, set: { store.updateSetting(key, $0) }))
+    }
+}
+
+/// Host: load a saved set of already-photographed signs (quick demo / judging setup), or save this lobby's.
+private struct SignSetsSection: View {
+    @Environment(GameStore.self) private var store
+    let state: GameState
+    @State private var sets: [GameStore.SignSet] = []
+    @State private var newName = ""
+    @State private var status: String?
+    @State private var busy = false
+    @State private var confirmLoad: GameStore.SignSet?
+
+    private var lobbySigns: Int { state.stations.filter { $0.kind == .task }.count }
+
+    var body: some View {
+        Section {
+            ForEach(sets) { set in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(set.name)
+                        Text("\(set.signs) signs · saved \(Date(timeIntervalSince1970: set.savedAt / 1000).formatted(date: .abbreviated, time: .shortened))")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Load") {
+                        if state.stations.isEmpty { load(set) } else { confirmLoad = set }
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(busy)
+                }
+            }
+            if sets.isEmpty { Text("No saved sign sets yet.").foregroundStyle(.secondary) }
+            HStack {
+                TextField("Name, e.g. Judging demo", text: $newName)
+                Button("Save \(lobbySigns) signs") { save() }
+                    .buttonStyle(.borderless)
+                    .disabled(busy || lobbySigns == 0 || newName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
+        } header: {
+            Text("Sign sets (demo / judging)")
+        } footer: {
+            Text("Save this lobby's photographed signs, then load them into any later lobby in one tap. Loading replaces the lobby's signs and turns off the per-player sign requirement.")
+        }
+        .task { await refresh() }
+        .confirmationDialog("Replace this lobby's \(state.stations.count) signs?", isPresented: Binding(
+            get: { confirmLoad != nil }, set: { if !$0 { confirmLoad = nil } }
+        ), titleVisibility: .visible) {
+            if let set = confirmLoad {
+                Button("Load \(set.name)", role: .destructive) { load(set) }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private func refresh() async {
+        sets = (try? await store.signSets()) ?? []
+    }
+
+    private func save() {
+        let name = newName.trimmingCharacters(in: .whitespaces)
+        busy = true
+        Task {
+            if let count = await store.signSet("save", name: name) {
+                status = "Saved \(count) signs as “\(name)”."
+                newName = ""
+                await refresh()
+            }
+            busy = false
+        }
+    }
+
+    private func load(_ set: GameStore.SignSet) {
+        busy = true
+        Task {
+            if let count = await store.signSet("load", name: set.name) {
+                status = "Loaded \(count) signs from “\(set.name)”. The sign requirement is off."
+            }
+            busy = false
+        }
     }
 }
