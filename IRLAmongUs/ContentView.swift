@@ -323,7 +323,7 @@ private struct LocalLobbyView: View {
             }
         }
         .onChange(of: store.state?.phase, initial: true) { _, phase in
-            if let phase, phase != .LOBBY && phase != .ROLE_REVEAL {
+            if let phase, phase != .LOBBY && phase != .ROLE_REVEAL && phase != .PLAYING {
                 OrientationDelegate.requestPortrait()
             } else {
                 OrientationDelegate.requestLandscape()
@@ -1466,10 +1466,10 @@ struct PhysicalMapView: View {
     }
 }
 
-private struct POCFloorPlan: View {
+struct POCFloorPlan: View {
     let rooms: [POCRoom]
     let stations: [POCStation]
-    let meetingPoint: CGPoint
+    let meetingPoint: CGPoint?
     let completedStationIDs: Set<String>
     let selectedStation: POCStation?
     let ownLastCheckpoint: POCCheckpoint
@@ -1614,19 +1614,21 @@ private struct POCFloorPlan: View {
             .accessibilityLabel("\(station.displayName) station, \(station.roomLabel), \(isCompleted ? "completed" : "assigned")")
         }
 
-        VStack(spacing: 2) {
-            Image(systemName: "megaphone.fill")
-            Text("MEETING")
-                .font(.system(size: 8, weight: .black))
+        if let meetingPoint {
+            VStack(spacing: 2) {
+                Image(systemName: "megaphone.fill")
+                Text("MEETING")
+                    .font(.system(size: 8, weight: .black))
+            }
+            .foregroundStyle(.white)
+            .padding(8)
+            .background(.red, in: Circle())
+            .overlay(Circle().stroke(.white, lineWidth: 2))
+            .scaleEffect(1 / zoomScale)
+            .position(projection.point(meetingPoint))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Emergency meeting point")
         }
-        .foregroundStyle(.white)
-        .padding(8)
-        .background(.red, in: Circle())
-        .overlay(Circle().stroke(.white, lineWidth: 2))
-        .scaleEffect(1 / zoomScale)
-        .position(projection.point(meetingPoint))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Emergency meeting point, SUB 2430 public study area, Level 2")
 
         if let checkpointStation = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) {
             VStack(spacing: 0) {
@@ -1762,7 +1764,7 @@ private struct POCStationDetailView: View {
     }
 }
 
-private struct POCRoom: Identifiable {
+struct POCRoom: Identifiable {
     let id: String
     let label: String
     let roomID: String
@@ -1791,7 +1793,7 @@ private struct POCRoom: Identifiable {
     }
 }
 
-private struct POCMapBounds {
+struct POCMapBounds {
     let minX: CGFloat
     let maxX: CGFloat
     let minY: CGFloat
@@ -1816,7 +1818,7 @@ private struct POCMapBounds {
     }
 }
 
-private struct POCMapProjection {
+struct POCMapProjection {
     private let bounds: POCMapBounds
     private let longitudeCorrection: CGFloat
     private let scale: CGFloat
@@ -1850,7 +1852,7 @@ private struct POCMapProjection {
     }
 }
 
-private enum SUBLevel2Map {
+enum SUBLevel2Map {
     static let rooms: [POCRoom] = loadRooms()
 
     static func center(of roomID: String) -> CGPoint {
@@ -1952,7 +1954,7 @@ private struct SFUGeoJSONGeometry: Decodable {
     let coordinates: [[[Double]]]
 }
 
-private struct POCStation: Identifiable {
+struct POCStation: Identifiable {
     let id: String
     let displayName: String
     let taskType: String
@@ -1961,7 +1963,7 @@ private struct POCStation: Identifiable {
     let position: CGPoint
 }
 
-private struct POCCheckpoint {
+struct POCCheckpoint {
     let stationID: String
     let stationName: String
     let roomLabel: String

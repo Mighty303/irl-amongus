@@ -36,14 +36,16 @@ struct GameRootView: View {
             }
         }
         .onChange(of: store.state?.phase, initial: true) { _, phase in
-            if phase == .LOBBY || phase == .ROLE_REVEAL || phase == nil {
+            if phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == nil {
                 OrientationDelegate.requestLandscape()
             } else {
                 OrientationDelegate.requestPortrait()
             }
         }
         .safeAreaInset(edge: .bottom) {
-            if store.session != nil && store.state?.phase != .ROLE_REVEAL && (!store.isSynced || (lobbyContent != nil && store.state?.phase != .LOBBY)) {
+            // The in-game HUD has Leave game in its settings menu, so it keeps the full screen height.
+            if store.session != nil && store.state?.phase != .ROLE_REVEAL
+                && (!store.isSynced || (lobbyContent != nil && store.state?.phase != .LOBBY && store.state?.phase != .PLAYING)) {
                 Button("Leave Game", role: .destructive) { store.leave() }
                     .padding(8)
                     .frame(maxWidth: .infinity)
@@ -63,7 +65,7 @@ struct GameRootView: View {
         case .LOBBY:
             if let lobbyContent { lobbyContent(state) } else { AnyView(LobbyView(state: state)) }
         case .ROLE_REVEAL: RoleRevealView(state: state)
-        case .PLAYING: state.me.isBody ? AnyView(BodyView(state: state)) : AnyView(PhysicalMapView(showsCloseButton: false, gameState: state))
+        case .PLAYING: state.me.isBody ? AnyView(BodyView(state: state)) : AnyView(GameHUDView(state: state))
         case .MEETING, .VOTING, .RESULT: MeetingView(state: state)
         case .GAME_OVER: GameOverView(state: state)
         }

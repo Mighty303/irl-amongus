@@ -46,44 +46,8 @@ struct TaskSheet: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
     }
 
-    @ViewBuilder private func game(state: GameState) -> some View {
-        switch task.type {
-        case .wiring: WiringGame(onDone: complete)
-        case .upload:
-            UploadGame(seconds: state.settings.uploadSec,
-                       start: { await store.perform("task_start", ["taskId": task.id]) },
-                       onDone: complete)
-        case .sequence: SequenceGame(onDone: complete)
-        case .swipe: SwipeCardGame(onDone: complete)
-        case .shields: ShieldsGame(onDone: complete)
-        case .o2: O2Game(onDone: complete)
-        case .scan:
-            ScanGame(seconds: state.settings.scanSec ?? 10, playerName: state.me.name,
-                     start: { await store.perform("task_start", ["taskId": task.id]) },
-                     onDone: complete)
-        case .divert:
-            if task.step == 0 {
-                VStack(spacing: 8) {
-                    DivertPowerGame(onDone: complete)
-                    if let dest = state.station(task.steps.last) {
-                        Text("Then accept the power at \(dest.name)").font(.caption.bold()).foregroundStyle(.white)
-                    }
-                }
-            } else {
-                AcceptPowerGame(onDone: complete)
-            }
-        case .unknown:
-            Text("This task needs a newer version of the app.")
-                .font(.headline).foregroundStyle(.white).multilineTextAlignment(.center)
-        case .delivery:
-            VStack(spacing: 12) {
-                Button(task.step == 0 ? "📦 Pick up package" : "📬 Deliver package") { complete() }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
-                if task.step == 0, let dest = state.station(task.steps.last) {
-                    Text("Then carry it to \(dest.name)").font(.caption).foregroundStyle(.white)
-                }
-            }
-        }
+    private func game(state: GameState) -> some View {
+        TaskGame(task: task, state: state, onDone: complete)
     }
 
     private func complete() {
@@ -107,5 +71,54 @@ struct TaskSheet: View {
     private func close() {
         TaskSound.panelClose.play()
         dismiss()
+    }
+}
+
+/// The mini-game for a task's current step. Shared by the task sheet and the in-game HUD's task square;
+/// the caller sends `task_complete` when `onDone` fires.
+struct TaskGame: View {
+    @Environment(GameStore.self) private var store
+    let task: GameTask
+    let state: GameState
+    let onDone: () -> Void
+
+    var body: some View {
+        switch task.type {
+        case .wiring: WiringGame(onDone: onDone)
+        case .upload:
+            UploadGame(seconds: state.settings.uploadSec,
+                       start: { await store.perform("task_start", ["taskId": task.id]) },
+                       onDone: onDone)
+        case .sequence: SequenceGame(onDone: onDone)
+        case .swipe: SwipeCardGame(onDone: onDone)
+        case .shields: ShieldsGame(onDone: onDone)
+        case .o2: O2Game(onDone: onDone)
+        case .scan:
+            ScanGame(seconds: state.settings.scanSec ?? 10, playerName: state.me.name,
+                     start: { await store.perform("task_start", ["taskId": task.id]) },
+                     onDone: onDone)
+        case .divert:
+            if task.step == 0 {
+                VStack(spacing: 8) {
+                    DivertPowerGame(onDone: onDone)
+                    if let dest = state.station(task.steps.last) {
+                        Text("Then accept the power at \(dest.name)").font(.caption.bold()).foregroundStyle(.white)
+                    }
+                }
+            } else {
+                AcceptPowerGame(onDone: onDone)
+            }
+        case .unknown:
+            Text("This task needs a newer version of the app.")
+                .font(.headline).foregroundStyle(.white).multilineTextAlignment(.center)
+        case .delivery:
+            VStack(spacing: 12) {
+                Button(task.step == 0 ? "📦 Pick up package" : "📬 Deliver package") { onDone() }
+                    .buttonStyle(.borderedProminent).controlSize(.large)
+                if task.step == 0, let dest = state.station(task.steps.last) {
+                    Text("Then carry it to \(dest.name)").font(.caption).foregroundStyle(.white)
+                }
+            }
+        }
     }
 }
