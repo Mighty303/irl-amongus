@@ -250,26 +250,28 @@ struct HUDMapSquare: View {
     var body: some View {
         // The SFU buildings around the signs and players, each on one floor (switchable).
         let campus = store.campusView(points: state.locatedStationPoints + store.livePositions.map { CGPoint(x: $0.lng, y: $0.lat) },
-                                      stations: state.stations)
+                                      stations: state.stations, playArea: state.playArea)
         let pins = taskPins(campus)
+        let (center, isPlayer) = mapCenter(campus)
         ZStack {
-            POCFloorPlan(
+            // Zoomed in to a little over a room across, locked on you.
+            FollowFloorMap(
                 rooms: campus.rooms,
                 // This player's task signs, plus every other sign so the whole venue is on the map.
                 stations: pins.map(\.station) + state.otherSignPins(excluding: Set(pins.map(\.station.id)), campus: campus),
-                meetingPoint: state.meetingPointPin,
                 completedStationIDs: Set(pins.filter(\.completed).map(\.station.id)),
-                selectedStation: nil,
-                ownLastCheckpoint: checkpoint,
+                meetingPoint: state.meetingPointPin,
+                players: store.liveDots(state: state, campus: campus),
+                center: center,
+                centerIsPlayer: isPlayer,
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }
-                },
-                players: store.liveDots(state: state, campus: campus)
+                }
             )
             .overlay(alignment: .topLeading) {
                 if let building = campus.focus, building.floors.count > 1, let floor = campus.floors[building.id] {
                     CampusFloorControl(building: building, floor: floor) { step in
-                        store.campus.stepFloor(building, by: step, hint: store.shownFloorHint(building, stations: state.stations))
+                        store.campus.stepFloor(building, by: step, hint: store.shownFloorHint(building, stations: state.stations, playArea: state.playArea))
                     }
                     .padding(12)
                 }
@@ -310,12 +312,19 @@ struct HUDMapSquare: View {
         }
     }
 
-    private var checkpoint: POCCheckpoint {
-        guard let cp = state.me.lastCheckpoint, let station = state.station(cp.stationId) else {
-            return POCCheckpoint(stationID: "", stationName: "", roomLabel: "", verifiedAt: .now)
+    /// What the map keeps in the middle: your live position, else your last check-in, else the red
+    /// button or the play area's building.
+    private func mapCenter(_ campus: CampusView) -> (CGPoint, Bool) {
+        if let e = store.positions.estimate { return (CGPoint(x: e.lng, y: e.lat), true) }
+        if let cp = state.me.lastCheckpoint, let s = state.station(cp.stationId), let lat = s.lat, let lng = s.lng {
+            return (CGPoint(x: lng, y: lat), true)
         }
-        return POCCheckpoint(stationID: station.id, stationName: station.name, roomLabel: station.name,
-                             verifiedAt: Date(timeIntervalSince1970: cp.at / 1000))
+        if let s = state.stations.first(where: { $0.kind == .emergency }), let lat = s.lat, let lng = s.lng {
+            return (CGPoint(x: lng, y: lat), false)
+        }
+        let b = store.campus.building(state.playArea?.buildingId) ?? campus.focus ?? store.campus.building("SUB")
+        guard let bounds = b?.bounds else { return (CGPoint(x: -122.91825, y: 49.27855), false) }
+        return (CGPoint(x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2), false)
     }
 }
 

@@ -489,6 +489,7 @@ final class GameStore {
             ble.start(token: newState.me.bleToken)
         }
         location.start()
+        positions.playArea = newState.playArea
         // Steps, compass and barometer only run (and only ask for Motion permission) while it's on.
         if newState.settings.livePositions == true {
             positions.start()

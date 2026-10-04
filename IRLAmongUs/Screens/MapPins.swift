@@ -57,28 +57,29 @@ struct CampusView {
 }
 
 extension GameStore {
-    func campusView(points: [CGPoint], stations: [Station]) -> CampusView {
+    func campusView(points: [CGPoint], stations: [Station], playArea: CampusPlace?) -> CampusView {
         let mine = positions.estimate
         var near = campus.buildings(near: points + [mine.map { CGPoint(x: $0.lng, y: $0.lat) }].compactMap { $0 })
+        // The play area's building is always drawn.
+        if let area = campus.building(playArea?.buildingId), !near.contains(area) { near.append(area) }
         if near.isEmpty, let fallback = campus.building(mine?.buildingId) ?? campus.building("SUB") { near = [fallback] }
         var view = CampusView()
         for building in near {
-            // Hint: the floor you're on, else the floor most of this building's signs are on.
-            let signFloors = stations.filter { $0.buildingId == building.id }.compactMap(\.floorId)
-            let common = Dictionary(grouping: signFloors, by: { $0 }).max { $0.value.count < $1.value.count }?.key
-            let hint = mine?.buildingId == building.id ? (mine?.floorId ?? common) : common
-            let floor = campus.displayedFloor(building, hint: hint)
+            let floor = campus.displayedFloor(building, hint: shownFloorHint(building, stations: stations, playArea: playArea))
             view.floors[building.id] = floor
             view.rooms += floor.rooms
         }
         view.focus = near.first { $0.id == mine?.buildingId }
+            ?? near.first { $0.id == playArea?.buildingId }
             ?? near.max { a, b in stations.filter { $0.buildingId == a.id }.count < stations.filter { $0.buildingId == b.id }.count }
         return view
     }
 
-    /// The floor shown for a building on the game maps (same choice as `campusView`).
-    func shownFloorHint(_ building: CampusBuilding, stations: [Station]) -> String? {
-        if positions.estimate?.buildingId == building.id { return positions.estimate?.floorId }
+    /// The floor shown for a building on the game maps: the one you're on, else the play area's floor,
+    /// else the floor most of its signs are on (the player's own pick on the map overrides all of these).
+    func shownFloorHint(_ building: CampusBuilding, stations: [Station], playArea: CampusPlace?) -> String? {
+        if positions.estimate?.buildingId == building.id, let floor = positions.estimate?.floorId { return floor }
+        if playArea?.buildingId == building.id { return playArea?.floorId }
         let signFloors = stations.filter { $0.buildingId == building.id }.compactMap(\.floorId)
         return Dictionary(grouping: signFloors, by: { $0 }).max { $0.value.count < $1.value.count }?.key
     }
