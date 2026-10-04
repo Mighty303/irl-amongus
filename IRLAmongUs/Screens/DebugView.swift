@@ -58,7 +58,11 @@ struct DebugView: View {
 
                 Section("Sign recognition") {
                     row("Reference signs loaded", "\(store.signs.loadedCount)")
-                    row("Threshold", String(format: "%.2f", store.signThreshold))
+                    @Bindable var store = store
+                    VStack(alignment: .leading) {
+                        Text("Match threshold: \(store.signThreshold, specifier: "%.2f") (lower = stricter)")
+                        Slider(value: $store.signThreshold, in: 0.1...1.5)
+                    }
                 }
             }
         }
