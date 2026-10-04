@@ -167,6 +167,8 @@ class Handler(BaseHTTPRequestHandler):
                         continue
                     message = json.loads(data)
                     events.append(message)
+                    if message['action'] == 'update_settings':
+                        settings.update(message['payload'])
                     if message['action'] == 'add_bot':
                         players.append(player('bot', 'Test Bot', bot=True))
                     if message['action'] == 'start_game':

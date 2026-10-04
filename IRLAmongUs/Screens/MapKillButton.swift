@@ -24,7 +24,7 @@ struct MapKillButton: View {
                 guard available else { return }
                 if state == nil {
                     audio.play()
-                    previewCooldown = .now.addingTimeInterval(30)
+                    previewCooldown = .now.addingTimeInterval(10)
                 } else if targets.count == 1, let target = targets.first {
                     kill(target)
                 } else {

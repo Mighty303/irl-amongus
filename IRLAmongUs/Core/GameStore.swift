@@ -41,6 +41,7 @@ final class GameStore {
 
     @ObservationIgnored private let killAudio = KillAudioPlayer()
     @ObservationIgnored private var deathSound = DeathSoundState()
+    @ObservationIgnored private var initializedCooldownForLobby: String?
     @ObservationIgnored private let preferences: UserDefaults
     @ObservationIgnored private let httpSession: URLSession
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
@@ -217,6 +218,7 @@ final class GameStore {
         alert = nil
         killAudio.stop()
         deathSound = DeathSoundState()
+        initializedCooldownForLobby = nil
         session = nil
         state = nil
         ble.stop()
@@ -344,6 +346,14 @@ final class GameStore {
         connection = .connected
         isSynced = true
         reconnectAttempt = 0
+
+        // Use the temporary playtest default once per host lobby; subsequent edits stay intact.
+        if newState.phase == .LOBBY, newState.isHost, initializedCooldownForLobby != newState.code {
+            initializedCooldownForLobby = newState.code
+            if newState.settings.killCooldownSec != 10 {
+                Task { await perform("update_settings", ["killCooldownSec": 10]) }
+            }
+        }
 
         if newState.phase == .LOBBY || newState.phase == .GAME_OVER {
             ble.stop()

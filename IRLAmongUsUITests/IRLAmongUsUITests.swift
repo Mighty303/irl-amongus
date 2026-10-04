@@ -344,4 +344,10 @@ extension IRLAmongUsUITests {
         XCTAssertEqual(kills.count, 1)
         XCTAssertEqual((kills.first?["payload"] as? [String: Any])?["targetId"] as? String, "bot")
     }
+        let cooldownUpdates = events.filter { $0["action"] as? String == "update_settings" }
+        XCTAssertEqual(cooldownUpdates.count, 1)
+        XCTAssertEqual((cooldownUpdates.first?["payload"] as? [String: Any])?["killCooldownSec"] as? Int, 10)
+        XCTAssertTrue((kill.value as? String)?.hasPrefix("Cooldown") == true)
+        let cooldownSeconds = Int((kill.value as? String ?? "").split(separator: " ").dropFirst().first ?? "")
+        XCTAssertTrue((1...10).contains(cooldownSeconds ?? 0))
 }
