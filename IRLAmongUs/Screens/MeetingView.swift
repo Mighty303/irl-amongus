@@ -35,8 +35,15 @@ struct MeetingView: View {
                 }
             }
             .navigationTitle(state.phase == .VOTING ? "Vote" : "Meeting")
-            .sheet(isPresented: $scanning) { CheckpointScannerView(state: state) }
         }
+        .overlay {
+            // Same sign scanner as tasks in the HUD: checks you in at the meeting point, then closes.
+            if scanning {
+                SignScanPanel(state: state, target: meetingStation) { scanning = false }
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scanning)
     }
 
     @ViewBuilder private var header: some View {
