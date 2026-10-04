@@ -2,8 +2,8 @@ import SwiftUI
 
 /// The in-game map: zoomed in to a little more than a room across, and locked on the player, who stays
 /// in the middle while the floor plan glides underneath. The zoom is fixed and there's no panning:
-/// seeing further than you could in person would be cheating. Task signs off the edge get an arrow with
-/// their distance.
+/// seeing further than you could in person would be cheating (ghosts may pinch to zoom). Task signs off
+/// the edge get an arrow with their distance.
 ///
 /// Fog of war, like Among Us vision: you see out to `visionM`, and walls block the view, so other rooms
 /// are dark. Other players only show where you can see them; your task signs, the red button and the
@@ -23,12 +23,17 @@ struct FollowFloorMap: View {
     var visionM: Double? = nil
     /// Your suit colour, for the YOU crewmate.
     var myColor: PlayerColor? = nil
-    /// Dead: your marker is see-through, like an Among Us ghost.
+    /// Dead: your marker is see-through, like an Among Us ghost, and you can zoom.
     var isGhost = false
     let onSelectStation: (POCStation) -> Void
 
-    /// Meters across the shorter side: a little over a room's width. Fixed, so nobody can zoom out to look around.
+    /// Meters across the shorter side: a little over a room's width. Fixed for the living, so nobody can
+    /// zoom out to look around; ghosts can pinch between `minSpan` and `maxSpan`.
     private static let spanM: Double = 16
+    private static let minSpan = 8.0
+    private static let maxSpan = 150.0
+    @State private var ghostSpan = FollowFloorMap.spanM
+    @GestureState private var pinch: CGFloat = 1
     /// The floor plan is drawn around this point (three views wide) and slid so `center` stays put;
     /// it moves when the player gets far from it.
     @State private var anchor: CGPoint?
@@ -36,7 +41,7 @@ struct FollowFloorMap: View {
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
-            let span = Self.spanM
+            let span = isGhost ? min(max(ghostSpan / Double(pinch), Self.minSpan), Self.maxSpan) : Self.spanM
             let ppm = min(size.width, size.height) / span // points per meter
             let a = anchor ?? center
             let big = CGSize(width: size.width * 3, height: size.height * 3)
@@ -109,6 +114,12 @@ struct FollowFloorMap: View {
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 22))
             .contentShape(Rectangle())
+            .simultaneousGesture(
+                MagnificationGesture()
+                    .updating($pinch) { value, state, _ in state = value }
+                    .onEnded { value in ghostSpan = min(max(ghostSpan / Double(value), Self.minSpan), Self.maxSpan) },
+                including: isGhost ? .all : .none
+            )
             .onAppear { anchor = center }
             .onChange(of: center) { _, new in
                 // Far from where the plan is drawn: redraw around here, without sliding.
