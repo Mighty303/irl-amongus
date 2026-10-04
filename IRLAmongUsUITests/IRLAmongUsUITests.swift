@@ -1,6 +1,62 @@
 import XCTest
 
 final class IRLAmongUsUITests: XCTestCase {
+    @MainActor
+    func testDemoModeWaivesAndRestoresLobbySigns() throws {
+        guard let server = ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_SERVER"],
+              ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_SIGNS"] == "3" else {
+            throw XCTSkip("Requires the local lobby fixture with three signs per player")
+        }
+        let guest = ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_HOST_ID"] == "other"
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-playerName", "Ben", "-serverURL", server,
+                               "-session", "", "-showDeveloperMenu", "-demoModeEnabled", "NO"]
+        app.launch()
+        let demo = app.buttons["developer.demoMode"]
+        XCTAssertTrue(demo.waitForExistence(timeout: 5))
+        if !demo.isHittable { app.swipeUp() }
+        demo.tap()
+        let enabled = app.switches["demo.enabled"]
+        XCTAssertTrue(enabled.waitForExistence(timeout: 5))
+        XCTAssertEqual(enabled.value as? String, "0")
+        enabled.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        XCTAssertEqual(enabled.value as? String, "1")
+        app.buttons["Main menu"].tap()
+        XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
+        app.buttons["Local"].tap()
+        XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
+        app.buttons["local.createGame"].tap()
+        XCTAssertTrue(app.buttons["SETTINGS"].waitForExistence(timeout: 10))
+        if !guest {
+            app.buttons["Add bot"].tap()
+            let twoPlayers = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                app.staticTexts["lobby.playerCount"].label == "2"
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [twoPlayers], timeout: 5), .completed)
+        }
+        XCTAssertFalse(app.buttons["START"].isEnabled)
+        app.buttons["SETTINGS"].tap()
+        let signs = app.switches["demo.requireSigns"]
+        if !signs.waitForExistence(timeout: 2) {
+            app.scrollViews["settings.content"].swipeUp()
+        }
+        XCTAssertTrue(signs.waitForExistence(timeout: 5))
+        XCTAssertEqual(signs.isEnabled, !guest)
+        if guest { return }
+        for (index, required) in [false, true, false].enumerated() {
+            signs.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+            let changed = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+                app.staticTexts["settings.signsPerPlayer.value"].label == (required ? "3" : "0")
+            }, object: nil)
+            XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+            app.buttons["settings.done"].tap()
+            XCTAssertEqual(app.buttons["START"].isEnabled, !required)
+            if index < 2 { app.buttons["SETTINGS"].tap() }
+        }
+        app.buttons["START"].tap()
+        XCTAssertTrue(app.staticTexts["There is 1 Impostor among us"].waitForExistence(timeout: 8))
+    }
+
     override func setUpWithError() throws {
         continueAfterFailure = false
     }

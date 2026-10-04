@@ -56,6 +56,12 @@ The networked game: real roles, BLE proximity kills, sign check-ins, meetings an
 
 Testing with one phone: in the backend repo, `npm run bots -- <CODE> 3` fills the lobby with bots. In the lobby host settings, the `DEV:` toggles skip BLE and checkpoint checks for simulator testing.
 
+### Demo mode without signs
+
+In a Debug build, shake the phone and choose **Demo mode**, then turn on **Enable demo controls** (off by default). Host a game and open **Settings → Game → Demo mode**, then turn off **Require signs**. The server sets the lobby's signs-per-player requirement to zero, allowing everyone to start without photographing signs. Minimum player counts and other game rules still apply. Existing signs remain available; a lobby with no task signs starts without sign tasks.
+
+Turn **Require signs** back on to restore the previous count for that lobby (or three after relaunching). Guests cannot change it. Saved games already waive sign setup. The feature flag is saved on this device; hiding demo controls does not reset the server's lobby setting.
+
 ### Test lab (no server needed)
 
 Developer Mode (shake) also has test benches for each device component:

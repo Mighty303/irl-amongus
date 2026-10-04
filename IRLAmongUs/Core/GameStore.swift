@@ -35,6 +35,10 @@ final class GameStore {
     /// serverTime - localTime, in ms
     private(set) var clockOffset: Double = 0
     var signThreshold: Float { didSet { preferences.set(signThreshold, forKey: "signThreshold") } }
+    /// Local opt-in; the sign requirement itself remains authoritative on the server.
+    var demoModeEnabled: Bool { didSet { preferences.set(demoModeEnabled, forKey: "demoModeEnabled") } }
+    private(set) var isUpdatingDemoSigns = false
+    @ObservationIgnored private var demoSignRequirements: [String: Int] = [:]
 
     let ble = BLEProximity()
     let location = LocationService()
@@ -75,6 +79,7 @@ final class GameStore {
         playerName = defaults.string(forKey: "playerName") ?? ""
         gamesetPassword = defaults.string(forKey: "gamesetPassword") ?? ""
         signThreshold = defaults.object(forKey: "signThreshold") as? Float ?? 0.6
+        demoModeEnabled = defaults.bool(forKey: "demoModeEnabled")
         if restoresSession, let data = defaults.data(forKey: "session") {
             session = try? JSONDecoder().decode(Session.self, from: data)
         }
@@ -618,6 +623,19 @@ final class GameStore {
 
     func updateSetting<T>(_ key: String, _ value: T) {
         Task { await perform("update_settings", [key: value]) }
+    }
+
+    /// Only the synced lobby host can waive sign setup. Keep the previous count for restoring it.
+    func setDemoSignsRequired(_ required: Bool) async {
+        guard demoModeEnabled, isSynced, !isUpdatingDemoSigns,
+              let state, state.isHost, state.phase == .LOBBY,
+              state.settings.signsPerPlayer != nil, state.gameset == nil else { return }
+        let key = "\(state.code):\(state.me.id)"
+        if !required, state.requiredSigns > 0 { demoSignRequirements[key] = state.requiredSigns }
+        let count = required ? (demoSignRequirements[key] ?? 3) : 0
+        isUpdatingDemoSigns = true
+        defer { isUpdatingDemoSigns = false }
+        await perform("update_settings", ["signsPerPlayer": count])
     }
 
     func checkIn(stationId: String, method: String) async -> Bool {

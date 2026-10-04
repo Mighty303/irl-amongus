@@ -175,6 +175,9 @@ struct LobbyView: View {
         LazyVGrid(columns: columns(twoColumns), spacing: 6) {
             integer("Impostors", \.impostors, "impostors", 1...3)
             integer("Minimum players", \.minPlayers, "minPlayers", 2...12)
+            if store.demoModeEnabled {
+                settingCard("Demo mode") { DemoSignsControl(state: current) }
+            }
             if current.settings.signsPerPlayer != nil {
                 numberCard("Signs per player", value: "\(current.requiredSigns)", key: "signsPerPlayer",
                            canDecrease: current.requiredSigns > 0, canIncrease: current.requiredSigns < 10,
