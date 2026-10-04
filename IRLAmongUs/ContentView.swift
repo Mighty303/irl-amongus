@@ -312,7 +312,6 @@ private struct LocalLobbyView: View {
     @Environment(GameStore.self) private var store
     @State private var code = ""
     @State private var scanning = false
-    @State private var scannedLobbyPayload: String?
     @State private var showingJoinName = false
     @FocusState private var codeFocused: Bool
     @State private var showingNameEditor = false
@@ -384,24 +383,23 @@ private struct LocalLobbyView: View {
                     LocalPlayerNameEditor { showingNameEditor = false }
                         .transition(.opacity)
                 }
+
+                if scanning {
+                    LobbyScanPanel(onLobby: { payload in
+                        scanning = false
+                        Task { await store.handleLobbyQRCode(payload) }
+                    }, close: { scanning = false })
+                    .transition(.opacity)
+                }
             }
             .frame(width: size.width, height: size.height)
             .clipped()
             .animation(.easeOut(duration: 0.2), value: showingNameEditor)
+            .animation(.easeOut(duration: 0.2), value: scanning)
         }
         // The name popup sits above the keyboard, so the screen behind it stays put.
         .ignoresSafeArea(.keyboard)
         .background(Color.black)
-        .sheet(isPresented: $scanning, onDismiss: {
-            guard let payload = scannedLobbyPayload else { return }
-            scannedLobbyPayload = nil
-            Task { await store.handleLobbyQRCode(payload) }
-        }) {
-            QRScanSheet(title: "Scan lobby QR") { payload in
-                scannedLobbyPayload = payload
-                scanning = false
-            }
-        }
         .sheet(isPresented: $showingJoinName) {
             LobbyJoinNameSheet(code: code)
         }
