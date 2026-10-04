@@ -89,6 +89,18 @@ struct GameState: Decodable, Equatable {
     let winReason: String?
 
     var isHost: Bool { me.id == hostId }
+
+    /// Signs each non-bot player must add before the host can start (0 = no requirement).
+    var requiredSigns: Int { settings.signsPerPlayer ?? 0 }
+    func signs(addedBy playerId: String) -> [Station] {
+        stations.filter { $0.kind == .task && $0.addedBy == playerId }
+    }
+    var mySigns: [Station] { signs(addedBy: me.id) }
+    /// Mirrors the server's start check.
+    var playersMissingSigns: [PlayerView] {
+        guard requiredSigns > 0 else { return [] }
+        return players.filter { $0.isBot != true && signs(addedBy: $0.id).count < requiredSigns }
+    }
     func station(_ id: String?) -> Station? { stations.first { $0.id == id } }
     func player(_ id: String?) -> PlayerView? { players.first { $0.id == id } }
     var alivePlayers: [PlayerView] { players.filter(\.alive) }
@@ -123,6 +135,9 @@ struct Settings: Codable, Equatable {
     var taskTypes: [TaskType]
     /// Only filled in for the host; blank for everyone else.
     var forcedImpostorIds: [String]
+    /// Signs each non-bot player must add in the lobby before START (0 = no requirement).
+    /// Optional so phones still decode snapshots from servers without lobby signs.
+    var signsPerPlayer: Int?
     var uploadSec: Int
     /// Optional so phones still decode snapshots from servers without Submit Scan.
     var scanSec: Int?
@@ -140,6 +155,8 @@ struct Station: Codable, Identifiable, Hashable {
     let radiusM: Double
     let signText: String?
     let photoId: String?
+    /// Player who photographed this sign in the lobby (task signs only).
+    let addedBy: String?
 }
 
 struct PlayerView: Decodable, Identifiable, Equatable {

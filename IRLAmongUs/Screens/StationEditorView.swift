@@ -5,6 +5,9 @@ import SwiftUI
 struct StationEditorView: View {
     @Environment(GameStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    /// Players adding their lobby signs: always a task sign, no station-kind picker.
+    var signOnly = false
+    var title = "New sign"
 
     @State private var name = ""
     @State private var kind: StationKind = .task
@@ -34,8 +37,10 @@ struct StationEditorView: View {
                 }
                 Section("Station") {
                     TextField("Name (e.g. Room 2005 sign)", text: $name)
-                    Picker("Used as", selection: $kind) {
-                        ForEach(StationKind.allCases) { Text($0.label).tag($0) }
+                    if !signOnly {
+                        Picker("Used as", selection: $kind) {
+                            ForEach(StationKind.allCases) { Text($0.label).tag($0) }
+                        }
                     }
                     TextField("Text on the sign (optional, for OCR)", text: $signText)
                 }
@@ -52,7 +57,7 @@ struct StationEditorView: View {
                     Text("GPS places the pin on the mini-map and enables GPS check-in. Indoors it's rough. Sign recognition is the main check-in method.")
                 }
             }
-            .navigationTitle("New sign")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

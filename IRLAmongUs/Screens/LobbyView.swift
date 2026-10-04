@@ -4,6 +4,7 @@ struct LobbyView: View {
     @Environment(GameStore.self) private var store
     let state: GameState
     @State private var addingStation = false
+    @State private var addingMySign = false
     @State private var qrStation: Station?
 
     var body: some View {
@@ -43,11 +44,29 @@ struct LobbyView: View {
                     }
                 }
 
+                if state.requiredSigns > 0 {
+                    let required = state.requiredSigns
+                    let mine = state.mySigns
+                    Section {
+                        ForEach(mine) { StationRow(station: $0) }
+                        if mine.count < required {
+                            Button("Add a sign (\(mine.count + 1) of \(required))") { addingMySign = true }
+                        }
+                    } header: {
+                        Text("My signs (\(min(mine.count, required))/\(required))")
+                    } footer: {
+                        let missing = state.playersMissingSigns
+                        Text(missing.isEmpty
+                             ? "Everyone's signs are in."
+                             : "Waiting on \(missing.map(\.name).joined(separator: ", ")) to add signs. Each player photographs \(required) signs; together they become the task stations.")
+                    }
+                }
+
                 Section {
                     ForEach(state.stations) { s in
                         StationRow(station: s)
                             .swipeActions {
-                                if state.isHost {
+                                if state.isHost || s.addedBy == state.me.id {
                                     Button("Delete", role: .destructive) { Task { await store.perform("delete_station", ["stationId": s.id]) } }
                                 }
                                 Button("QR") { qrStation = s }
@@ -65,6 +84,7 @@ struct LobbyView: View {
                     Section {
                         Button("Start game") { Task { await store.perform("start_game") } }
                             .font(.headline)
+                            .disabled(!state.playersMissingSigns.isEmpty)
                     }
                 } else {
                     Section { Text("Waiting for the host to start…").foregroundStyle(.secondary) }
@@ -77,6 +97,9 @@ struct LobbyView: View {
             }
             .navigationTitle("Lobby")
             .sheet(isPresented: $addingStation) { StationEditorView() }
+            .sheet(isPresented: $addingMySign) {
+                StationEditorView(signOnly: true, title: "Sign \(state.mySigns.count + 1) of \(state.requiredSigns)")
+            }
             .sheet(item: $qrStation) { s in
                 VStack(spacing: 16) {
                     Text(s.name).font(.title.bold())
@@ -118,7 +141,7 @@ private struct SettingsSection: View {
     let players: [PlayerView]
 
     var body: some View {
-        Section("Players & tasks") {
+        Section {
             stepper("Impostors", \.impostors, "impostors", 1...3)
             Picker("Impostor", selection: Binding(
                 get: { settings.forcedImpostorIds.first ?? "" },
@@ -128,6 +151,11 @@ private struct SettingsSection: View {
                 ForEach(players) { Text($0.name).tag($0.id) }
             }
             stepper("Min players", \.minPlayers, "minPlayers", 2...12)
+            if let signsPerPlayer = settings.signsPerPlayer {
+                Stepper("Signs per player: \(signsPerPlayer)",
+                        value: Binding(get: { signsPerPlayer }, set: { store.updateSetting("signsPerPlayer", $0) }),
+                        in: 0...10)
+            }
             stepper("Tasks per player", \.tasksPerPlayer, "tasksPerPlayer", 1...8)
             ForEach(TaskType.allCases) { type in
                 Toggle(type.label, isOn: Binding(
@@ -139,6 +167,10 @@ private struct SettingsSection: View {
                     }
                 ))
             }
+        } header: {
+            Text("Players & tasks")
+        } footer: {
+            Text("Signs per player: how many signs each player must photograph in the lobby before START unlocks (0 = no requirement). Bots don't add signs; everyone's signs become the task stations.")
         }
         Section {
             meters("Kill distance", \.killDistanceM, "killDistanceM")
