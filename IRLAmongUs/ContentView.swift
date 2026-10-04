@@ -316,6 +316,7 @@ private struct LocalLobbyView: View {
     @State private var showingJoinName = false
     @FocusState private var codeFocused: Bool
     @State private var showingNameEditor = false
+    @State private var showingCustomize = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
 
@@ -386,10 +387,16 @@ private struct LocalLobbyView: View {
                     LocalPlayerNameEditor { showingNameEditor = false }
                         .transition(.opacity)
                 }
+                if showingCustomize {
+                    // No game yet: your picks are saved and used when you create or join one.
+                    CustomizePanel(state: nil) { showingCustomize = false }
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
             }
             .frame(width: size.width, height: size.height)
             .clipped()
             .animation(.easeOut(duration: 0.2), value: showingNameEditor)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingCustomize)
         }
         // The name popup sits above the keyboard, so the screen behind it stays put.
         .ignoresSafeArea(.keyboard)
@@ -503,10 +510,9 @@ private struct LocalLobbyView: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.65))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Image("LobbyPlayerRed")
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
+                // Your picked colour and face (set with CUSTOMIZE), as everyone will see them.
+                CrewmateView(color: store.preferredColor ?? .red, faceURL: store.faceURL(store.preferredFaceId),
+                             height: compact ? 58 : 84)
                     .frame(height: compact ? 64 : 92)
                     .accessibilityHidden(true)
                 Text(store.playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Enter name" : store.playerName)
@@ -514,20 +520,34 @@ private struct LocalLobbyView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .accessibilityIdentifier("local.username")
-                Button {
-                    buttonAudio.play()
-                    showingNameEditor = true
-                } label: {
-                    Label("EDIT NAME", systemImage: "pencil")
-                        .font(.system(size: 15, weight: .heavy, design: .rounded))
-                        .frame(maxWidth: .infinity, minHeight: 44)
+                HStack(spacing: 8) {
+                    Button {
+                        buttonAudio.play()
+                        showingNameEditor = true
+                    } label: {
+                        Label("NAME", systemImage: "pencil")
+                            .font(.system(size: 14, weight: .heavy, design: .rounded))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(LobbyOutlineButtonStyle())
+                    .accessibilityLabel("Edit name")
+                    .accessibilityIdentifier("local.editName")
+                    Button {
+                        buttonAudio.play()
+                        showingCustomize = true
+                    } label: {
+                        Label("LOOK", systemImage: "paintpalette.fill")
+                            .font(.system(size: 14, weight: .heavy, design: .rounded))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(LobbyOutlineButtonStyle())
+                    .accessibilityLabel("Customize your color and face")
+                    .accessibilityIdentifier("local.customize")
                 }
-                .buttonStyle(LobbyOutlineButtonStyle())
-                .accessibilityLabel("Edit name")
-                .accessibilityIdentifier("local.editName")
+                .lineLimit(1).minimumScaleFactor(0.8)
                 .disabled(store.isEnteringLobby)
                 if !compact {
-                    Text("Pick your color and face in the lobby")
+                    Text("Your color and face go with you into every game")
                         .font(.system(size: 11, design: .rounded))
                         .foregroundStyle(.white.opacity(0.62))
                         .multilineTextAlignment(.center)

@@ -94,6 +94,8 @@ final class GameStore {
         serverURLString = isStale ? Self.defaultServerURL : saved!
         playerName = defaults.string(forKey: "playerName") ?? ""
         gamesetPassword = defaults.string(forKey: "gamesetPassword") ?? ""
+        preferredColor = defaults.string(forKey: "preferredColor").flatMap(PlayerColor.init(rawValue:))
+        preferredFaceId = defaults.string(forKey: "preferredFaceId")
         signThreshold = defaults.object(forKey: "signThreshold") as? Float ?? 0.6
         demoModeEnabled = defaults.bool(forKey: "demoModeEnabled")
         if restoresSession, let data = defaults.data(forKey: "session") {
@@ -151,13 +153,13 @@ final class GameStore {
     // MARK: - Lobby (REST)
 
     func createGame() async {
-        await enterLobby(path: "games", body: ["name": playerName, "mapId": "default"])
+        await enterLobby(path: "games", body: lookBody(["name": playerName, "mapId": "default"]))
     }
 
     func joinGame(code: String) async {
         guard Self.isValidRoomCode(code) else { errorMessage = "Enter a four-character room code."; return }
         let code = Self.normalizedRoomCode(code)
-        await enterLobby(path: "games/\(code)/join", body: ["name": playerName])
+        await enterLobby(path: "games/\(code)/join", body: lookBody(["name": playerName]))
     }
 
     private func enterLobby(path: String, body: [String: Any]) async {
@@ -179,6 +181,13 @@ final class GameStore {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Adds your preferred suit colour to a create/join request (the server uses it if it's free).
+    private func lookBody(_ body: [String: Any]) -> [String: Any] {
+        var body = body
+        if let preferredColor { body["color"] = preferredColor.rawValue }
+        return body
     }
 
     func checkServer() async -> String {
@@ -210,6 +219,11 @@ final class GameStore {
 
     /// Shared password for creating and editing saved games (until accounts exist). Remembered once it works.
     var gamesetPassword: String { didSet { preferences.set(gamesetPassword, forKey: "gamesetPassword") } }
+    /// Your look, picked on the Local screen (or last used in a lobby): sent when you create or join a game.
+    var preferredColor: PlayerColor? { didSet { preferences.set(preferredColor?.rawValue, forKey: "preferredColor") } }
+    var preferredFaceId: String? { didSet { preferences.set(preferredFaceId, forKey: "preferredFaceId") } }
+    /// The lobby we've already put your saved face on, so it isn't sent again on every snapshot.
+    @ObservationIgnored private var faceAppliedForLobby: String?
     var canEditGamesets: Bool { !gamesetPassword.isEmpty }
 
     /// Saved games: sets of already-photographed signs for no-setup demos. Anyone can list and use them.
@@ -537,6 +551,12 @@ final class GameStore {
         }
         location.start()
         positions.playArea = newState.playArea
+        // Put your saved face on once you're in a lobby (the colour went with the join request).
+        if newState.phase == .LOBBY, let face = preferredFaceId, faceAppliedForLobby != newState.code,
+           newState.player(newState.me.id)?.faceId != face {
+            faceAppliedForLobby = newState.code
+            Task { await perform("set_face", ["faceId": face]) }
+        }
         if newState.me.canWatchCams != true, isWatchingCams { isWatchingCams = false; camFeeds = [:] }
         updateCameraStream()
         // The local map follows movement even when position sharing is disabled.

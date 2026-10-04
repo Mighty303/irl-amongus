@@ -32,9 +32,10 @@ struct LobbyView: View {
     @State private var showingSpecialSigns = false
 
     private var current: GameState { store.state ?? state }
-    private static let accent = Color(red: 0.22, green: 0.63, blue: 0.62)
-    private static let panel = Color(red: 0.045, green: 0.065, blue: 0.08)
-    private static let well = Color(red: 0.075, green: 0.10, blue: 0.12)
+    // The lobby's black and white Among Us look; green only for switches that are on (like START).
+    private static let accent = Color(red: 0.48, green: 0.87, blue: 0.38)
+    private static let panel = Color.black
+    private static let well = Color.black
 
     var body: some View {
         NavigationStack {
@@ -67,7 +68,7 @@ struct LobbyView: View {
                     .frame(maxWidth: 1060, maxHeight: 620)
                     .foregroundStyle(.white)
                     .background(Self.panel, in: RoundedRectangle(cornerRadius: 18))
-                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.3), lineWidth: 1.5))
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white, lineWidth: 3))
                     .padding(12)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -146,7 +147,9 @@ struct LobbyView: View {
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .padding(.horizontal, 10)
                 .contentShape(Rectangle())
-                .background(category == item ? Self.accent.opacity(0.7) : .clear, in: RoundedRectangle(cornerRadius: 9))
+                .foregroundStyle(category == item ? Color.black : .white)
+                .background(category == item ? Color.white : .clear, in: RoundedRectangle(cornerRadius: 9))
+                .overlay(RoundedRectangle(cornerRadius: 9).stroke(.white.opacity(category == item ? 0 : 0.25), lineWidth: 1.5))
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("settings.category.\(item.rawValue.lowercased())")
@@ -177,44 +180,49 @@ struct LobbyView: View {
     }
 
     private func gameSettings(twoColumns: Bool) -> some View {
-        LazyVGrid(columns: columns(twoColumns), spacing: 6) {
-            if current.settings.mapBuildingId != nil {
-                settingCard("Play area") { PlayAreaPicker(state: current) }
-            }
-            integer("Impostors", \.impostors, "impostors", 1...3)
-            integer("Minimum players", \.minPlayers, "minPlayers", 2...12)
-            if store.demoModeEnabled {
-                settingCard("Demo mode") {
-                    DemoSignsControl(state: current)
-                    DemoVotingControl(state: current)
+        VStack(spacing: 6) {
+            // First thing in settings, so nobody misses which sign set the game uses.
+            SettingsSavedGameCard(state: current)
+            LazyVGrid(columns: columns(twoColumns), spacing: 6) {
+                if current.settings.mapBuildingId != nil {
+                    settingCard("Play area") { PlayAreaPicker(state: current) }
                 }
-            }
-            if current.settings.signsPerPlayer != nil {
-                let perPlayer = current.settings.signsPerPlayer ?? 0
-                numberCard("Signs per player", value: "\(perPlayer)", key: "signsPerPlayer",
-                           canDecrease: perPlayer > 0, canIncrease: perPlayer < 10,
-                           decrease: { store.updateSetting("signsPerPlayer", perPlayer - 1) },
-                           increase: { store.updateSetting("signsPerPlayer", perPlayer + 1) },
-                           detail: current.gameset == nil ? nil : "The saved game's signs count toward this; players split the rest")
-            }
-            integer("Tasks per player", \.tasksPerPlayer, "tasksPerPlayer", 1...8)
-            if current.isHost { // nobody else can see who it is, so nobody else picks it
-                settingCard("Choose impostor") {
-                    Picker("Choose impostor", selection: Binding(
-                        get: { current.settings.forcedImpostorIds.first ?? "" },
-                        set: { store.updateSetting("forcedImpostorIds", $0.isEmpty ? [String]() : [$0]) }
-                    )) {
-                        Text("Random").tag("")
-                        ForEach(current.players) { Text($0.name).tag($0.id) }
+                integer("Impostors", \.impostors, "impostors", 1...3)
+                integer("Minimum players", \.minPlayers, "minPlayers", 2...12)
+                if store.demoModeEnabled {
+                    settingCard("Demo mode") {
+                        DemoSignsControl(state: current)
+                        DemoVotingControl(state: current)
                     }
-                    .pickerStyle(.menu).tint(.white)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
-                    .disabled(!store.isSynced)
-                    .accessibilityIdentifier("settings.forcedImpostorIds")
                 }
+                if current.settings.signsPerPlayer != nil {
+                    let perPlayer = current.settings.signsPerPlayer ?? 0
+                    numberCard("Signs per player", value: "\(perPlayer)", key: "signsPerPlayer",
+                               canDecrease: perPlayer > 0, canIncrease: perPlayer < 10,
+                               decrease: { store.updateSetting("signsPerPlayer", perPlayer - 1) },
+                               increase: { store.updateSetting("signsPerPlayer", perPlayer + 1) },
+                               detail: current.gameset == nil ? nil : "The saved game's signs count toward this; players split the rest")
+                }
+                integer("Tasks per player", \.tasksPerPlayer, "tasksPerPlayer", 1...8)
+                if current.isHost { // nobody else can see who it is, so nobody else picks it
+                    settingCard("Choose impostor") {
+                        Picker("Choose impostor", selection: Binding(
+                            get: { current.settings.forcedImpostorIds.first ?? "" },
+                            set: { store.updateSetting("forcedImpostorIds", $0.isEmpty ? [String]() : [$0]) }
+                        )) {
+                            Text("Random").tag("")
+                            ForEach(current.players) { Text($0.name).tag($0.id) }
+                        }
+                        .pickerStyle(.menu).tint(.white)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Color.black, in: RoundedRectangle(cornerRadius: 7))
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(.white.opacity(0.6), lineWidth: 1.5))
+                        .disabled(!store.isSynced)
+                        .accessibilityIdentifier("settings.forcedImpostorIds")
+                    }
+                }
+                toggle("Anonymous votes", \.anonymousVotes, "anonymousVotes")
             }
-            toggle("Anonymous votes", \.anonymousVotes, "anonymousVotes")
         }
     }
 
@@ -386,7 +394,7 @@ struct LobbyView: View {
         .padding(6)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Self.well, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.12), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.35), lineWidth: 2))
     }
 
     private func numberCard(_ title: String, value: String, key: String, canDecrease: Bool, canIncrease: Bool,
@@ -458,9 +466,10 @@ private struct SettingsActionStyle: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(.white.opacity(enabled ? 1 : 0.35))
-            .background(filled ? Color(red: 0.18, green: 0.50, blue: 0.50) : Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(filled ? 0.4 : 0.2), lineWidth: 1))
+            // White fill with black text, or a white outline on black, like the lobby buttons.
+            .foregroundStyle((filled ? Color.black : .white).opacity(enabled ? 1 : 0.35))
+            .background(filled ? Color.white.opacity(enabled ? 1 : 0.35) : Color.black, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(enabled ? 1 : 0.35), lineWidth: filled ? 0 : 2.5))
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
@@ -489,43 +498,86 @@ struct StationRow: View {
 }
 
 
-/// Keep saved-game selection alongside sign management, with the existing server API.
+/// Which saved game (pre-photographed set of signs) the lobby uses, as a list of choices that are
+/// obviously tappable: the chosen one is filled white with a check. Anyone in the lobby can pick.
 private struct SettingsSavedGameCard: View {
     @Environment(GameStore.self) private var store
     let state: GameState
     @State private var games: [GameStore.GamesetSummary] = []
-    @State private var busy = false
+    @State private var loaded = false
+    @State private var pending: String??
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("SAVED GAME").font(.system(size: 14, weight: .bold, design: .rounded))
-            Picker("Saved game", selection: Binding(
-                get: { state.gameset?.id ?? "" },
-                set: { id in
-                    busy = true
-                    Task { await store.useGameset(id.isEmpty ? nil : id); busy = false }
+            HStack(alignment: .firstTextBaseline) {
+                Text("SIGN SET").font(.system(size: 14, weight: .black, design: .rounded))
+                Text("saved games").font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.55))
+                Spacer()
+                NavigationLink(value: LobbySettingsDestination.savedGames) {
+                    Text("Manage ›").font(.system(size: 12, weight: .heavy, design: .rounded)).underline()
+                        .frame(minHeight: 32)
                 }
-            )) {
-                Text("None · players photograph signs").tag("")
-                ForEach(games) { Text("\($0.name) · \($0.signs) signs").tag($0.id) }
-                if let current = state.gameset, !games.contains(where: { $0.id == current.id }) {
-                    Text(current.name).tag(current.id)
-                }
+                .buttonStyle(.plain)
             }
-            .pickerStyle(.menu).tint(.white).frame(minHeight: 44)
-            .disabled(busy || !store.isSynced)
-            NavigationLink(value: LobbySettingsDestination.savedGames) {
-                Label("Manage saved games", systemImage: "folder")
-                    .frame(maxWidth: .infinity, minHeight: 44)
+            Text("Tap one to use its already-photographed signs, or None to have players photograph their own.")
+                .font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+            option(id: nil, title: "None", detail: "Players photograph signs in the lobby", icon: "camera.fill")
+            ForEach(games) { game in
+                option(id: game.id, title: game.name, detail: "\(game.signs) signs ready", icon: "photo.stack.fill")
             }
-            .buttonStyle(SettingsActionStyle())
-            Text(state.gameset.map { "Using “\($0.name)”. Per-player sign requirements are off." }
-                 ?? "Choose a saved game to reuse photographed signs, or None to have players add their own.")
-                .font(.caption).foregroundStyle(.white.opacity(0.6))
+            if let current = state.gameset, !games.contains(where: { $0.id == current.id }) {
+                option(id: current.id, title: current.name, detail: "In use", icon: "photo.stack.fill")
+            }
+            if !loaded {
+                Label("Loading saved games…", systemImage: "arrow.down.circle")
+                    .font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+            } else if games.isEmpty {
+                Text("No saved games yet. Make one in Manage (needs the team password).")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+            }
         }
         .padding(10)
-        .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
-        .task { games = (try? await store.gamesets()) ?? [] }
+        .background(Color.black, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.35), lineWidth: 2))
+        .task {
+            games = (try? await store.gamesets()) ?? []
+            loaded = true
+        }
+    }
+
+    private func option(id: String?, title: String, detail: String, icon: String) -> some View {
+        let selected = state.gameset?.id == id
+        return Button {
+            guard !selected, pending == nil else { return }
+            pending = .some(id)
+            Task {
+                await store.useGameset(id)
+                pending = nil
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20, weight: .bold))
+                Image(systemName: icon).font(.system(size: 14, weight: .bold)).frame(width: 20)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(title).font(.system(size: 15, weight: .black, design: .rounded)).lineLimit(1)
+                    Text(detail).font(.system(size: 11, weight: .semibold, design: .rounded)).opacity(0.7).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if pending == .some(id) { ProgressView().tint(selected ? .black : .white) }
+            }
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .foregroundStyle(selected ? Color.black : .white)
+            .background(selected ? Color.white : .black, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white, lineWidth: selected ? 0 : 2))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!store.isSynced)
+        .accessibilityLabel("\(title), \(detail)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("settings.signSet.\(id ?? "none")")
     }
 }
 
@@ -553,7 +605,8 @@ private struct PlayAreaPicker: View {
             }
             .pickerStyle(.menu).tint(.white)
             .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
-            .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+            .background(Color.black, in: RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(.white.opacity(0.6), lineWidth: 1.5))
             .accessibilityIdentifier("settings.mapBuildingId")
             if let building {
                 Picker("Floor", selection: Binding(
@@ -565,7 +618,8 @@ private struct PlayAreaPicker: View {
                 }
                 .pickerStyle(.menu).tint(.white)
                 .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
-                .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+                .background(Color.black, in: RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7).stroke(.white.opacity(0.6), lineWidth: 1.5))
                 .accessibilityIdentifier("settings.mapFloorId")
             }
             Text(store.campus.isFullCampus ? "Maps open on this floor." : "Downloading the SFU campus… (SUB only for now)")
