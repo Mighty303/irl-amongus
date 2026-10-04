@@ -75,6 +75,65 @@ final class IRLAmongUsUITests: XCTestCase {
     }
 
     @MainActor
+    func testRoomFirstLobbyFitsAndKeepsActionsAvailable() throws {
+        guard let server = ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_SERVER"] else {
+            throw XCTSkip("Requires scripts/test-local-lobby-server.py")
+        }
+        let required = Int(ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_SIGNS"] ?? "0") ?? 0
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-playerName", "Ben", "-serverURL", server, "-session", ""]
+        app.launch()
+        app.buttons["Local"].tap()
+        XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
+        app.buttons["local.createGame"].tap()
+        let room = app.descendants(matching: .any)["lobby.waitingRoom"].firstMatch
+        XCTAssertTrue(room.waitForExistence(timeout: 10))
+        let screen = app.windows.firstMatch.frame
+        captureVoting(app, name: "Room-first initial layout")
+        XCTAssertTrue(screen.contains(room.frame), "screen \(screen), room \(room.frame)")
+        for name in ["Leave Game", "Copy room code", "Share lobby QR", "Customize your crewmate", "SETTINGS", "START"] {
+            let button = app.buttons[name]
+            XCTAssertTrue(button.exists, name)
+            XCTAssertTrue(screen.contains(button.frame), "\(name) must fit on the phone")
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44, name)
+        }
+        XCTAssertFalse(app.buttons["START"].isEnabled)
+        if required > 0 {
+            app.scrollViews["lobby.mySigns"].swipeUp()
+        }
+        app.buttons["Add bot"].tap()
+        if required > 0 {
+            app.scrollViews["lobby.mySigns"].swipeDown()
+        }
+        let count = app.staticTexts["lobby.playerCount"]
+        expectation(for: NSPredicate { _, _ in count.label == "2" }, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
+        if required > 0 {
+            XCTAssertFalse(app.buttons["START"].isEnabled, "Missing signs must still block the host")
+            XCTAssertTrue(app.buttons["START"].value as? String == "Waiting for signs (1 player)")
+            app.buttons["Add signs"].firstMatch.tap()
+            XCTAssertTrue(app.buttons["Close my signs"].waitForExistence(timeout: 5))
+            app.buttons["Close my signs"].tap()
+            expectation(for: NSPredicate { _, _ in !app.buttons["Close my signs"].exists }, evaluatedWith: nil)
+            waitForExpectations(timeout: 5)
+        } else {
+            XCTAssertTrue(app.buttons["START"].isEnabled)
+        }
+        app.buttons["Customize your crewmate"].tap()
+        XCTAssertTrue(app.buttons["customize.close"].waitForExistence(timeout: 5))
+        app.buttons["customize.close"].tap()
+        expectation(for: NSPredicate { _, _ in !app.buttons["customize.close"].exists }, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
+        app.buttons["Share lobby QR"].tap()
+        XCTAssertTrue(app.staticTexts["Scan to join this game"].waitForExistence(timeout: 5))
+        app.buttons["Done"].tap()
+        captureVoting(app, name: "Room-first lobby")
+        app.buttons["Leave Game"].tap()
+        XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testLaunchesToMainMenu() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()

@@ -114,10 +114,14 @@ lobby QR**. Both tabs fit smaller landscape phones without scrolling at standard
 text sizes. The app uses the hosted server by default. Join links from the system
 camera also open the Join tab with the room code filled in.
 
-The landscape waiting room shows the server's room code and live player roster.
-The host can **Add bot**, open **SETTINGS** to configure rules and venue signs,
-and press **START** once the configured minimum player count is reached. Start
-and all settings changes are validated by the server. Gameplay uses the existing
+The landscape lobby puts the crew room first, with names above each player,
+room-code copy and QR invite controls in the header, and **CUSTOMIZE**,
+**SETTINGS**, and **START GAME** along the bottom. The right panel shows your
+sign photos and progress; **ADD SIGN** opens the sign editor. The host can
+**Add bot** and open **SETTINGS** to configure rules and venue signs. Start
+unlocks once the minimum player count is reached, everyone's required signs
+are added, and the connection is synced. The button explains what is still
+needed. Start and all settings changes are validated by the server. Gameplay uses the existing
 portrait server POC screens; returning to the lobby restores landscape.
 
 Saved sessions resume in LOCAL when the app launches. During reconnects, actions

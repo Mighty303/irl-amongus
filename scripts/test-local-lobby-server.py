@@ -13,6 +13,7 @@ import time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 settings = dict(
     impostors=1,
+    signsPerPlayer=int(os.environ.get('LOCAL_LOBBY_TEST_SIGNS', '0')),
     minPlayers=2,
     tasksPerPlayer=1,
     killCooldownSec=30,

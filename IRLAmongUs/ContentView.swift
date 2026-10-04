@@ -711,39 +711,47 @@ private struct GameLobbyView: View {
                     .frame(width: size.width, height: size.height)
                     .allowsHitTesting(false)
 
-                VStack(spacing: 14) {
+                VStack(spacing: 10) {
                     lobbyTopBar
 
                     if landscape {
-                        HStack(spacing: 20) {
+                        HStack(spacing: 12) {
                             waitingRoom
-                            lobbyControls
-                                .frame(width: min(340, size.width * 0.4))
+                            signsPanel
+                                .frame(width: min(220, size.width * 0.28))
                         }
                         .frame(maxHeight: .infinity)
                     } else {
                         waitingRoom
-                        lobbyControls
+                        signsPanel.frame(maxHeight: 230)
                     }
+
+                    lobbyDock
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 18)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
                 .frame(width: size.width, height: size.height)
             }
             .frame(width: size.width, height: size.height)
             .clipped()
             .overlay {
-                if showingCustomize {
-                    CustomizePanel(state: state) { showingCustomize = false }
-                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                ZStack {
+                    if showingCustomize {
+                        CustomizePanel(state: state) { showingCustomize = false }
+                            .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    }
                 }
+                .allowsHitTesting(showingCustomize)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingCustomize)
             .overlay {
-                if showingMySigns {
-                    MySignsView { showingMySigns = false }
-                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                ZStack {
+                    if showingMySigns {
+                        MySignsView { showingMySigns = false }
+                            .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    }
                 }
+                .allowsHitTesting(showingMySigns)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingMySigns)
         }
@@ -775,330 +783,312 @@ private struct GameLobbyView: View {
     }
 
     private var waitingRoom: some View {
-        ZStack(alignment: .bottomLeading) {
-            WaitingRoomScene()
-            LobbyPlayerStage(players: state.players, visiblePlayerIDs: visiblePlayerIDs)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text(!state.playersMissingSigns.isEmpty ? "Waiting for everyone's signs…"
-                     : state.isHost ? "Waiting for players…" : "Waiting for the host to start…")
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 6) {
-                        ForEach(state.players) { player in
-                            HStack {
-                                Text("\(player.connected ? "●" : "○") \(player.name)\(player.id == state.me.id ? " (you)" : "")\(player.isHost ? " · Host" : "")")
-                                Spacer(minLength: 8)
-                                signStatus(for: player)
-                            }
-                            .font(.caption)
-                        }
-                    }
-                }
-                .frame(maxHeight: 100)
-            }
-                .font(.system(size: 17, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.88))
-                .padding(.horizontal, 15)
-                .padding(.vertical, 9)
-                .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 14))
-                .padding(16)
-        }
+        LobbyPlayerStage(state: state, visiblePlayerIDs: visiblePlayerIDs)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 22))
-        .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.75), lineWidth: 3))
-        .accessibilityElement(children: .combine)
+        .background {
+            WaitingRoomScene().accessibilityHidden(true).allowsHitTesting(false)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .contentShape(Rectangle())
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.25), lineWidth: 1))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("lobby.waitingRoom")
-        .overlay(alignment: .bottomTrailing) {
-            // The Customize laptop, like the one in the game's lobby.
+    }
+
+    private var canStart: Bool {
+        state.isHost && state.players.count >= state.settings.minPlayers
+            && state.playersMissingSigns.isEmpty && store.isSynced
+    }
+
+    private var startCaption: String {
+        if !store.isSynced { return "Reconnecting…" }
+        if !state.playersMissingSigns.isEmpty {
+            let count = state.playersMissingSigns.count
+            return "Waiting for signs (\(count) player\(count == 1 ? "" : "s"))"
+        }
+        if !state.isHost { return "Waiting for the host" }
+        if state.players.count < state.settings.minPlayers {
+            return "Need \(state.settings.minPlayers - state.players.count) more player\(state.settings.minPlayers - state.players.count == 1 ? "" : "s")"
+        }
+        return "Everyone is ready"
+    }
+
+    private var lobbyDock: some View {
+        HStack(spacing: 12) {
             Button {
                 buttonAudio.play()
                 showingCustomize = true
             } label: {
-                Image("CustomizeActionIcon").resizable().scaledToFit().frame(width: 72, height: 72)
+                Label("CUSTOMIZE", systemImage: "person.crop.square")
+                    .frame(maxWidth: .infinity, minHeight: 48)
             }
-            .buttonStyle(.plain)
-            .padding(8)
+            .buttonStyle(LobbyOutlineButtonStyle())
             .accessibilityLabel("Customize your crewmate")
-        }
-    }
-
-    private var lobbyControls: some View {
-        VStack(spacing: 14) {
-            HStack(spacing: 12) {
-                lobbyCode
-                playersCard
-            }
-
-            if state.requiredSigns > 0 { mySignsCard }
-
-            HStack(spacing: 12) {
-                Button {
-                    buttonAudio.play()
-                    showingSettings = true
-                } label: {
-                    Label("SETTINGS", systemImage: "gearshape.fill")
-                        .frame(maxWidth: .infinity, minHeight: 54)
-                }
-                .buttonStyle(LobbyOutlineButtonStyle())
-
-                Button {
-                    buttonAudio.play()
-                    Task { await store.perform("start_game") }
-                } label: {
-                    Text("START")
-                        .frame(maxWidth: .infinity, minHeight: 54)
-                }
-                .buttonStyle(LobbyStartButtonStyle())
-                .disabled(!state.isHost || state.players.count < state.settings.minPlayers
-                          || !state.playersMissingSigns.isEmpty || !store.isSynced)
-            }
-
-            Text(startCaption)
-                .font(.caption)
-                .foregroundStyle(.secondary)
 
             Button {
                 buttonAudio.play()
-                store.leave()
+                showingSettings = true
             } label: {
-                Text("Leave Game")
-                    .font(.system(size: 16, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.82))
-                    .underline()
+                Label("SETTINGS", systemImage: "gearshape.fill")
+                    .frame(maxWidth: .infinity, minHeight: 48)
             }
-            .buttonStyle(.plain)
-            .padding(.bottom, 4)
-        }
-    }
+            .buttonStyle(LobbyOutlineButtonStyle())
 
-    private var startCaption: String {
-        let missing = state.playersMissingSigns
-        if !missing.isEmpty {
-            let names = missing.map { $0.id == state.me.id ? "you" : $0.name }.joined(separator: ", ")
-            return "Waiting on \(missing.count) player\(missing.count == 1 ? "" : "s") to add signs (\(names))"
+            Button {
+                buttonAudio.play()
+                Task { await store.perform("start_game") }
+            } label: {
+                VStack(spacing: 2) {
+                    Text("START GAME")
+                        .font(.system(size: 19, weight: .heavy, design: .rounded))
+                    Text(startCaption)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .padding(.horizontal, 8)
+            }
+            .buttonStyle(LobbyStartButtonStyle())
+            .disabled(!canStart)
+            .accessibilityLabel("START")
+            .accessibilityValue(startCaption)
         }
-        let base = state.isHost ? "Minimum \(state.settings.minPlayers) players to start" : "The host will start the game"
-        return state.gameset.map { "Using saved game “\($0.name)” · \(base)" } ?? base
-    }
-
-    @ViewBuilder
-    private func signStatus(for player: PlayerView) -> some View {
-        let required = state.requiredSigns
-        if player.isBot == true {
-            Text("bot").foregroundStyle(.white.opacity(0.55))
-        } else if required > 0 {
-            let count = min(state.signs(addedBy: player.id).count, required)
-            Text(count >= required ? "\(count)/\(required) ✓" : "\(count)/\(required)")
-                .fontWeight(.heavy)
-                .foregroundStyle(count >= required ? Self.signsReady : Self.signsMissing)
-        }
+        .font(.system(size: 15, weight: .bold, design: .rounded))
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
     }
 
     private static let signsReady = Color(red: 0.56, green: 0.84, blue: 0.69)
     private static let signsMissing = Color(red: 0.96, green: 0.78, blue: 0.30)
 
-    /// Every player photographs `requiredSigns` signs before the host can start.
-    private var mySignsCard: some View {
+    private var signsPanel: some View {
         let required = state.requiredSigns
         let count = min(state.mySigns.count, required)
         let done = count >= required
-        let accent = done ? Self.signsReady : Self.signsMissing
-        return HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text("MY SIGNS")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.65))
-                    (Text("\(count)") + Text("/\(required)").foregroundColor(.white.opacity(0.5)))
-                        .font(.system(size: 20, weight: .heavy, design: .rounded))
-                        .foregroundStyle(.white)
-                    if done {
-                        Text("READY")
-                            .font(.system(size: 12, weight: .heavy, design: .rounded))
-                            .foregroundStyle(accent)
-                    }
+                        .font(.system(size: 17, weight: .heavy, design: .rounded))
+                    Text(required > 0 ? "\(count) / \(required) added" : "No signs required")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.75))
                 }
-                HStack(spacing: 5) {
-                    ForEach(0..<required, id: \.self) { index in
-                        Capsule().fill(index < count ? accent : Color(white: 0.3)).frame(height: 6)
+                .padding(.bottom, 4)
+
+                if required > 0 {
+                    signThumbnails
+                    Button { buttonAudio.play(); showingMySigns = true } label: {
+                        Label(done ? "VIEW SIGNS" : "ADD SIGN", systemImage: done ? "photo.on.rectangle" : "plus")
+                            .font(.system(size: 15, weight: .heavy, design: .rounded))
+                            .frame(maxWidth: .infinity, minHeight: 44)
                     }
+                    .buttonStyle(LobbyFilledButtonStyle())
+                    .accessibilityLabel(done ? "Edit my signs" : "Add signs")
+                }
+
+                Divider().overlay(.white.opacity(0.15))
+                Label {
+                    Text(state.playersMissingSigns.isEmpty ? "All signs added" : "\(state.playersMissingSigns.count) player\(state.playersMissingSigns.count == 1 ? "" : "s") still adding signs")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                } icon: {
+                    Image(systemName: state.playersMissingSigns.isEmpty ? "checkmark.circle.fill" : "person.2.fill")
+                        .foregroundStyle(state.playersMissingSigns.isEmpty ? Self.signsReady : Self.signsMissing)
+                }
+                if let gameset = state.gameset {
+                    Text("Saved game: \(gameset.name)")
+                        .font(.caption).foregroundStyle(.white.opacity(0.65))
+                }
+                if state.isHost {
+                    Button {
+                        buttonAudio.play()
+                        Task { await store.perform("add_bot") }
+                    } label: {
+                        Text("Add bot")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .buttonStyle(LobbyOutlineButtonStyle())
                 }
             }
-            if done {
-                Button { buttonAudio.play(); showingMySigns = true } label: {
-                    Text("EDIT").font(.system(size: 15, weight: .heavy, design: .rounded))
-                        .padding(.horizontal, 16).frame(minHeight: 44)
-                }
-                .buttonStyle(LobbyOutlineButtonStyle())
-            } else {
-                Button { buttonAudio.play(); showingMySigns = true } label: {
-                    Label("ADD SIGNS", systemImage: "plus")
-                        .font(.system(size: 15, weight: .heavy, design: .rounded))
-                        .padding(.horizontal, 14).frame(minHeight: 44)
-                }
-                .buttonStyle(LobbyFilledButtonStyle())
-            }
+            .padding(10)
         }
-        .padding(.vertical, 9).padding(.leading, 12).padding(.trailing, 10)
-        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(accent, lineWidth: 2))
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(red: 0.06, green: 0.09, blue: 0.11), in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("lobby.mySigns")
     }
 
+    private var signThumbnails: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(state.mySigns) { sign in
+                    ZStack {
+                        Color(white: 0.18)
+                        if let photoId = sign.photoId, let base = store.serverURL {
+                            AsyncImage(url: base.appendingPathComponent("photos/\(photoId).jpg")) { image in
+                                image.resizable().scaledToFill()
+                            } placeholder: {
+                                Image(systemName: "photo").foregroundStyle(.white.opacity(0.5))
+                            }
+                        } else {
+                            Image(systemName: "photo").foregroundStyle(.white.opacity(0.5))
+                        }
+                    }
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(.white.opacity(0.6), lineWidth: 1))
+                    .accessibilityLabel(sign.signText ?? sign.name)
+                }
+                if state.mySigns.count < state.requiredSigns {
+                    Button { buttonAudio.play(); showingMySigns = true } label: {
+                        Image(systemName: "plus").font(.title3)
+                            .frame(width: 44, height: 44)
+                            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4])))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Add signs")
+                }
+            }
+            .padding(1)
+        }
+    }
+
     private var lobbyTopBar: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(state.mapId.uppercased())
+        HStack(spacing: 10) {
+            Button {
+                buttonAudio.play()
+                store.leave()
+            } label: {
+                Label("LEAVE", systemImage: "chevron.left")
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.7))
-                Text("GAME LOBBY")
-                    .font(.system(size: 31, weight: .light, design: .rounded))
+                    .padding(.horizontal, 12).frame(height: 44)
+            }
+            .buttonStyle(LobbyOutlineButtonStyle())
+            .accessibilityLabel("Leave Game")
+
+            Text("LOBBY")
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+            Spacer(minLength: 0)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("ROOM CODE")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.6))
+                Text(state.code)
+                    .font(.system(size: 20, weight: .bold, design: .monospaced))
                     .foregroundStyle(.white)
             }
+            .accessibilityElement(children: .contain)
 
-            Spacer()
+            Button {
+                buttonAudio.play()
+                UIPasteboard.general.string = state.code
+            } label: {
+                Image(systemName: "doc.on.doc").frame(width: 44, height: 44)
+            }
+            .buttonStyle(LobbyOutlineButtonStyle())
+            .accessibilityLabel("Copy room code")
 
             Button {
                 buttonAudio.play()
                 showingInvite = true
             } label: {
-                Image(systemName: "qrcode")
-                    .font(.system(size: 20, weight: .bold))
-                    .frame(width: 48, height: 48)
+                Label("INVITE", systemImage: "qrcode")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .padding(.horizontal, 10).frame(height: 44)
             }
-            .buttonStyle(LobbyCircleButtonStyle())
+            .buttonStyle(LobbyOutlineButtonStyle())
             .accessibilityLabel("Share lobby QR")
-        }
-    }
 
-    private var lobbyCode: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("CODE")
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.65))
-            Text(state.code)
-                .font(.system(size: 30, weight: .bold, design: .monospaced))
-                .tracking(3)
-                .foregroundStyle(.white)
-            Text(state.isHost ? "Share code or QR with friends" : "Waiting for the host")
-                .font(.system(size: 12, design: .rounded))
-                .foregroundStyle(.white.opacity(0.62))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.35), lineWidth: 1.5))
-    }
-
-    private var playersCard: some View {
-        VStack(spacing: 5) {
-            Text("PLAYERS")
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.65))
-            Text("\(state.players.count)")
-                .accessibilityIdentifier("lobby.playerCount")
-                .font(.system(size: 27, weight: .bold, design: .rounded))
-                .foregroundStyle(.white)
-            if state.isHost {
-                Button("Add bot") { Task { await store.perform("add_bot") } }
-            } else {
-                Text("Joined").font(.caption)
+            VStack(spacing: 1) {
+                Text("\(state.players.count)")
+                    .font(.system(size: 18, weight: .heavy, design: .rounded))
+                    .accessibilityIdentifier("lobby.playerCount")
+                Text("PLAYERS").font(.system(size: 9, weight: .bold, design: .rounded))
             }
+            .foregroundStyle(.white.opacity(0.8))
         }
-        .frame(width: 132, height: 105)
-        .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.35), lineWidth: 1.5))
+        .lineLimit(1)
     }
 }
 
 private struct LobbyPlayerStage: View {
     @Environment(GameStore.self) private var store
-    let players: [PlayerView]
+    let state: GameState
     let visiblePlayerIDs: Set<String>
-
-    private static let roomAspectRatio: CGFloat = 1229 / 995
-    private static let anchors = [
-        CGPoint(x: 0.50, y: 0.54),
-        CGPoint(x: 0.59, y: 0.55),
-        CGPoint(x: 0.41, y: 0.55),
-        CGPoint(x: 0.55, y: 0.63),
-        CGPoint(x: 0.46, y: 0.63),
-        CGPoint(x: 0.65, y: 0.62),
-        CGPoint(x: 0.36, y: 0.62),
-        CGPoint(x: 0.63, y: 0.47),
-        CGPoint(x: 0.38, y: 0.47),
-        CGPoint(x: 0.54, y: 0.45),
-        CGPoint(x: 0.46, y: 0.45),
-        CGPoint(x: 0.70, y: 0.54)
-    ]
 
     var body: some View {
         GeometryReader { geometry in
-            let roomFrame = aspectFitFrame(in: geometry.size)
-            let spriteHeight = min(max(roomFrame.height * 0.095, 38), 58)
+            let columns = min(max(state.players.count, 1), 6)
+            let rows = max(1, Int(ceil(Double(state.players.count) / 6)))
+            let spriteHeight = min(58, max(32, geometry.size.height * (rows > 1 ? 0.22 : 0.3)))
+            let cellWidth = geometry.size.width * 0.88 / CGFloat(columns)
 
-            ForEach(Array(players.enumerated()), id: \.element.id) { index, player in
+            ForEach(Array(state.players.enumerated()), id: \.element.id) { index, player in
                 if visiblePlayerIDs.contains(player.id) {
-                    let anchor = Self.anchors[index % Self.anchors.count]
                     let playerColor = player.color ?? PlayerColor.allCases[index % PlayerColor.allCases.count]
-
-                    VStack(spacing: 2) {
-                        ZStack(alignment: .topTrailing) {
-                            CrewmateView(color: playerColor, faceURL: store.faceURL(player.faceId), height: spriteHeight)
-
+                    let signs = min(state.signs(addedBy: player.id).count, state.requiredSigns)
+                    VStack(spacing: 3) {
+                        HStack(spacing: 3) {
                             if player.isHost {
-                                Image(systemName: "crown.fill")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(.yellow)
-                                    .shadow(color: .black, radius: 1)
+                                Image(systemName: "crown.fill").foregroundStyle(.yellow)
                             }
+                            Text(player.name + (player.id == state.me.id ? " (You)" : ""))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                         }
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4).padding(.vertical, 2)
+                        .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 5))
 
-                        Text(player.name)
-                            .font(.system(size: 9, weight: .bold, design: .rounded))
-                            .lineLimit(1)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(.black.opacity(0.72), in: Capsule())
+                        CrewmateView(color: playerColor, faceURL: store.faceURL(player.faceId), height: spriteHeight)
+                            .opacity(player.connected ? 1 : 0.45)
+
+                        if state.requiredSigns > 0 && player.isBot != true {
+                            Text("\(signs)/\(state.requiredSigns) \(signs >= state.requiredSigns ? "✓" : "")")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundStyle(signs >= state.requiredSigns ? .green : .yellow)
+                                .padding(.horizontal, 4)
+                                .background(.black.opacity(0.75), in: Capsule())
+                        }
                     }
+                    .frame(width: cellWidth - 4)
                     .position(
-                        x: roomFrame.minX + roomFrame.width * anchor.x,
-                        y: roomFrame.minY + roomFrame.height * anchor.y
+                        x: geometry.size.width * 0.06 + cellWidth * (CGFloat(index % columns) + 0.5),
+                        y: geometry.size.height * (rows == 1 ? 0.62 : 0.43 + CGFloat(index / columns) * 0.35)
                     )
                     .transition(.scale(scale: 0.05, anchor: .bottom).combined(with: .opacity))
                     .accessibilityElement(children: .ignore)
                     .accessibilityIdentifier("lobby.playerSprite.\(index)")
                     .accessibilityLabel("\(player.name) \(playerColor.rawValue) player icon\(player.isHost ? ", host" : "")")
+                    .accessibilityValue(player.connected ? (player.isBot == true ? "Bot" : "\(signs) of \(state.requiredSigns) signs") : "Disconnected")
                 }
             }
         }
         .allowsHitTesting(false)
         .animation(.spring(response: 0.55, dampingFraction: 0.62), value: visiblePlayerIDs)
     }
-
-    private func aspectFitFrame(in size: CGSize) -> CGRect {
-        if size.width / size.height > Self.roomAspectRatio {
-            let width = size.height * Self.roomAspectRatio
-            return CGRect(x: (size.width - width) / 2, y: 0, width: width, height: size.height)
-        }
-
-        let height = size.width / Self.roomAspectRatio
-        return CGRect(x: 0, y: (size.height - height) / 2, width: size.width, height: height)
-    }
 }
 
 private struct WaitingRoomScene: View {
     var body: some View {
         GeometryReader { geometry in
+            // Frame the cabin interior, rather than shrinking the entire ship into the room.
+            let width = max(geometry.size.width / 0.64, geometry.size.height * 1229 / 995 / 0.54)
+            let height = width * 995 / 1229
             Image("LobbyRoom")
                 .resizable()
                 .interpolation(.high)
-                .scaledToFit()
-                .frame(width: geometry.size.width, height: geometry.size.height)
+                .frame(width: width, height: height)
+                .position(x: geometry.size.width / 2, y: geometry.size.height / 2 + height * 0.04)
                 .accessibilityHidden(true)
         }
+        .clipped()
     }
 }
 
@@ -1125,13 +1115,15 @@ private struct LobbyOutlineButtonStyle: ButtonStyle {
 }
 
 private struct LobbyStartButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 20, weight: .bold, design: .rounded))
-            .foregroundStyle(configuration.isPressed ? Color.black.opacity(0.75) : .black.opacity(0.55))
-            .background(Color(red: 0.52, green: 0.64, blue: 0.62).opacity(configuration.isPressed ? 0.75 : 1))
+            .foregroundStyle(isEnabled ? Color.black : Color.white.opacity(0.5))
+            .background(isEnabled ? Color(red: 0.48, green: 0.87, blue: 0.38) : Color(white: 0.2))
             .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.4), lineWidth: 2))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(isEnabled ? Color.green : Color.white.opacity(0.25), lineWidth: 2))
+            .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
     }
 }
