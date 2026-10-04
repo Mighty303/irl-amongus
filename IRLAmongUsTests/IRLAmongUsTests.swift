@@ -5,6 +5,62 @@ import Testing
 import UIKit
 @testable import IRLAmongUs
 
+struct NearbyTaskGateTests {
+    @Test func passingThroughRangeNeverUnlocksWithoutStopping() {
+        var gate = NearbyTaskGate()
+        gate.placeTask(SIMD2(0, -4))
+        for i in 0...20 {
+            gate.update(position: SIMD2(0, -Float(i) * 0.4), at: Double(i) * 0.1, tracking: true)
+            #expect(!gate.ready)
+        }
+        #expect(gate.passedAt != nil)
+        #expect(NearbyTaskGate.segmentDistance(SIMD2(0, -4), from: SIMD2(0, 0), to: SIMD2(0, -8)) == 0)
+    }
+
+    @Test func useRequiresContinuousStopWithinTwoMetres() {
+        var gate = NearbyTaskGate()
+        gate.placeTask(.zero)
+        for i in 0...4 { gate.update(position: SIMD2(0, 1.5), at: Double(i) * 0.1, tracking: true) }
+        #expect(!gate.ready)
+        gate.update(position: SIMD2(0, 1.5), at: 0.7, tracking: true)
+        #expect(gate.ready)
+        gate.update(position: SIMD2(0, 1.8), at: 0.8, tracking: true)
+        #expect(!gate.ready)
+        for i in 9...17 { gate.update(position: SIMD2(0, 2.1), at: Double(i) * 0.1, tracking: true) }
+        #expect(!gate.ready)
+    }
+
+    @Test func lostOrStaleTrackingFreezesMapAndClearsDwell() {
+        var gate = NearbyTaskGate()
+        gate.placeTask(.zero)
+        for i in 0...8 { gate.update(position: SIMD2(0, 1), at: Double(i) * 0.1, tracking: true) }
+        #expect(gate.ready)
+        gate.update(position: SIMD2(100, 100), at: 0.9, tracking: false)
+        #expect(gate.position == SIMD2(0, 1))
+        #expect(!gate.ready)
+        gate.update(position: SIMD2(0, 1), at: 1, tracking: true)
+        #expect(!gate.ready)
+        for i in 11...18 { gate.update(position: SIMD2(0, 1), at: Double(i) * 0.1, tracking: true) }
+        #expect(gate.ready)
+        gate.update(position: SIMD2(0, 1), at: 3, tracking: true)
+        #expect(!gate.ready)
+    }
+
+    @Test func revealHysteresisAndInvalidSamplesDoNotEnableInteraction() {
+        var gate = NearbyTaskGate()
+        gate.placeTask(.zero)
+        gate.update(position: SIMD2(0, 3.9), at: 0, tracking: true)
+        #expect(gate.nearby)
+        gate.update(position: SIMD2(0, 4.1), at: 0.1, tracking: true)
+        #expect(gate.nearby)
+        gate.update(position: SIMD2(0, 5.1), at: 0.2, tracking: true)
+        #expect(!gate.nearby)
+        gate.update(position: SIMD2(.nan, 0), at: 0.3, tracking: true)
+        #expect(gate.position == SIMD2(0, 5.1))
+        #expect(!gate.ready)
+    }
+}
+
 @MainActor
 struct LocalMapTrackingTests {
     private func remote(_ id: String, accuracy: Double = 3, at: Double = 10_000, stale: Bool = false) -> LivePosition {

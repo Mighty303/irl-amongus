@@ -2,7 +2,7 @@ import SwiftUI
 
 /// POC screens opened from the shake-to-open Developer Mode menu (Debug builds).
 enum POCDestination: String, CaseIterable, Identifiable {
-    case onlineGame, demoMode, gameOver, signsLab, bluetoothLab, tools
+    case onlineGame, demoMode, gameOver, arWalking, signsLab, bluetoothLab, tools
 
     var id: String { rawValue }
 
@@ -11,6 +11,7 @@ enum POCDestination: String, CaseIterable, Identifiable {
         case .onlineGame: return "Online game"
         case .demoMode: return "Demo mode"
         case .gameOver: return "Win screen"
+        case .arWalking: return "Indoor AR walking POC"
         case .signsLab: return "Sign recognition test"
         case .bluetoothLab: return "Bluetooth proximity test"
         case .tools: return "GPS, QR, haptics & mini-games"
@@ -22,6 +23,7 @@ enum POCDestination: String, CaseIterable, Identifiable {
         case .onlineGame: return "gamecontroller.fill"
         case .demoMode: return "flag.fill"
         case .gameOver: return "trophy.fill"
+        case .arWalking: return "figure.walk"
         case .signsLab: return "camera.viewfinder"
         case .bluetoothLab: return "dot.radiowaves.left.and.right"
         case .tools: return "wrench.and.screwdriver"
@@ -50,7 +52,7 @@ struct POCDestinationView: View {
             }
             // The online game sets its own orientation per phase; the test benches are portrait.
             .onAppear {
-                if destination == .gameOver { OrientationDelegate.requestLandscape() }
+                if destination == .gameOver || destination == .arWalking { OrientationDelegate.requestLandscape() }
                 else if destination != .onlineGame { OrientationDelegate.requestPortrait() }
             }
     }
@@ -60,6 +62,7 @@ struct POCDestinationView: View {
         case .onlineGame: GameRootView()
         case .demoMode: DemoModeView()
         case .gameOver: GameOverPreview()
+        case .arWalking: ARWalkingPOCView()
         case .signsLab: SignsLabView()
         case .bluetoothLab: BluetoothLabView()
         case .tools: ToolsLabView()

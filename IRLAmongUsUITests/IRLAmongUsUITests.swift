@@ -2,6 +2,45 @@ import XCTest
 
 final class IRLAmongUsUITests: XCTestCase {
     @MainActor
+    func testARWalkingPOCRequiresStopAndBlocksTrackingLoss() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Developer Mode"].waitForExistence(timeout: 5))
+        let entry = app.buttons["developer.arWalking"]
+        if !entry.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        entry.tap()
+        XCTAssertTrue(app.buttons["arWalking.simulation"].waitForExistence(timeout: 5))
+        app.buttons["arWalking.simulation"].tap()
+        app.buttons["arWalking.place"].tap()
+        let use = app.buttons["arWalking.use"]
+        XCTAssertTrue(use.waitForExistence(timeout: 3))
+        XCTAssertFalse(use.isEnabled)
+        app.buttons["arWalking.run"].tap()
+        XCTAssertFalse(use.isEnabled)
+        app.buttons["arWalking.walk"].tap()
+        XCTAssertFalse(use.isEnabled)
+        app.buttons["arWalking.stop"].tap()
+        XCTAssertTrue(use.isEnabled)
+        captureVoting(app, name: "AR walking POC - stopped near task")
+        let distance = app.staticTexts["arWalking.distance"].label
+        app.buttons["arWalking.trackingToggle"].tap()
+        XCTAssertFalse(use.isEnabled)
+        XCTAssertEqual(app.staticTexts["arWalking.distance"].label, distance)
+        app.buttons["arWalking.trackingToggle"].tap()
+        XCTAssertFalse(use.isEnabled)
+        app.buttons["arWalking.stop"].tap()
+        XCTAssertTrue(use.isEnabled)
+        use.tap()
+        app.buttons["arWalking.complete"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["arWalking.completed"].firstMatch.waitForExistence(timeout: 3))
+        captureVoting(app, name: "AR walking POC - completed task")
+        app.buttons["arWalking.reset"].tap()
+        XCTAssertTrue(app.buttons["arWalking.place"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testWinScreenUsesSuppliedBackgroundsAndColouredSprites() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
