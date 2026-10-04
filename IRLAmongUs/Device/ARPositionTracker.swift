@@ -40,7 +40,9 @@ final class ARPositionTracker: NSObject, ARSessionDelegate {
 
     static var isSupported: Bool { ARWorldTrackingConfiguration.isSupported }
 
-    private let session = ARSession()
+    /// Full-resolution frames on the main thread, only when the shake-menu preview requests them.
+    var onFrame: ((ARFrame) -> Void)?
+    private let session: ARSession
     private let queue = DispatchQueue(label: "ar-position")
     /// Main thread only.
     private var running = false
@@ -64,25 +66,28 @@ final class ARPositionTracker: NSObject, ARSessionDelegate {
     private static let cameraInterval: TimeInterval = 0.3
     private static let cameraMaxDimension: CGFloat = 240
 
-    override init() {
+    init(session: ARSession = ARSession()) {
+        self.session = session
         super.init()
         session.delegate = self
         session.delegateQueue = queue
     }
 
-    func start() {
+    func start(configuration customConfiguration: ARWorldTrackingConfiguration? = nil) {
         guard !running else { return }
         guard ARWorldTrackingConfiguration.isSupported else { report(.unsupported); return }
         running = true
-        let configuration = ARWorldTrackingConfiguration()
-        // +x east, +y up, +z south: moves come out in map directions, no heading of our own needed.
-        configuration.worldAlignment = .gravityAndHeading
-        configuration.planeDetection = []
-        configuration.isLightEstimationEnabled = false
-        // Smallest picture ARKit offers: tracking needs features, not pixels.
-        func pixels(_ format: ARConfiguration.VideoFormat) -> CGFloat { format.imageResolution.width * format.imageResolution.height }
-        if let smallest = ARWorldTrackingConfiguration.supportedVideoFormats.min(by: { pixels($0) < pixels($1) }) {
-            configuration.videoFormat = smallest
+        let configuration = customConfiguration ?? ARWorldTrackingConfiguration()
+        if customConfiguration == nil {
+            // +x east, +y up, +z south: moves come out in map directions, no heading of our own needed.
+            configuration.worldAlignment = .gravityAndHeading
+            configuration.planeDetection = []
+            configuration.isLightEstimationEnabled = false
+            // Smallest picture ARKit offers: tracking needs features, not pixels.
+            func pixels(_ format: ARConfiguration.VideoFormat) -> CGFloat { format.imageResolution.width * format.imageResolution.height }
+            if let smallest = ARWorldTrackingConfiguration.supportedVideoFormats.min(by: { pixels($0) < pixels($1) }) {
+                configuration.videoFormat = smallest
+            }
         }
         queue.async { self.lastPose = nil }
         session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
@@ -141,8 +146,9 @@ final class ARPositionTracker: NSObject, ARSessionDelegate {
     // MARK: - ARSessionDelegate (delegate queue)
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        // The camera feed doesn't need tracking, only the picture.
+        // Keep latest main's security stream independent of the POC preview.
         sendCameraFrame(frame)
+        if onFrame != nil { DispatchQueue.main.async { self.onFrame?(frame) } }
         let time = frame.timestamp
         guard time - lastSampleAt >= Self.sampleInterval else { return }
         lastSampleAt = time

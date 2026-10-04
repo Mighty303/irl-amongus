@@ -2,6 +2,8 @@ import ARKit
 import SwiftUI
 
 struct ARWalkingPOCView: View {
+    @Environment(GameStore.self) private var store
+    @State private var useLiveFloorMap = true
     @State private var session = ARWalkingSession()
     @State private var showingMapSetup = false
     @State private var showingSettings = false
@@ -21,35 +23,28 @@ struct ARWalkingPOCView: View {
                     LinearGradient(colors: [.gray.opacity(0.3), .black], startPoint: .top, endPoint: .bottom)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                let landscape = geometry.size.width > geometry.size.height
                 VStack(spacing: 8) {
-                    header
-                    Spacer(minLength: 0)
-                    HStack(alignment: .bottom, spacing: 16) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            minimap
-                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.7), lineWidth: 2))
-                            trackingBadge
-                        }
+                    header(landscape: landscape)
+                    if landscape {
                         Spacer(minLength: 0)
-                        VStack(spacing: 8) {
-                            Button {} label: {
-                                VStack(spacing: 3) {
-                                    Image(systemName: "megaphone.fill").font(.system(size: 20))
-                                    Text("REPORT").font(.system(size: 9, weight: .bold))
-                                }
-                                .frame(width: 56, height: 56)
-                                .background(.black.opacity(0.6), in: Circle())
-                                .overlay(Circle().stroke(.white, lineWidth: 2))
-                            }.disabled(true).opacity(0.35).accessibilityLabel("Report")
-                            actions
+                        HStack(alignment: .bottom, spacing: 16) {
+                            mapPanel.frame(width: 190)
+                            Spacer(minLength: 0)
+                            VStack(spacing: 8) { actions; reportButton }.frame(maxWidth: 300)
                         }
+                    } else {
+                        mapPanel
+                        Spacer(minLength: 12)
+                        actions
+                        reportButton
                     }
                     Text(walkingHint)
                         .font(.caption.bold()).multilineTextAlignment(.center)
                         .padding(.horizontal, 12).padding(.vertical, 5)
                         .background(.black.opacity(0.7), in: Capsule())
                         .accessibilityIdentifier("arWalking.status")
-                    if session.simulated { simulationControls }
+                    if session.simulated { simulationControls(landscape: landscape) }
                 }
                 .padding(12)
                 if session.gate.task == nil {
@@ -78,7 +73,7 @@ struct ARWalkingPOCView: View {
                 if showingSettings {
                     Color.black.opacity(0.65).ignoresSafeArea()
                     settings
-                        .frame(maxWidth: 600, maxHeight: 300)
+                        .frame(maxWidth: 600, maxHeight: 600)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .padding(12)
                         .sheet(isPresented: $showingMapSetup) {
@@ -92,6 +87,14 @@ struct ARWalkingPOCView: View {
         .foregroundStyle(.white)
         .onAppear {
             OrientationDelegate.requestLandscape()
+            session.onMove = { [weak store] east, north in
+                guard store?.positionMode == .ar else { return }
+                store?.positions.useARMove(east: east, north: north)
+            }
+            session.onTrackingState = { [weak store] state in
+                guard store?.positionMode == .ar else { return }
+                store?.positions.useARState(state)
+            }
             if !prepared { session.setMapped(true); prepared = true }
         }
         .onDisappear { session.stop() }
@@ -110,50 +113,88 @@ struct ARWalkingPOCView: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            HStack(spacing: 8) {
-                CrewmateView(color: .red, faceURL: nil, height: 38)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("TOTAL TASKS").font(.caption2.bold())
-                    ProgressView(value: Double(session.completedCount), total: session.mapped ? 3 : 1)
-                        .tint(.green).frame(width: 110)
-                }
-                .padding(8).background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.7), lineWidth: 2))
+    @ViewBuilder private func header(landscape: Bool) -> some View {
+        if landscape {
+            HStack(alignment: .top, spacing: 12) {
+                progress
+                Spacer(minLength: 0)
+                taskPicker
+                Spacer(minLength: 0)
+                settingsButton
             }
-            Spacer(minLength: 0)
-            Button { showingTaskMenu = true } label: {
-                VStack(spacing: 3) {
-                    HStack(spacing: 4) {
-                        Text("Next task ·")
-                        Text(session.mapped ? (session.selectedTask?.name ?? "Task") : "Floor task").foregroundStyle(.yellow)
-                    }.font(.callout.bold())
-                    if let distance = session.gate.distance {
-                        Text(String(format: "%.1f m away", distance)).font(.caption2.monospacedDigit())
-                            .accessibilityIdentifier("arWalking.distance")
-                    }
-                }
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(.black.opacity(0.8), in: Capsule())
-                .overlay(Capsule().stroke(.white.opacity(0.7), lineWidth: 2))
+        } else {
+            VStack(spacing: 10) {
+                HStack(alignment: .top) { progress; Spacer(); settingsButton }
+                taskPicker
             }
-            .buttonStyle(.plain)
-            .disabled(!session.mapped)
-            .accessibilityIdentifier("arWalking.taskSelection")
-            Spacer(minLength: 0)
-            Button { showingSettings = true } label: {
-                Image(systemName: "gearshape.fill").font(.system(size: 25))
-                    .frame(width: 46, height: 46)
-                    .background(.black.opacity(0.7), in: Circle())
-                    .overlay(Circle().stroke(.white, lineWidth: 3))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Walking settings").accessibilityIdentifier("arWalking.settings")
-            .accessibilityValue(showingSettings ? "Open" : "Closed")
         }
     }
+
+    private var progress: some View {
+        HStack(spacing: 8) {
+            CrewmateView(color: .red, faceURL: nil, height: 38)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("TOTAL TASKS").font(.caption2.bold())
+                ProgressView(value: Double(session.completedCount), total: session.mapped ? 3 : 1)
+                .tint(.green).frame(width: 110)
+            }
+            .padding(8).background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.7), lineWidth: 2))
+        }
+    }
+
+    private var settingsButton: some View {
+        Button { showingSettings = true } label: {
+            Image(systemName: "gearshape.fill").font(.system(size: 25))
+            .frame(width: 46, height: 46)
+            .background(.black.opacity(0.7), in: Circle())
+            .overlay(Circle().stroke(.white, lineWidth: 3))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Walking settings").accessibilityIdentifier("arWalking.settings")
+        .accessibilityValue(showingSettings ? "Open" : "Closed")
+    }
+
+    private var taskPicker: some View {
+        Button { showingTaskMenu = true } label: {
+            VStack(spacing: 3) {
+                HStack(spacing: 4) {
+                    Text("Next task ·")
+                    Text(session.mapped ? (session.selectedTask?.name ?? "Task") : "Floor task").foregroundStyle(.yellow)
+                }.font(.callout.bold())
+                if let distance = session.gate.distance {
+                    Text(String(format: "%.1f m away", distance)).font(.caption2.monospacedDigit())
+                    .accessibilityIdentifier("arWalking.distance")
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(.black.opacity(0.8), in: Capsule())
+            .overlay(Capsule().stroke(.white.opacity(0.7), lineWidth: 2))
+        }
+        .buttonStyle(.plain)
+        .disabled(!session.mapped)
+        .accessibilityIdentifier("arWalking.taskSelection")
+    }
+
+    private var mapPanel: some View {
+        VStack(spacing: 6) {
+            comparisonMinimap.overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.7), lineWidth: 2))
+            trackingBadge
+        }
+    }
+
+    private var reportButton: some View {
+        Button {} label: {
+            VStack(spacing: 3) {
+                Image(systemName: "megaphone.fill").font(.system(size: 20))
+                Text("REPORT").font(.system(size: 9, weight: .bold))
+            }.frame(width: 46, height: 46)
+            .background(.black.opacity(0.6), in: Circle())
+            .overlay(Circle().stroke(.white, lineWidth: 2))
+        }.disabled(true).opacity(0.35).accessibilityLabel("Report")
+    }
+
 
     private var walkingHint: String {
         if session.simulated { return "SIMULATION · " + session.status.replacingOccurrences(of: "Simulation · ", with: "") }
@@ -255,9 +296,9 @@ struct ARWalkingPOCView: View {
                     Image(systemName: "hand.raised.fill").font(.system(size: 30))
                     Text("USE").font(.headline)
                 }
-                .frame(width: 84, height: 84)
-                .background(.black.opacity(0.75), in: Circle())
-                .overlay(Circle().stroke(session.gate.ready && session.tracking ? .white : .gray, lineWidth: 3))
+                .frame(maxWidth: .infinity).frame(height: 64)
+                .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 18))
+                .overlay(RoundedRectangle(cornerRadius: 18).stroke(session.gate.ready && session.tracking ? .white : .gray, lineWidth: 3))
             }
             .disabled(!session.gate.ready || !session.tracking)
             .opacity(session.gate.ready && session.tracking ? 1 : 0.45)
@@ -265,17 +306,46 @@ struct ARWalkingPOCView: View {
         }
     }
 
+    private func liveCheckpoint(_ state: GameState) -> POCCheckpoint {
+        guard let cp = state.me.lastCheckpoint, let station = state.station(cp.stationId) else {
+            return POCCheckpoint(stationID: "", stationName: "", roomLabel: "", verifiedAt: .now)
+        }
+        return POCCheckpoint(stationID: station.id, stationName: station.name, roomLabel: station.name,
+                             verifiedAt: Date(timeIntervalSince1970: cp.at / 1000))
+    }
+
+    @ViewBuilder private var comparisonMinimap: some View {
+        if useLiveFloorMap, !session.simulated, let state = store.state {
+            let campus = store.campusView(points: state.locatedStationPoints, stations: state.stations, playArea: state.playArea)
+            POCFloorPlan(rooms: campus.rooms, stations: state.otherSignPins(excluding: [], campus: campus),
+                         meetingPoint: state.meetingPointPin, completedStationIDs: [], selectedStation: nil,
+                         ownLastCheckpoint: liveCheckpoint(state), onSelectStation: { _ in },
+                         players: store.liveDots(state: state, campus: campus, includeMine: true))
+                .frame(height: 135)
+                .accessibilityIdentifier("arWalking.liveFloorMap")
+        } else { minimap }
+    }
+
     @ViewBuilder private var minimap: some View {
         if session.mapped {
             ARMeasuredMap(layout: session.layout, player: session.mapPosition, selectedID: session.selectedTaskID,
                           completed: session.completedTasks, tracking: session.tracking && session.aligned, heading: session.heading)
-                .frame(width: 160, height: 120)
+                .frame(maxWidth: .infinity).frame(height: 135)
                 .background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 10))
         } else { floorMinimap }
     }
 
     private var mapControls: some View {
-        HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: 12) {
+            if store.state != nil {
+                Toggle("Use latest main floor map", isOn: $useLiveFloorMap)
+                    .accessibilityIdentifier("arWalking.liveFloorToggle")
+                Text("Uses your sign-corrected game position and Steps fallback. Preset beacons still use the printed marker.")
+                    .font(.caption2)
+            } else {
+                Text("Join a game to compare its sign-corrected floor map; this standalone test uses the measured marker map.")
+                    .font(.caption2)
+            }
             Picker("Task placement", selection: Binding(get: { session.mapped }, set: { session.setMapped($0) })) {
                 Text("Floor task").tag(false)
                 Text("Preset map").tag(true)
@@ -347,14 +417,19 @@ struct ARWalkingPOCView: View {
         .padding(8).background(.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 10))
     }
 
-    private var simulationControls: some View {
-        HStack {
+    private func simulationControls(landscape: Bool) -> some View {
+        let layout = landscape ? AnyLayout(HStackLayout(spacing: 8)) : AnyLayout(VStackLayout(spacing: 8))
+        return layout {
+            HStack {
             Button("Walk toward") { session.simulateWalk() }.accessibilityIdentifier("arWalking.walk")
             Button("Run past") { session.simulateRunPast() }.accessibilityIdentifier("arWalking.run")
+            }
+            HStack {
             Button("Stop") { session.simulateStop() }.accessibilityIdentifier("arWalking.stop")
             Button(session.tracking ? "Lose tracking" : "Recover") {
                 if session.tracking { session.simulateTrackingLoss() } else { session.simulateRecovery() }
             }.accessibilityIdentifier("arWalking.trackingToggle")
+            }
         }
         .font(.caption).buttonStyle(.bordered).background(.black.opacity(0.7), in: Capsule())
     }
@@ -374,23 +449,61 @@ struct ARWalkingPOCView: View {
     }
 }
 
-private struct WalkingCamera: UIViewRepresentable {
+/// The controller shares its actual interface orientation with the camera renderer.
+struct WalkingCamera: UIViewControllerRepresentable {
     let session: ARWalkingSession
 
-    func makeUIView(context: Context) -> ARSCNView {
-        let view = ARSCNView(frame: .zero)
-        view.backgroundColor = .black
-        view.clipsToBounds = true
-        // Camera interaction uses HUD actions and raycasts, not SceneKit touch gestures.
-        view.isUserInteractionEnabled = false
-        session.attach(view)
-        return view
+    func makeUIViewController(context: Context) -> WalkingCameraController {
+        WalkingCameraController(session: session)
     }
 
-    func updateUIView(_ uiView: ARSCNView, context: Context) {}
+    func updateUIViewController(_ controller: WalkingCameraController, context: Context) {}
 
-    static func dismantleUIView(_ uiView: ARSCNView, coordinator: ()) {
-        uiView.session.pause()
-        uiView.session.delegate = nil
+    static func dismantleUIViewController(_ controller: WalkingCameraController, coordinator: ()) {
+        controller.camera.session.pause()
+        controller.camera.session.delegate = nil
+    }
+}
+
+final class WalkingCameraController: UIViewController {
+    let session: ARWalkingSession
+    let camera = WalkingSceneView(frame: .zero)
+    private var attached = false
+
+    init(session: ARWalkingSession) {
+        self.session = session
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .landscape }
+    override var shouldAutorotate: Bool { true }
+
+    override func loadView() {
+        camera.backgroundColor = .black
+        camera.clipsToBounds = true
+        camera.isUserInteractionEnabled = false
+        view = camera
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // Start only once the camera has a window, nonzero bounds, and the actual interface orientation.
+        guard !attached else { return }
+        attached = true
+        view.layoutIfNeeded()
+        session.attach(camera)
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: { [weak self] _ in
+            self?.camera.setNeedsLayout()
+            self?.camera.layoutIfNeeded()
+        }, completion: { [weak self] _ in
+            self?.camera.setNeedsLayout()
+            self?.camera.layoutIfNeeded()
+        })
     }
 }

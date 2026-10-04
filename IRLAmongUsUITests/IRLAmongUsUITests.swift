@@ -3,7 +3,7 @@ import XCTest
 final class IRLAmongUsUITests: XCTestCase {
     @MainActor
     func testARPresetMapSetupAlignsAndCompletesSelectedBeacon() throws {
-        XCUIDevice.shared.orientation = .landscapeRight
+        XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
         app.launch()
@@ -41,6 +41,12 @@ final class IRLAmongUsUITests: XCTestCase {
         app.buttons["arWalking.stop"].tap()
         XCTAssertTrue(app.buttons["arWalking.use"].isEnabled)
         captureVoting(app, name: "AR preset map aligned")
+        rotateAR(app, to: .landscapeRight, portrait: false)
+        XCTAssertTrue(app.buttons["arWalking.use"].isEnabled)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(app.buttons["arWalking.use"].frame))
+        captureVoting(app, name: "AR preset map landscape - same active task")
+        rotateAR(app, to: .portrait, portrait: false)
+        XCTAssertTrue(app.buttons["arWalking.use"].isEnabled)
         app.buttons["arWalking.use"].tap()
         app.buttons["arWalking.complete"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["arWalking.completed"].firstMatch.waitForExistence(timeout: 3))
@@ -63,7 +69,7 @@ final class IRLAmongUsUITests: XCTestCase {
 
     @MainActor
     func testARWalkingPOCRequiresStopAndBlocksTrackingLoss() throws {
-        XCUIDevice.shared.orientation = .landscapeRight
+        XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
         app.launch()
@@ -234,6 +240,18 @@ final class IRLAmongUsUITests: XCTestCase {
     }
 
     @MainActor
+    private func rotateAR(_ app: XCUIApplication, to orientation: UIDeviceOrientation, portrait: Bool) {
+        XCUIDevice.shared.orientation = orientation
+        let changed = NSPredicate { _, _ in
+            let frame = app.windows.firstMatch.frame
+            return portrait ? frame.height > frame.width : frame.width > frame.height
+        }
+        expectation(for: changed, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
+        Thread.sleep(forTimeInterval: 0.5)
+    }
+
+    @MainActor
     func testLocalLobbyRequiresNameAndValidServer() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()
@@ -290,7 +308,33 @@ final class IRLAmongUsUITests: XCTestCase {
         // The real in-game HUD follows the reveal, with no proof-of-concept map in between.
         XCTAssertTrue(app.buttons["hud.scan"].waitForExistence(timeout: 10))
         XCTAssertFalse(app.staticTexts["PHYSICAL MAP"].exists)
-        app.buttons["Settings"].tap()
+        // Relaunch into the shake menu while retaining the live game session.
+        app.terminate()
+        app.launchArguments = ["-disableAudio", "-serverURL", server, "-showDeveloperMenu"]
+        app.launch()
+        let arEntry = app.buttons["developer.arWalking"]
+        XCTAssertTrue(arEntry.waitForExistence(timeout: 5))
+        if !arEntry.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        arEntry.tap()
+        Thread.sleep(forTimeInterval: 0.8)
+        let liveMap = app.descendants(matching: .any)["arWalking.liveFloorMap"].firstMatch
+        XCTAssertTrue(liveMap.waitForExistence(timeout: 5))
+        app.buttons["arWalking.settings"].tap()
+        let floorToggle = app.switches["arWalking.liveFloorToggle"]
+        XCTAssertTrue(floorToggle.waitForExistence(timeout: 3))
+        floorToggle.tap()
+        app.buttons["arWalking.settings.close"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["arWalking.measuredMap"].firstMatch.waitForExistence(timeout: 3))
+        app.buttons["arWalking.settings"].tap()
+        floorToggle.tap()
+        app.buttons["arWalking.settings.close"].tap()
+        XCTAssertTrue(liveMap.waitForExistence(timeout: 3))
+        captureVoting(app, name: "Shake POC - latest main floor tracking")
+        app.buttons["arWalking.settings"].tap()
+        app.buttons["arWalking.exit"].tap()
+        XCTAssertTrue(app.buttons["hud.scan"].waitForExistence(timeout: 5))
+        Thread.sleep(forTimeInterval: 0.8)
+        app.buttons["Settings"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         app.buttons["Leave game"].tap()
         XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
         let landscape = NSPredicate { _, _ in app.windows.firstMatch.frame.width > app.windows.firstMatch.frame.height }

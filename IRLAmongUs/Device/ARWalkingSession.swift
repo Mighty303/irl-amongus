@@ -30,7 +30,11 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
     private(set) var needsSettings = false
     private(set) var canPlace = false
 
-    @ObservationIgnored weak var view: ARSCNView?
+    @ObservationIgnored var onMove: ((Double, Double) -> Void)?
+    @ObservationIgnored var onTrackingState: ((ARPositionTracker.State) -> Void)?
+    @ObservationIgnored private var tracker: ARPositionTracker?
+    @ObservationIgnored private var ownsCamera = false
+    @ObservationIgnored weak var view: WalkingSceneView?
     @ObservationIgnored private var anchorID: UUID?
     @ObservationIgnored private var marker: SCNNode?
     @ObservationIgnored private var lastProcessed: TimeInterval = 0
@@ -40,12 +44,21 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
     @ObservationIgnored private var active = false
     @ObservationIgnored private var resetRequired = false
 
-    func attach(_ view: ARSCNView) {
+    func attach(_ view: WalkingSceneView) {
         self.view = view
-        view.session.delegate = self
-        view.session.delegateQueue = .main
-        view.scene = SCNScene()
-        view.automaticallyUpdatesLighting = true
+        let tracker = ARPositionTracker(session: view.session)
+        tracker.onFrame = { [weak self] frame in
+            guard let self, let view = self.view else { return }
+            self.session(view.session, didUpdate: frame)
+        }
+        tracker.onMove = { [weak self] east, north in self?.onMove?(east, north) }
+        tracker.onState = { [weak self] state in
+            guard let self else { return }
+            self.onTrackingState?(state)
+            if case .paused(let why) = state { self.resetRequired = true; self.pause(why) }
+        }
+        self.tracker = tracker
+        view.prepareScene()
         active = true
         Task { await requestCamera() }
     }
@@ -68,12 +81,19 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
             return
         }
         needsSettings = false
+        if !ownsCamera {
+            ownsCamera = true
+            CameraUsage.backCameraStarted()
+            // Let GameStore's camera-usage observer pause its headless tracker before this session starts.
+            await Task.yield()
+        }
+        guard active, !simulated else { return }
         run()
     }
 
     private func run() {
         let configuration = ARWorldTrackingConfiguration()
-        configuration.worldAlignment = .gravity
+        configuration.worldAlignment = .gravityAndHeading
         configuration.planeDetection = [.horizontal]
         if mapped {
             guard let cgImage = UIImage(named: "ARAlignmentMarker")?.cgImage else {
@@ -85,7 +105,8 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
             configuration.detectionImages = [reference]
             configuration.maximumNumberOfTrackedImages = 1
         }
-        view?.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+        tracker?.stop()
+        tracker?.start(configuration: configuration)
         status = mapped ? "Point at the printed ALIGN marker" : "Move the camera slowly to find the floor"
         resetRequired = false
     }
@@ -122,7 +143,8 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
 
     func stop() {
         active = false
-        view?.session.pause()
+        tracker?.stop()
+        if ownsCamera { ownsCamera = false; CameraUsage.backCameraStopped() }
         pause("Tracking paused")
     }
 
@@ -160,22 +182,27 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
         ring.firstMaterial?.emission.contents = UIColor.systemYellow
         let node = SCNNode(geometry: ring)
         node.simdPosition = SIMD3(transform.columns.3.x, transform.columns.3.y + 0.035, transform.columns.3.z)
-        view.scene.rootNode.addChildNode(node)
+        view.scene?.rootNode.addChildNode(node)
         marker = node
         status = "Task placed · walk toward the yellow marker"
     }
 
-    private func floorHit(in view: ARSCNView) -> ARRaycastResult? {
-        let centre = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
-        guard let query = view.raycastQuery(from: centre, allowing: .existingPlaneGeometry, alignment: .horizontal),
-              let hit = view.session.raycast(query).first,
-              let frame = view.session.currentFrame,
+    private func floorHit(in view: WalkingSceneView) -> ARRaycastResult? {
+        guard let frame = view.session.currentFrame else { return nil }
+        let transform = frame.camera.transform
+        let query = ARRaycastQuery(
+            origin: SIMD3(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z),
+            direction: -SIMD3(transform.columns.2.x, transform.columns.2.y, transform.columns.2.z),
+            allowing: .existingPlaneGeometry, alignment: .horizontal)
+        guard let hit = view.session.raycast(query).first,
               hit.worldTransform.columns.3.y < frame.camera.transform.columns.3.y - 0.4 else { return nil }
         return hit
     }
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        guard active, !simulated, frame.timestamp - lastProcessed >= 0.08 else { return }
+        guard active, !simulated else { return }
+        view?.present(frame)
+        guard frame.timestamp - lastProcessed >= 0.08 else { return }
         lastProcessed = frame.timestamp
         lastFrameAt = Date()
         guard case .normal = frame.camera.trackingState else {
@@ -289,12 +316,18 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
         reset()
     }
 
-    func applyLayout(_ value: ARMapLayout) {
+    func applyLayout(_ value: ARMapLayout, persist: Bool = true) {
         guard value.isValid else { return }
         layout = value
-        layout.save()
+        if persist { layout.save() }
         if selectedTask == nil { selectedTaskID = value.tasks[0].id }
         if mapped { reset() }
+    }
+
+    /// Live games take completion from the server, never from the local POC panel.
+    func updateCompletedStations(_ ids: Set<String>) {
+        completedTasks = ids.intersection(Set(layout.tasks.map(\.id)))
+        refreshBeaconColours()
     }
 
     func alignMap() {
@@ -328,7 +361,7 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
         for task in layout.tasks {
             let node = makeBeacon(task)
             node.simdPosition = value.worldPoint(task.point)
-            view?.scene.rootNode.addChildNode(node)
+            view?.scene?.rootNode.addChildNode(node)
             beaconNodes[task.id] = node
         }
         selectTask(selectedTaskID)
@@ -394,7 +427,8 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
 
     func simulate() {
         simulated = true
-        view?.session.pause()
+        tracker?.stop()
+        if ownsCamera { ownsCamera = false; CameraUsage.backCameraStopped() }
         reset()
     }
 

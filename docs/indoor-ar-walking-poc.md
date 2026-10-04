@@ -86,3 +86,23 @@ Regenerate the reference PNG and exact-size PDF with
 Apple references: [image detection](https://developer.apple.com/documentation/arkit/detecting-images-in-an-ar-experience),
 [world tracking](https://developer.apple.com/documentation/arkit/arworldtrackingconfiguration),
 [camera tracking state](https://developer.apple.com/documentation/arkit/arcamera/trackingstate-swift.enum).
+
+
+## Shake-menu A/B comparison
+
+This camera POC is available only through **shake → Indoor AR walking POC**.
+The normal game HUD and its latest-main GPS/Steps/AR choices remain in place.
+The POC reuses latest main's `ARPositionTracker` runner, compass-aligned world coordinates,
+movement sampling and jump rejection. It owns the back camera while open; the normal tracker
+and security stream pause, then resume when it closes.
+
+When opened during a game, its minimap defaults to latest main's floor plan, sign pins and
+`PositionEstimator` position. In AR mode the POC's movement feeds that estimator, preserving
+sign corrections and Steps fallback. Settings → **Use latest main floor map** switches to the
+measured map for comparison. Standalone and simulated tests use the measured map.
+Preset beacons still need the printed marker; georeferenced sign pins do not automatically
+become precise marker-aligned beacons. This lab never completes server tasks.
+
+The preview and virtual camera use the same window orientation and aspect fill, with a
+landscape HUD. Camera rotation/crop tests and the stopped-nearby/limited-tracking UI tests
+cover the POC; physical accuracy still needs testing in the venue.

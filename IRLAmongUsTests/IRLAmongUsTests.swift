@@ -946,3 +946,31 @@ struct SignTextMatchTests {
         #expect(SignRecognizer.textMatch(signWords: signs, seen: seen, distances: ["room": 0.5], prefer: nil) == nil)
     }
 }
+
+@MainActor
+struct WalkingCameraOrientationTests {
+    @Test func landscapeImageCornersStayUprightInBothDirections() {
+        let size = CGSize(width: 1920, height: 1080)
+        let output = CGSize(width: 960, height: 540)
+        let topLeft = CGPoint(x: 0, y: 1080)
+        let topRight = CGPoint(x: 1920, y: 1080)
+        let right = WalkingSceneView.imageTransform(imageSize: size, viewportSize: output,
+                                                   displayTransform: .identity)
+        #expect(topLeft.applying(right) == CGPoint(x: 0, y: 540))
+        #expect(topRight.applying(right) == CGPoint(x: 960, y: 540))
+        let left = WalkingSceneView.imageTransform(imageSize: size, viewportSize: output,
+            displayTransform: CGAffineTransform(a: -1, b: 0, c: 0, d: -1, tx: 1, ty: 1))
+        #expect(topLeft.applying(left) == CGPoint(x: 960, y: 0))
+        #expect(topRight.applying(left) == CGPoint(x: 0, y: 0))
+    }
+
+    @Test func aspectFillCropsSidesWithoutStretchingOrQuarterTurning() {
+        let transform = WalkingSceneView.imageTransform(imageSize: CGSize(width: 200, height: 100),
+            viewportSize: CGSize(width: 100, height: 100),
+            displayTransform: CGAffineTransform(a: 2, b: 0, c: 0, d: 1, tx: -0.5, ty: 0))
+        #expect(CGPoint(x: 50, y: 100).applying(transform) == CGPoint(x: 0, y: 100))
+        #expect(CGPoint(x: 150, y: 0).applying(transform) == CGPoint(x: 100, y: 0))
+        #expect(transform.b == 0 && transform.c == 0)
+        #expect(transform.a == transform.d)
+    }
+}
