@@ -175,10 +175,19 @@ struct GamesetDetailView: View {
             }
         }
         .navigationTitle(gameset?.name ?? initialName)
-        .sheet(isPresented: $adding, onDismiss: { Task { await refresh() } }) {
-            StationEditorView(title: "Add a sign", fallbackName: "Sign \(signCount + 1)") { payload in
-                await store.editGamesets("gamesets/\(gamesetId)/stations", payload) != nil
+        .fullScreenCover(isPresented: $adding, onDismiss: { Task { await refresh() } }) {
+            SignPanelContainer { compact in
+                VStack(alignment: .leading, spacing: 12) {
+                    SignPanel.header("Add a sign", subtitle: "To \(gameset?.name ?? initialName) · \(signCount) so far · no naming needed")
+                    SignCaptureStep(compact: compact, title: "Sign \(signCount + 1)", fallbackName: "Sign \(signCount + 1)") { payload in
+                        await store.editGamesets("gamesets/\(gamesetId)/stations", payload) != nil
+                    } onSaved: {
+                        Task { await refresh() }
+                    }
+                }
+                .signPanel(closeLabel: "Done adding signs") { adding = false }
             }
+            .presentationBackground(.clear)
         }
         .onChange(of: importItems) { _, items in
             guard !items.isEmpty else { return }
