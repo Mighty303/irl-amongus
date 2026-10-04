@@ -5,6 +5,20 @@ import UIKit
 @testable import IRLAmongUs
 
 struct NeckKillTests {
+    @Test func hdPlaybackPreservesAspectRatioAndUsesCurrentSuitColours() throws {
+        let purple = try NeckKillFrames.load(attacker: .purple, victim: .cyan)
+        let renderer = NeckKillHDRenderer()
+        let first = renderer.image(at: 4, in: purple)
+        let bitmap = try #require(first.cgImage)
+        #expect(bitmap.width == 1352 && bitmap.height == 800)
+        #expect(renderer.image(at: 4, in: purple) === first)
+
+        let yellow = try NeckKillFrames.load(attacker: .yellow, victim: .cyan)
+        let updated = NeckKillHDRenderer().image(at: 4, in: yellow)
+        #expect(updated.pngData() != first.pngData(), "new presentation colours must reach the HD frame")
+        #expect(abs(purple.duration - yellow.duration) < 0.0001)
+    }
+
     @MainActor
     @Test func killWindowCoversPresentedScannerAndKeepsTheUnderlyingScreen() throws {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)

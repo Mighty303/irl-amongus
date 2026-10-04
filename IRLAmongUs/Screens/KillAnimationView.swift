@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreImage
 
 struct NeckKillFrames: @unchecked Sendable {
     let images: [UIImage]
@@ -65,12 +66,44 @@ struct NeckKillFrames: @unchecked Sendable {
     enum AssetError: Error { case missing }
 }
 
+/// Enhance after recolouring so interpolated suit edges use the selected palette.
+/// Keep only a few HD frames decoded, rather than all 47 (over 200 MB).
+final class NeckKillHDRenderer {
+    private let context = CIContext(options: [.cacheIntermediates: false])
+    private let cache = NSCache<NSNumber, UIImage>()
+
+    init() {
+        cache.countLimit = 3
+        cache.totalCostLimit = 16 * 1024 * 1024
+    }
+
+    func image(at index: Int, in frames: NeckKillFrames) -> UIImage {
+        let key = NSNumber(value: index)
+        if let cached = cache.object(forKey: key) { return cached }
+        let source = frames.images[index]
+        guard let bitmap = source.cgImage else { return source }
+        let input = CIImage(cgImage: bitmap)
+        let enlarged = input.applyingFilter("CILanczosScaleTransform", parameters: [
+            kCIInputScaleKey: 4.0,
+            kCIInputAspectRatioKey: 1.0
+        ])
+        let enhanced = enlarged.clampedToExtent()
+            .applyingFilter("CISharpenLuminance", parameters: [kCIInputSharpnessKey: 0.25])
+            .cropped(to: enlarged.extent)
+        guard let output = context.createCGImage(enhanced, from: enlarged.extent) else { return source }
+        let result = UIImage(cgImage: output)
+        cache.setObject(result, forKey: key, cost: output.bytesPerRow * output.height)
+        return result
+    }
+}
+
 /// Uses source frame delays, including delays shorter than UIImage animation's uniform interval.
 struct KillAnimationView: View {
     let presentation: KillPresentation
     let dismiss: () -> Void
     @State private var frames: NeckKillFrames?
     @State private var startedAt: Date?
+    @State private var renderer = NeckKillHDRenderer()
 
     var body: some View {
         ZStack {
@@ -78,8 +111,9 @@ struct KillAnimationView: View {
             if let frames, let startedAt {
                 TimelineView(.animation) { context in
                     let index = frames.frameIndex(at: context.date.timeIntervalSince(startedAt))
-                    Image(uiImage: frames.images[index])
+                    Image(uiImage: renderer.image(at: index, in: frames))
                         .resizable()
+                        .interpolation(.high)
                         .scaledToFit()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
@@ -99,6 +133,8 @@ struct KillAnimationView: View {
             guard !Task.isCancelled else { return }
             guard let loaded else { dismiss(); return }
             frames = loaded
+            // A late attacker-colour update must not reuse previously tinted frames.
+            renderer = NeckKillHDRenderer()
             if startedAt == nil { startedAt = .now }
             let remaining = max(0, loaded.duration - Date.now.timeIntervalSince(startedAt!))
             do { try await Task.sleep(for: .seconds(remaining)) } catch { return }
