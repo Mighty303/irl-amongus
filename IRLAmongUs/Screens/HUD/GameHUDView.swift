@@ -15,6 +15,8 @@ struct GameHUDView: View {
 
     @State private var panel: Panel = .actions
     @State private var scanning = false
+    /// The sign a tapped task needs; nil when scanning from the big button (any sign).
+    @State private var scanTarget: Station?
     @State private var confirmingEmergency = false
     @State private var showingDiagnostics = false
     @State private var showingLiveMap = false
@@ -46,11 +48,13 @@ struct GameHUDView: View {
             // A task finished or vanished (e.g. restart): go back to the actions.
             if case let .detail(id) = panel, tasks.first(where: { $0.id == id })?.completed != false { panel = .actions }
         }
-        .sheet(isPresented: $scanning, onDismiss: { OrientationDelegate.requestLandscape() }) {
-            // Portrait, like the lobby sign photos, so frames match the reference photos.
-            CheckpointScannerView(state: state)
-                .onAppear { OrientationDelegate.requestPortrait() }
+        .overlay {
+            if scanning {
+                SignScanPanel(state: state, target: scanTarget) { scanning = false }
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scanning)
         .confirmationDialog("Call an emergency meeting?", isPresented: $confirmingEmergency, titleVisibility: .visible) {
             Button("Call meeting (\(state.me.emergencyLeft) left)", role: .destructive) {
                 Task { await store.perform("call_emergency") }
@@ -87,7 +91,7 @@ struct GameHUDView: View {
             if let task = state.me.tasks.first(where: { $0.id == id }) {
                 HUDTaskDetail(state: state, task: task,
                               close: { panel = .actions },
-                              scan: { scanning = true },
+                              scan: { scanTarget = state.station(task.currentStationId); scanning = true },
                               start: { panel = .task(taskId: id) })
             } else {
                 actions
@@ -105,7 +109,7 @@ struct GameHUDView: View {
     private var actions: some View {
         HUDActionsPanel(state: state,
                         selectTask: { panel = .detail(taskId: $0) },
-                        scan: { scanning = true },
+                        scan: { scanTarget = nil; scanning = true },
                         showDiagnostics: { showingDiagnostics = true },
                         showLiveMap: { showingLiveMap = true },
                         showMyQR: { showingMyQR = true },
