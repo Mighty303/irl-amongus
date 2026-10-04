@@ -478,12 +478,14 @@ struct HUDMapSquare: View {
     /// What the map keeps in the middle: your live position, else your last check-in, else the red
     /// button or the play area's building.
     /// Unfound bodies in their colours: yours where you fell, and the ones near you (the map shows those in sight).
+    /// The server's spot for yours, else where this phone thought it was when you died.
     private var mapBodies: [MapBody] {
         var bodies = (state.me.bodies ?? []).map { spot in
             MapBody(id: spot.playerId, position: CGPoint(x: spot.lng, y: spot.lat),
-                    color: PlayerColor.rosterColor(for: spot.playerId, in: state.players) ?? .red)
+                    color: PlayerColor.rosterColor(for: spot.playerId, in: state.players) ?? .red,
+                    mine: spot.playerId == state.me.id)
         }
-        if state.me.isBody, let spot = store.deathSpot {
+        if state.me.isBody, !bodies.contains(where: \.mine), let spot = store.deathSpot {
             bodies.append(MapBody(id: state.me.id, position: spot,
                                   color: PlayerColor.rosterColor(for: state.me.id, in: state.players) ?? .red, mine: true))
         }

@@ -105,7 +105,10 @@ struct FollowFloorMap: View {
                     ForEach(stations.filter { $0.style != .sign }) { station in
                         pin(station).position(projection.point(station.position))
                     }
-                    ForEach(bodies.filter { $0.mine || (sight?.canSee($0.position) ?? true) }) { body in
+                    // Yours always; others in sight, and always when they're right by you (within reporting range,
+                    // where a wall in the floor plan shouldn't hide what you're standing next to).
+                    ForEach(bodies.filter { $0.mine || hypot(projection.point($0.position).x - pc.x, projection.point($0.position).y - pc.y) / ppm <= 8
+                                || (sight?.canSee($0.position) ?? true) }) { body in
                         Image(uiImage: BodyReportArtwork.corpse(color: body.color))
                             .resizable().interpolation(.high).scaledToFit()
                             .frame(width: 56, height: 36)
