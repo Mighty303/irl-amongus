@@ -82,11 +82,14 @@ extension GameStore {
 
     /// The floor shown for a building on the game maps: the play area's floor (picked at setup), else the
     /// one you're on, else the floor most of its signs are on.
-    /// The floor you're on (the red button at the start, then your scans and the barometer) comes first; then
-    /// the floor most of the signs are on; the play area last. Putting the play area first drew another
-    /// floor's plan under the signs when it was set to a different floor than the saved game's signs.
+    /// The floor you're measured to be on (from the red button at the start or a sign scan in this building,
+    /// then the barometer) comes first; then the floor most of the signs are on; the play area last. The
+    /// play area (or an estimate that only assumed it) drew another floor's plan under the signs whenever it
+    /// was set to a different floor than the saved game's signs.
     func shownFloorHint(_ building: CampusBuilding, stations: [Station], playArea: CampusPlace?) -> String? {
-        if positions.estimate?.buildingId == building.id, let floor = positions.estimate?.floorId { return floor }
+        if let mine = positions.estimate, mine.buildingId == building.id, mine.floorMeasured, let floor = mine.floorId {
+            return floor
+        }
         let signFloors = stations.filter { $0.buildingId == building.id }.compactMap(\.floorId)
         if let most = Dictionary(grouping: signFloors, by: { $0 }).max(by: { $0.value.count < $1.value.count })?.key {
             return most

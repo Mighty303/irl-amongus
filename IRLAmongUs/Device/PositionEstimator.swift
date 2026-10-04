@@ -62,6 +62,9 @@ final class PositionEstimator {
         /// SFU building and floor (campus map), when known.
         var buildingId: String?
         var floorId: String?
+        /// The floor is measured: counted from a sign scan or the red button in this building, or the
+        /// barometer saw a floor change. Otherwise it's just the lobby's play area, an assumption.
+        var floorMeasured = false
         /// e.g. "SUB · 2000 Level", for display.
         var place: String?
         /// Floors up (+) or down (-) from the last sign check-in.
@@ -573,6 +576,7 @@ final class PositionEstimator {
             room: room.map { r in building.map { r.label.hasPrefix("\($0.id) ") } == true ? r.label : "\(r.roomID) \(r.label)" },
             buildingId: building?.id,
             floorId: floor?.id,
+            floorMeasured: floor != nil && (building?.id == fixBuildingId || levelDelta != 0),
             place: building.map { b in [b.id, floor?.name].compactMap { $0 }.joined(separator: " · ") },
             levelDelta: levelDelta,
             sources: sources,

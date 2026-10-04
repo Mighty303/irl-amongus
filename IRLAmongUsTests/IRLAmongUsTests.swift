@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import Observation
 import simd
+import SwiftUI
 import Testing
 import UIKit
 @testable import IRLAmongUs
@@ -973,5 +974,30 @@ struct WalkingCameraOrientationTests {
         #expect(CGPoint(x: 150, y: 0).applying(transform) == CGPoint(x: 100, y: 0))
         #expect(transform.b == 0 && transform.c == 0)
         #expect(transform.a == transform.d)
+    }
+}
+
+@MainActor
+struct CenterPinTests {
+    /// Where pins are saved is the map's exact centre, so that's where the drawn tip must be.
+    @Test func thePinsTipIsTheMapsCentre() throws {
+        let view = ZStack {
+            Color.black
+            CenterPin(stem: .white)
+        }
+        .frame(width: 300, height: 300)
+        let renderer = ImageRenderer(content: view)
+        renderer.scale = 1
+        let image = try #require(renderer.cgImage)
+        let width = image.width, height = image.height
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let context = CGContext(data: &bytes, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        // The stem's lowest bright row is the tip (its edge is anti-aliased); the centre line is row 150.
+        // (The old alignment-guide pin measured 172 here: 22 points low.)
+        var tip = -1
+        for y in 0..<height where bytes[(y * width + width / 2) * 4] > 100 { tip = y }
+        #expect(abs(tip - 149) <= 2, "the tip is at row \(tip), not the centre")
     }
 }

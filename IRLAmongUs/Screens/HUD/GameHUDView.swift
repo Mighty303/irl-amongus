@@ -318,6 +318,18 @@ struct HUDMapSquare: View {
                 }
                 .padding(10)
             }
+            // Which floor's plan this is, so a plan that doesn't match the signs is easy to spot.
+            .overlay(alignment: .topLeading) {
+                if let building = campus.focus, let floor = campus.floors[building.id] {
+                    Text("\(building.id) · \(floor.name)")
+                        .font(.system(size: 10, weight: .black, design: .rounded)).foregroundStyle(.white)
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(.black.opacity(0.7), in: Capsule())
+                        .padding(10)
+                        .allowsHitTesting(false)
+                        .accessibilityIdentifier("map.floor")
+                }
+            }
             .overlay(alignment: .bottom) {
                 if !state.me.alive {
                     Text(state.me.isBody ? "YOU WERE KILLED · stay put until your body is found" : "YOU ARE DEAD · finish your tasks")

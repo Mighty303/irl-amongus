@@ -29,22 +29,8 @@ struct SignPinMap: View {
         .onMapCameraChange(frequency: .continuous) { context in
             pin = context.camera.distance <= Self.maxPinDistance ? context.region.center : nil
         }
-        .overlay {
-            // The pin's tip marks the map's center; it doesn't take touches, so the map drags under it.
-            ZStack {
-                Ellipse().fill(.black.opacity(0.35)).frame(width: 12, height: 5)
-                VStack(spacing: 0) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundStyle(.white, SignPanel.error)
-                    Rectangle().fill(SignPanel.ink).frame(width: 3, height: 12)
-                }
-                .alignmentGuide(VerticalAlignment.center) { $0[.bottom] }
-                .opacity(pin == nil ? 0.4 : 1)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .allowsHitTesting(false)
-        }
+        // The pin's tip marks the map's center; it doesn't take touches, so the map drags under it.
+        .overlay { CenterPin(stem: SignPanel.ink).opacity(pin == nil ? 0.4 : 1) }
     }
 }
 
@@ -111,7 +97,8 @@ struct FloorPlanPinMap: View {
     private func floor(_ b: CampusBuilding) -> CampusFloor {
         if let chosen = b.floor(floorChoice[b.id]) { return chosen }
         // Start on the floor you're on when you're in this building, else the game's play area floor.
-        if store.positions.estimate?.buildingId == b.id, let mine = b.floor(store.positions.estimate?.floorId) { return mine }
+        if let estimate = store.positions.estimate, estimate.buildingId == b.id, estimate.floorMeasured,
+           let mine = b.floor(estimate.floorId) { return mine }
         if let area = store.state?.playArea, area.buildingId == b.id, let floor = b.floor(area.floorId) { return floor }
         return store.campus.displayedFloor(b)
     }
@@ -187,21 +174,8 @@ struct FloorPlanPinMap: View {
                 }
                 updatePin(size: size, projection: projection)
             }
-            .overlay {
-                // Same pin as the Apple map version: its tip marks the middle, and it doesn't take touches.
-                ZStack {
-                    Ellipse().fill(.black.opacity(0.35)).frame(width: 12, height: 5)
-                    VStack(spacing: 0) {
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 30, weight: .bold))
-                            .foregroundStyle(.white, SignPanel.error)
-                        Rectangle().fill(.white).frame(width: 3, height: 12)
-                    }
-                    .alignmentGuide(VerticalAlignment.center) { $0[.bottom] }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .allowsHitTesting(false)
-            }
+            // Same pin as the Apple map version: its tip marks the middle, and it doesn't take touches.
+            .overlay { CenterPin(stem: .white) }
             .overlay(alignment: .bottom) {
                 if let building = pinBuilding, building.floors.count > 1 {
                     CampusFloorControl(building: building, floor: floor(building)) { step in
@@ -234,5 +208,29 @@ struct FloorPlanPinMap: View {
         let building = store.campus.building(at: coordinate, marginM: 2)
         if building?.id != pinBuilding?.id { pinBuilding = building }
         place = building.map { CampusPlace(buildingId: $0.id, floorId: floor($0).id) }
+    }
+}
+
+/// The fixed pin over a draggable map, its tip exactly on the map's centre (the point that gets saved).
+/// It stands on the bottom edge of the top half, so nothing can shift it: the earlier alignment-guide
+/// version put the tip about 22 points below the centre, and every pin was saved that much north of it.
+struct CenterPin: View {
+    var stem: Color = .white
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                Image(systemName: "mappin.circle.fill")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundStyle(.white, SignPanel.error)
+                Rectangle().fill(stem).frame(width: 3, height: 12)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            // Its shadow, centred on the tip.
+            Ellipse().fill(.black.opacity(0.35)).frame(width: 12, height: 5)
+                .offset(y: -2.5)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .allowsHitTesting(false)
     }
 }
