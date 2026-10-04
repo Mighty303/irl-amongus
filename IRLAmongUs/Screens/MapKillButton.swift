@@ -4,6 +4,7 @@ import SwiftUI
 struct MapKillButton: View {
     @Environment(GameStore.self) private var store
     let state: GameState?
+    var size: CGFloat = 96
     @StateObject private var audio = KillAudioPlayer()
     @State private var choosingTarget = false
     @State private var submitting = false
@@ -33,11 +34,11 @@ struct MapKillButton: View {
             } label: {
                 ZStack {
                     Image("KillIcon").resizable().scaledToFit()
-                        .frame(width: 96, height: 96)
+                        .frame(width: size, height: size)
                         .opacity(available ? 1 : 0.4)
                     if cooldown > 0 {
                         Text("\(cooldown)")
-                            .font(.system(size: 32, weight: .black, design: .rounded).monospacedDigit())
+                            .font(.system(size: size / 3, weight: .black, design: .rounded).monospacedDigit())
                             .foregroundStyle(.white)
                             .shadow(color: .black, radius: 2)
                     } else if submitting {

@@ -44,7 +44,8 @@ struct POCDestinationView: View {
                 .padding(.vertical, 8)
                 .background(.bar)
             }
-            .onAppear { OrientationDelegate.requestPortrait() }
+            // The online game sets its own orientation per phase; the test benches are portrait.
+            .onAppear { if destination != .onlineGame { OrientationDelegate.requestPortrait() } }
     }
 
     @ViewBuilder private var content: some View {
