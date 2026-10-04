@@ -113,12 +113,14 @@ final class CameraViewController: UIViewController, AVCaptureMetadataOutputObjec
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        CameraUsage.backCameraStarted()
         // Tabs keep the controller alive; restart the session when it comes back on screen.
         if previewLayer != nil { videoQueue.async { if !self.session.isRunning { self.session.startRunning() } } }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
+        CameraUsage.backCameraStopped()
         videoQueue.async { self.session.stopRunning() }
     }
 

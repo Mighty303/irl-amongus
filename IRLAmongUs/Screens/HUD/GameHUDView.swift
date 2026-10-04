@@ -15,6 +15,7 @@ struct GameHUDView: View {
 
     @State private var panel: Panel = .actions
     @State private var scanning = false
+    @State private var showingCams = false
     /// The sign a tapped task needs; nil when scanning from the big button (any sign).
     @State private var scanTarget: Station?
     @State private var confirmingEmergency = false
@@ -54,6 +55,17 @@ struct GameHUDView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scanning)
+        .overlay {
+            if showingCams {
+                SecurityCamsView(state: state) { showingCams = false }
+                    .transition(.scale(scale: 0.95).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingCams)
+        .onChange(of: state.me.canWatchCams) { _, can in
+            // Walked away from Security long enough for the check-in to lapse.
+            if can != true { showingCams = false }
+        }
         .confirmationDialog("Call an emergency meeting?", isPresented: $confirmingEmergency, titleVisibility: .visible) {
             Button("Call meeting (\(state.me.emergencyLeft) left)", role: .destructive) {
                 Task { await store.perform("call_emergency") }
@@ -97,7 +109,6 @@ struct GameHUDView: View {
         case let .task(id):
             if let task = state.me.tasks.first(where: { $0.id == id }) {
                 HUDTaskSquare(state: state, task: task) { panel = .actions }
-                    .id(task.step) // a two-step task restarts its panel for the next step
             } else {
                 actions
             }
@@ -108,6 +119,7 @@ struct GameHUDView: View {
         HUDActionsPanel(state: state,
                         selectTask: { panel = .detail(taskId: $0) },
                         scan: { scanTarget = nil; scanning = true },
+                        showCams: { showingCams = true },
                         showDiagnostics: { showingDiagnostics = true },
                         showMyQR: { showingMyQR = true },
                         scanPlayer: { scanningPlayer = true })
@@ -119,6 +131,11 @@ struct GameHUDView: View {
         if let sabotage = state.sabotage, state.me.alive,
            sabotage.stations.contains(where: { $0.stationId == station.id }) {
             Task { await store.perform("fix_sabotage", ["stationId": station.id]) }
+        }
+        if station.kind == .security, state.me.alive {
+            // Sat down at Security: open the cameras.
+            showingCams = true
+            return
         }
         if station.kind == .emergency, state.me.alive, state.me.emergencyLeft > 0, state.sabotage == nil {
             confirmingEmergency = true
@@ -263,10 +280,35 @@ struct HUDMapSquare: View {
                 centerIsPlayer: isPlayer,
                 visionM: isPlayer ? visionM : nil,
                 myColor: state.player(state.me.id)?.color,
+                isGhost: !state.me.alive,
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }
                 }
             )
+            .overlay(alignment: .topTrailing) {
+                if store.isStreamingCamera {
+                    // Someone is watching the cameras, so yours is on.
+                    HStack(spacing: 4) {
+                        Circle().fill(Color.red).frame(width: 7, height: 7)
+                        Text("CAM ON").font(.system(size: 10, weight: .black, design: .rounded))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(.black.opacity(0.75), in: Capsule())
+                    .padding(10)
+                    .accessibilityLabel("Your camera is on: someone is watching Security")
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if !state.me.alive {
+                    Text("YOU ARE DEAD · finish your tasks")
+                        .font(.system(size: 11, weight: .black, design: .rounded)).foregroundStyle(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 5)
+                        .background(.black.opacity(0.75), in: Capsule())
+                        .overlay(Capsule().stroke(.white.opacity(0.4), lineWidth: 1))
+                        .padding(10)
+                }
+            }
             .overlay(alignment: .top) {
                 if lightsOut {
                     Label("LIGHTS OUT", systemImage: "lightbulb.slash.fill")
@@ -338,6 +380,7 @@ struct HUDActionsPanel: View {
     let state: GameState
     let selectTask: (String) -> Void
     let scan: () -> Void
+    let showCams: () -> Void
     let showDiagnostics: () -> Void
     let showMyQR: () -> Void
     let scanPlayer: () -> Void
@@ -480,6 +523,7 @@ struct HUDActionsPanel: View {
             HStack(alignment: .bottom, spacing: 8) {
                 sabotageButton(size: button * 0.72)
                 reportButton(size: button * 0.72)
+                if state.me.canWatchCams == true { camsButton(size: button * 0.72) }
                 Spacer(minLength: 4)
                 MapKillButton(state: state, size: button)
                 HUDScanButton(size: button, action: scan)
@@ -488,14 +532,25 @@ struct HUDActionsPanel: View {
             HStack(alignment: .bottom, spacing: 10) {
                 Text(state.me.alive
                      ? "Point the camera at a task's sign to check in and start it."
-                     : "Ghosts can't report or vote.")
+                     : "You're a ghost: you can't report or vote, but your tasks still count. Watch the cameras any time.")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
+                if state.me.canWatchCams == true { camsButton(size: button * 0.86) }
                 if state.me.alive { reportButton(size: button * 0.86) }
                 if state.me.alive || state.settings.ghostTasks { HUDScanButton(size: button, action: scan) }
             }
         }
+    }
+
+    /// Among Us's Security button: every other player's camera. Ghosts always; the living at Security.
+    private func camsButton(size: CGFloat) -> some View {
+        Button(action: showCams) {
+            Image("SecurityActionIcon").resizable().scaledToFit().frame(width: size, height: size)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Security cameras")
+        .accessibilityIdentifier("hud.cams")
     }
 
     private func reportButton(size: CGFloat) -> some View {
@@ -629,17 +684,30 @@ struct HUDTaskSquare: View {
     let close: () -> Void
 
     @State private var completed = false
+    @State private var submitting = false
     @State private var error: String?
     @State private var attempt = 0
+    /// The task and sign as they were when the panel opened. Finishing moves the task on (done, or its
+    /// next sign) on the server before this panel closes; without these it would flash "scan first".
+    @State private var shownTask: GameTask
+    @State private var stationId: String?
+
+    init(state: GameState, task: GameTask, close: @escaping () -> Void) {
+        self.state = state
+        self.task = task
+        self.close = close
+        _shownTask = State(initialValue: task)
+        _stationId = State(initialValue: task.currentStationId)
+    }
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 20).fill(Color.black)
-            if state.isCheckedIn(at: task.currentStationId, now: store.serverNow()) {
-                TaskGame(task: task, state: state, onDone: complete)
+            if completed || submitting || state.isCheckedIn(at: stationId, now: store.serverNow()) {
+                TaskGame(task: shownTask, state: state, onDone: complete)
                     .id(attempt)
                     .padding(8)
-                    .allowsHitTesting(!completed)
+                    .allowsHitTesting(!completed && !submitting)
             } else {
                 Text("Scan this task's sign first.")
                     .font(.headline).foregroundStyle(.white)
@@ -662,7 +730,9 @@ struct HUDTaskSquare: View {
     private func complete() {
         Task {
             error = nil
-            if await store.perform("task_complete", ["taskId": task.id]) {
+            submitting = true
+            defer { submitting = false }
+            if await store.perform("task_complete", ["taskId": shownTask.id]) {
                 completed = true
                 TaskSound.complete.play()
                 Haptics.success()

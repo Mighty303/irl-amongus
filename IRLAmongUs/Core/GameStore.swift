@@ -47,6 +47,13 @@ final class GameStore {
     let positions = PositionEstimator()
     /// Every SFU Burnaby building's floor plans, so play can happen anywhere on campus.
     let campus = CampusMap()
+    /// Security cameras: the latest frame from each player's front camera, while you're watching.
+    private(set) var camFeeds: [String: (image: UIImage, at: Date)] = [:]
+    private(set) var isWatchingCams = false
+    /// True while this phone's front camera is being sent to someone watching.
+    private(set) var isStreamingCamera = false
+    @ObservationIgnored private let frontCamera = FrontCameraStreamer()
+    @ObservationIgnored private var cameraUsageObserver: NSObjectProtocol?
     /// Everyone's estimated positions, while live positions are on.
     private(set) var livePositions: [LivePosition] = []
     var livePositionsOn: Bool { state?.settings.livePositions == true }
@@ -93,6 +100,9 @@ final class GameStore {
         location.onHeading = { [positions] in positions.useHeading($0) }
         if session != nil { connect() }
         if let base = serverURL { Task { [campus] in await campus.load(serverURL: base) } }
+        cameraUsageObserver = NotificationCenter.default.addObserver(forName: CameraUsage.changed, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateCameraStream() }
+        }
     }
 
     /// Hosted game server (Render). There's no address field in the app; for a local server, launch with
@@ -336,6 +346,9 @@ final class GameStore {
         session = nil
         state = nil
         livePositions = []
+        camFeeds = [:]
+        isWatchingCams = false
+        updateCameraStream()
         ble.stop()
         location.stop()
         positions.reset()
@@ -376,6 +389,7 @@ final class GameStore {
         connection = .disconnected
         isSynced = false
         failPending(ClientError.server("Disconnected"))
+        updateCameraStream() // backgrounded or offline: camera off
     }
 
     /// PRD: on returning to the app, fetch authoritative state before enabling actions.
@@ -431,6 +445,8 @@ final class GameStore {
         let event: String?
         let state: GameState?
         let positions: [LivePosition]?
+        let playerId: String?
+        let jpeg: String?
     }
 
     private func handleMessage(_ data: Data) {
@@ -453,6 +469,10 @@ final class GameStore {
             handleEvent(envelope.event ?? "", data: json?["data"] as? [String: Any] ?? [:])
         case "positions":
             livePositions = envelope.positions ?? []
+        case "cam":
+            guard isWatchingCams, let id = envelope.playerId, let jpeg = envelope.jpeg,
+                  let data = Data(base64Encoded: jpeg), let image = UIImage(data: data) else { return }
+            camFeeds[id] = (image, Date())
         default:
             break
         }
@@ -507,6 +527,8 @@ final class GameStore {
         }
         location.start()
         positions.playArea = newState.playArea
+        if newState.me.canWatchCams != true, isWatchingCams { isWatchingCams = false; camFeeds = [:] }
+        updateCameraStream()
         // Steps, compass and barometer only run (and only ask for Motion permission) while it's on.
         if newState.settings.livePositions == true {
             positions.start()
@@ -674,6 +696,45 @@ final class GameStore {
         isUpdatingDemoSigns = true
         defer { isUpdatingDemoSigns = false }
         await perform("update_settings", ["signsPerPlayer": count])
+    }
+
+    // MARK: - Security cameras
+
+    /// Start or stop watching every player's camera (dead players, or right after scanning Security).
+    @discardableResult
+    func watchCams(_ on: Bool) async -> Bool {
+        if !on {
+            isWatchingCams = false
+            camFeeds = [:]
+            try? await send("cam_watch", ["on": false])
+            return true
+        }
+        isWatchingCams = true
+        if await perform("cam_watch", ["on": true]) { return true }
+        isWatchingCams = false
+        return false
+    }
+
+    /// Sends this phone's front camera while someone is watching, except while the back camera is busy
+    /// (scanning a sign): a phone can't run both.
+    private func updateCameraStream() {
+        let wanted = state?.phase == .PLAYING && state?.me.camWanted == true && isSynced && !CameraUsage.backCameraInUse
+        guard wanted != isStreamingCamera else { return }
+        isStreamingCamera = wanted
+        if wanted {
+            frontCamera.start { [weak self] jpeg in
+                Task { @MainActor in self?.sendCameraFrame(jpeg) }
+            }
+        } else {
+            frontCamera.stop()
+        }
+    }
+
+    private func sendCameraFrame(_ jpeg: String) {
+        guard isStreamingCamera, let socket, isSynced,
+              let data = try? JSONSerialization.data(withJSONObject: ["id": 0, "action": "cam_frame", "payload": ["jpeg": jpeg]])
+        else { return }
+        socket.send(.string(String(decoding: data, as: UTF8.self))) { _ in }
     }
 
     /// Loads the signs' reference photos for recognition (already processed photos are reused).

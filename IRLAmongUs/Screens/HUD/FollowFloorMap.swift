@@ -23,6 +23,8 @@ struct FollowFloorMap: View {
     var visionM: Double? = nil
     /// Your suit colour, for the YOU crewmate.
     var myColor: PlayerColor? = nil
+    /// Dead: your marker is see-through, like an Among Us ghost.
+    var isGhost = false
     let onSelectStation: (POCStation) -> Void
 
     /// Meters across the shorter side: a little over a room's width. Fixed, so nobody can zoom out to look around.
@@ -128,6 +130,7 @@ struct FollowFloorMap: View {
     private var you: some View {
         VStack(spacing: 0) {
             Image(myColor?.lobbyAssetName ?? "PlayerMarker").resizable().scaledToFit().frame(width: 40, height: 40)
+                .opacity(isGhost ? 0.5 : 1)
                 .shadow(color: .cyan.opacity(0.75), radius: 6)
             Text("YOU")
                 .font(.system(size: 8, weight: .black, design: .rounded)).foregroundStyle(.black)
