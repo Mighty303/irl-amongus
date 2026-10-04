@@ -2336,6 +2336,8 @@ struct POCPlayerDot: Identifiable {
     let isMe: Bool
     /// No fresh input for a while.
     let faded: Bool
+    /// Their suit colour, for the crewmate icon on the in-game map.
+    var playerColor: PlayerColor? = nil
 }
 
 enum SUBLevel2Map {

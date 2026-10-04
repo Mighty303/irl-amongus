@@ -10,7 +10,8 @@ extension GameStore {
             // Faded when quiet, or on another floor than the map shows.
             return POCPlayerDot(id: pos.playerId, name: player.name, color: (player.color ?? .white).swatch,
                                 position: CGPoint(x: pos.lng, y: pos.lat), accuracyM: pos.accuracyM, isMe: false,
-                                faded: pos.stale || campus.isOffFloor(buildingId: pos.buildingId, floorId: pos.floorId))
+                                faded: pos.stale || campus.isOffFloor(buildingId: pos.buildingId, floorId: pos.floorId),
+                                playerColor: player.color)
         }
         if let mine = positions.estimate {
             dots.append(POCPlayerDot(id: state.me.id, name: state.me.name, color: .cyan,
