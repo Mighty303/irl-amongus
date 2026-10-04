@@ -19,7 +19,8 @@ struct MeetingView: View {
                           return await store.perform("vote", ["targetId": id as Any? ?? NSNull()])
                       },
                       checkIn: { scanning = true },
-                      advance: { Task { await store.perform("host_advance") } })
+                      advance: { Task { await store.perform("host_advance") } },
+                      startDiscussion: { Task { await store.perform("start_discussion") } })
             .overlay {
                 if scanning {
                     SignScanPanel(state: state, target: meetingStation) {

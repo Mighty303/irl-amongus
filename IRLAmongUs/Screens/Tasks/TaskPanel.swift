@@ -3,13 +3,14 @@ import SwiftUI
 
 /// The Among Us task window: the game dims behind the panel, an X closes it, and
 /// "Task Completed!" slides across before it closes itself. Tasks are always landscape,
-/// like the game; closing returns to the portrait game screens.
+/// like the game; closing restores whatever orientation was in use before.
 struct TaskPanel<Content: View>: View {
     var title: String?
     var message: String?
     let completed: Bool
     let close: () -> Void
     @ViewBuilder let content: () -> Content
+    @State private var previousOrientation: UIInterfaceOrientationMask = .landscape
 
     var body: some View {
         ZStack {
@@ -37,10 +38,12 @@ struct TaskPanel<Content: View>: View {
             }
         }
         .onAppear {
+            previousOrientation = OrientationDelegate.supportedOrientations
             OrientationDelegate.requestLandscape()
             TaskSound.panelOpen.play()
         }
-        .onDisappear { OrientationDelegate.requestPortrait() }
+        // Back to how it was: landscape in a game (never a flip to portrait and back), portrait in the POCs.
+        .onDisappear { OrientationDelegate.requestOrientation(previousOrientation) }
     }
 }
 

@@ -15,7 +15,8 @@ struct ToolsLabView: View {
                 Section("Feedback") {
                     NavigationLink("Haptics") { HapticsLabView() }
                     NavigationLink("Kill animation & colours") { KillAnimationPreview() }
-                    NavigationLink("Body report animation") { BodyReportPreview() }
+                    NavigationLink("Meeting banners (body, emergency)") { BodyReportPreview() }
+                    NavigationLink("Ejection animation") { EjectionPreview() }
                     NavigationLink("Body screen preview") { BodyPreview() }
                 }
                 Section("Task mini-games") {

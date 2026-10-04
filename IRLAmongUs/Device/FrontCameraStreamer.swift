@@ -8,8 +8,32 @@ enum CameraUsage {
     private(set) static var backCameraViews = 0 { didSet { NotificationCenter.default.post(name: changed, object: nil) } }
     static var backCameraInUse: Bool { backCameraViews > 0 }
 
-    static func backCameraStarted() { DispatchQueue.main.async { backCameraViews += 1 } }
-    static func backCameraStopped() { DispatchQueue.main.async { backCameraViews = max(0, backCameraViews - 1) } }
+    // On the main thread, at once: AR must be told to let go of the camera before the scanner's session
+    // is queued to start (see `CameraHandoff`).
+    static func backCameraStarted() { onMain { backCameraViews += 1 } }
+    static func backCameraStopped() { onMain { backCameraViews = max(0, backCameraViews - 1) } }
+
+    private static func onMain(_ change: @escaping () -> Void) {
+        if Thread.isMainThread { change() } else { DispatchQueue.main.async(execute: change) }
+    }
+}
+
+/// The back camera changes hands (ARKit position tracking, the sign scanner) one at a time, in order, off
+/// the main thread. Switching it between ARKit and a capture session back to back hung iOS's camera
+/// daemon while it tore down the LiDAR graph; with ARKit started on the main thread, that froze the app
+/// (and every relaunch, until the phone restarted). Each stop waits a moment for the camera to settle.
+enum CameraHandoff {
+    static let queue = DispatchQueue(label: "camera.handoff", qos: .userInitiated)
+    static let settle: TimeInterval = 0.5
+
+    static func start(_ run: @escaping () -> Void) { queue.async(execute: run) }
+
+    static func stop(_ halt: @escaping () -> Void) {
+        queue.async {
+            halt()
+            Thread.sleep(forTimeInterval: settle)
+        }
+    }
 }
 
 /// The front camera as a security camera: small upright JPEG frames a few times a second, only while

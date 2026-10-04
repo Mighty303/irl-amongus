@@ -48,7 +48,11 @@ struct SecurityCamsView: View {
             // Watching tells every other phone to start sending its camera.
             if !(await store.watchCams(true)) { close() }
         }
-        .onDisappear { Task { await store.watchCams(false) } }
+        .onAppear { GameSoundEffect.panelAppear.play() }
+        .onDisappear {
+            GameSoundEffect.panelDisappear.play()
+            Task { await store.watchCams(false) }
+        }
     }
 
     private var header: some View {

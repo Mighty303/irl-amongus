@@ -90,7 +90,8 @@ final class ARPositionTracker: NSObject, ARSessionDelegate {
             }
         }
         queue.async { self.lastPose = nil }
-        session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
+        // Off the main thread and after any other camera user has let go: a stuck camera can't freeze the app.
+        CameraHandoff.start { [session] in session.run(configuration, options: [.resetTracking, .removeExistingAnchors]) }
         report(.starting)
     }
 
@@ -98,7 +99,7 @@ final class ARPositionTracker: NSObject, ARSessionDelegate {
     func stop(reason: String? = nil) {
         if running {
             running = false
-            session.pause()
+            CameraHandoff.stop { [session] in session.pause() }
             queue.async { self.lastPose = nil }
         }
         if state != .unsupported { report(reason.map { .paused($0) } ?? .off) }

@@ -58,7 +58,11 @@ struct SpectateView: View {
             }
         }
         .task { if !(await store.watchCams(true)) { close() } }
-        .onDisappear { Task { await store.watchCams(false) } }
+        .onAppear { GameSoundEffect.panelAppear.play() }
+        .onDisappear {
+            GameSoundEffect.panelDisappear.play()
+            Task { await store.watchCams(false) }
+        }
         .accessibilityLabel("Spectating everyone's cameras")
     }
 

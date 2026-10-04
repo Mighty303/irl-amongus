@@ -457,13 +457,14 @@ struct GameOverTests {
     }
 
     @Test func losingPlayersDoNotHearVictoryAudio() {
+        // Everyone hears the winning team's music once, the losers too.
         var sound = VictorySoundState()
-        #expect(sound.accept(winner: "impostors", localRole: "crewmate") == nil)
-        #expect(sound.accept(winner: "crewmates", localRole: "impostor") == nil)
-        #expect(sound.accept(winner: "crewmates", localRole: "crewmate") == .crewmateVictory)
+        #expect(sound.accept(winner: "crewmates", localRole: "impostor") == .crewmateVictory)
         #expect(sound.accept(winner: "crewmates", localRole: "crewmate") == nil)
         sound.reset()
-        #expect(sound.accept(winner: "impostors", localRole: "impostor") == .impostorVictory)
+        #expect(sound.accept(winner: "impostors", localRole: "crewmate") == .impostorVictory)
+        sound.reset()
+        #expect(sound.accept(winner: "nobody", localRole: "crewmate") == nil)
     }
 
     @Test func winScreenShowsTheWinningTeamIncludingDeadPlayersWithTheirRosterColours() {

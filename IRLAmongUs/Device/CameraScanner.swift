@@ -90,7 +90,7 @@ final class CameraViewController: UIViewController, AVCaptureMetadataOutputObjec
                 DispatchQueue.main.async { self?.applyRotation() }
             },
         ]
-        videoQueue.async { self.session.startRunning() }
+        CameraHandoff.start { self.session.startRunning() }
     }
 
     /// Keeps the preview level with the horizon and delivers frames (and so sign photos) upright.
@@ -115,13 +115,13 @@ final class CameraViewController: UIViewController, AVCaptureMetadataOutputObjec
         super.viewWillAppear(animated)
         CameraUsage.backCameraStarted()
         // Tabs keep the controller alive; restart the session when it comes back on screen.
-        if previewLayer != nil { videoQueue.async { if !self.session.isRunning { self.session.startRunning() } } }
+        if previewLayer != nil { CameraHandoff.start { if !self.session.isRunning { self.session.startRunning() } } }
     }
 
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         CameraUsage.backCameraStopped()
-        videoQueue.async { self.session.stopRunning() }
+        CameraHandoff.stop { self.session.stopRunning() }
     }
 
     private func showMessage(_ text: String) {

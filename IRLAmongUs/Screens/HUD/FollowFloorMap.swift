@@ -10,7 +10,7 @@ import SwiftUI
 /// special signs stay visible on top so you can find them.
 struct FollowFloorMap: View {
     let rooms: [POCRoom]
-    /// This player's task pins (`.task`, tappable) and every other sign.
+    /// This player's task pins (`.task`) and the special signs, all tappable.
     let stations: [POCStation]
     let completedStationIDs: Set<String>
     let meetingPoint: CGPoint?
@@ -103,7 +103,9 @@ struct FollowFloorMap: View {
                 }
                 .frame(width: big.width, height: big.height)
                 .offset(slide)
-                .animation(.easeInOut(duration: 0.8), value: pc)
+                // Glide only when the player moves. Keyed on the projected point, a resize (rotation, layout)
+                // or a redraw around a new anchor animated every pin across the screen while the plan jumped.
+                .animation(.easeInOut(duration: 0.8), value: center)
                 .frame(width: size.width, height: size.height)
 
                 if centerIsPlayer {
@@ -158,8 +160,8 @@ struct FollowFloorMap: View {
             // Among Us map style: a yellow "!" for each task still to do; finished ones leave the map.
             if !completedStationIDs.contains(station.id) {
                 Button { onSelectStation(station) } label: {
-                    AmongUsTaskMarker()
-                        .frame(width: 44, height: 44)
+                    AmongUsTaskMarker(size: 44)
+                        .frame(width: 64, height: 64)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -167,21 +169,10 @@ struct FollowFloorMap: View {
                 .accessibilityLabel("\(station.displayName) task")
             }
         } else {
-            VStack(spacing: 2) {
-                Image(systemName: station.style.icon)
-                    .font(.system(size: station.style == .sign ? 9 : 11, weight: .black)).foregroundStyle(.white)
-                    .frame(width: station.style == .sign ? 18 : 26, height: station.style == .sign ? 18 : 26)
-                    .background(station.style.color, in: Circle())
-                    .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 1.5))
-                if station.style != .sign || station.faded {
-                    Text(station.pinLabel)
-                        .font(.system(size: 7, weight: .black, design: .rounded)).foregroundStyle(.white)
-                        .padding(.horizontal, 4).padding(.vertical, 1)
-                        .background(.black.opacity(0.76), in: Capsule())
-                }
-            }
-            .opacity(station.faded ? 0.45 : 1)
-            .allowsHitTesting(false)
+            // Special signs open their card (photo, what to scan), like a task's "!".
+            Button { onSelectStation(station) } label: { SignPinView(station: station) }
+                .buttonStyle(.plain)
+                .disabled(station.style == .sign)
             .accessibilityLabel("\(station.displayName) sign")
         }
     }
@@ -329,7 +320,7 @@ struct AmongUsTaskMarker: View {
             // The outline: the glyph in black, nudged all the way round.
             ForEach(0..<12, id: \.self) { i in
                 let angle = Double(i) * .pi / 6
-                glyph.foregroundStyle(.black).offset(x: cos(angle) * 2.5, y: sin(angle) * 2.5)
+                glyph.foregroundStyle(.black).offset(x: cos(angle) * size / 11, y: sin(angle) * size / 11)
             }
             glyph.foregroundStyle(Self.yellow)
         }
