@@ -629,9 +629,9 @@ final class GameStore {
     func setDemoSignsRequired(_ required: Bool) async {
         guard demoModeEnabled, isSynced, !isUpdatingDemoSigns,
               let state, state.isHost, state.phase == .LOBBY,
-              state.settings.signsPerPlayer != nil, state.gameset == nil else { return }
+              let perPlayer = state.settings.signsPerPlayer else { return }
         let key = "\(state.code):\(state.me.id)"
-        if !required, state.requiredSigns > 0 { demoSignRequirements[key] = state.requiredSigns }
+        if !required, perPlayer > 0 { demoSignRequirements[key] = perPlayer }
         let count = required ? (demoSignRequirements[key] ?? 3) : 0
         isUpdatingDemoSigns = true
         defer { isUpdatingDemoSigns = false }

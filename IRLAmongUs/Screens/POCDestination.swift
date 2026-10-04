@@ -98,11 +98,11 @@ struct DemoSignsControl: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Toggle("Require signs", isOn: Binding(
-                get: { state.requiredSigns > 0 },
+                get: { (state.settings.signsPerPlayer ?? 0) > 0 },
                 set: { required in Task { await store.setDemoSignsRequired(required) } }
             ))
             .disabled(!state.isHost || !store.isSynced || store.isUpdatingDemoSigns
-                      || state.settings.signsPerPlayer == nil || state.gameset != nil)
+                      || state.settings.signsPerPlayer == nil)
             .accessibilityIdentifier("demo.requireSigns")
             Text(detail).font(.caption).foregroundStyle(.secondary)
         }
@@ -111,7 +111,9 @@ struct DemoSignsControl: View {
     private var detail: String {
         if !state.isHost { return "Only the host can change the sign requirement." }
         if state.settings.signsPerPlayer == nil { return "This server does not support sign requirements." }
-        if state.gameset != nil { return "Saved games already waive sign setup. Choose None to change the requirement." }
-        return state.requiredSigns == 0 ? "Demo: no signs required to start." : "Players must add \(state.requiredSigns) signs each."
+        let perPlayer = state.settings.signsPerPlayer ?? 0
+        if perPlayer == 0 { return "Demo: no signs required to start. The red button is still needed." }
+        return state.gameset == nil ? "Players must add \(perPlayer) signs each."
+            : "\(perPlayer) per player, minus the saved game's signs, split between players."
     }
 }
