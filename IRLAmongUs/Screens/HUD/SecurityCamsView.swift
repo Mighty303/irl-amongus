@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Security, like Among Us: a grid of every other player's front camera. Open to dead players any time
-/// during play, and to the living right after scanning the Security sign. Frames arrive a few times a
+/// Security, like Among Us: a grid of every other player's front camera, for the living right after
+/// scanning the Security sign. (Dead players have their own Spectate view.) Frames arrive a few times a
 /// second (it's choppy, like the real cams); a phone busy scanning a sign shows static until it's done.
 struct SecurityCamsView: View {
     @Environment(GameStore.self) private var store
@@ -29,7 +29,7 @@ struct SecurityCamsView: View {
                         ScrollView {
                             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: columns), spacing: 10) {
                                 ForEach(subjects) { player in
-                                    tile(player)
+                                    CamTile(player: player).aspectRatio(4 / 3, contentMode: .fit)
                                 }
                             }
                             .padding(2)
@@ -56,57 +56,14 @@ struct SecurityCamsView: View {
             Text("SECURITY").font(.system(size: 18, weight: .black, design: .rounded)).foregroundStyle(.white)
             Spacer()
             RecordingTag()
-            if !state.me.alive {
-                Text("GHOST VIEW")
-                    .font(.system(size: 10, weight: .black, design: .rounded)).foregroundStyle(.black)
-                    .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(.white.opacity(0.85), in: Capsule())
-            }
         }
         .padding(.leading, 26)
         .frame(height: 32)
     }
-
-    private func tile(_ player: PlayerView) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let feed = store.camFeeds[player.id]
-            let live = feed.map { context.date.timeIntervalSince($0.at) < 3 } ?? false
-            Color.black
-                .aspectRatio(4 / 3, contentMode: .fit)
-                .overlay {
-                    if let feed {
-                        Image(uiImage: feed.image).resizable().scaledToFill()
-                            .opacity(live ? 1 : 0.35)
-                    }
-                    if !live { CamStatic() }
-                }
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.5), lineWidth: 2))
-                .overlay(alignment: .bottomLeading) {
-                    HStack(spacing: 4) {
-                        if let suit = player.color {
-                            Image(suit.lobbyAssetName).resizable().scaledToFit().frame(width: 18, height: 18)
-                        }
-                        Text(player.name).font(.system(size: 11, weight: .black, design: .rounded)).foregroundStyle(.white)
-                    }
-                    .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(.black.opacity(0.65), in: Capsule())
-                    .padding(6)
-                }
-                .overlay {
-                    if !live {
-                        Text(feed == nil ? "NO SIGNAL" : "CAMERA BUSY")
-                            .font(.system(size: 12, weight: .black, design: .monospaced)).foregroundStyle(.white.opacity(0.85))
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(player.name)'s camera\(live ? "" : ", no signal")")
-        }
-    }
 }
 
 /// Blinking red REC, like a security monitor.
-private struct RecordingTag: View {
+struct RecordingTag: View {
     @State private var on = true
 
     var body: some View {
@@ -136,5 +93,50 @@ private struct CamStatic: View {
             }
         }
         .allowsHitTesting(false)
+    }
+}
+
+/// One player's camera: their latest frame, with their crewmate and name. Static with "NO SIGNAL" when
+/// their phone has never sent a picture, "CAMERA BUSY" when it stopped (scanning a sign).
+struct CamTile: View {
+    @Environment(GameStore.self) private var store
+    let player: PlayerView
+    var nameSize: CGFloat = 11
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let feed = store.camFeeds[player.id]
+            let live = feed.map { context.date.timeIntervalSince($0.at) < 3 } ?? false
+            Color.black
+                .overlay {
+                    if let feed {
+                        Image(uiImage: feed.image).resizable().scaledToFill()
+                            .opacity(live ? 1 : 0.35)
+                    }
+                    if !live { CamStatic() }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.5), lineWidth: 2))
+                .overlay(alignment: .bottomLeading) {
+                    HStack(spacing: 4) {
+                        if let suit = player.color {
+                            Image(suit.lobbyAssetName).resizable().scaledToFit().frame(width: nameSize * 1.7, height: nameSize * 1.7)
+                                .opacity(player.alive ? 1 : 0.5)
+                        }
+                        Text(player.name).font(.system(size: nameSize, weight: .black, design: .rounded)).foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(.black.opacity(0.65), in: Capsule())
+                    .padding(6)
+                }
+                .overlay {
+                    if !live {
+                        Text(feed == nil ? "NO SIGNAL" : "CAMERA BUSY")
+                            .font(.system(size: 12, weight: .black, design: .monospaced)).foregroundStyle(.white.opacity(0.85))
+                    }
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(player.name)'s camera\(live ? "" : ", no signal")")
+        }
     }
 }

@@ -16,6 +16,7 @@ struct GameHUDView: View {
     @State private var panel: Panel = .actions
     @State private var scanning = false
     @State private var showingCams = false
+    @State private var spectating = false
     /// The sign a tapped task needs; nil when scanning from the big button (any sign).
     @State private var scanTarget: Station?
     @State private var confirmingEmergency = false
@@ -28,7 +29,7 @@ struct GameHUDView: View {
             // Two equal squares side by side, as large as the screen allows.
             let side = max(240, min(geometry.size.height - 16, (geometry.size.width - 48) / 2))
             HStack(spacing: 16) {
-                HUDMapSquare(state: state) { panel = .detail(taskId: $0) }
+                HUDMapSquare(state: state, selectTask: { panel = .detail(taskId: $0) }, spectate: { spectating = true })
                     .frame(width: side, height: side)
                 rightSquare
                     .frame(width: side, height: side)
@@ -62,6 +63,14 @@ struct GameHUDView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingCams)
+        .overlay {
+            if spectating {
+                SpectateView(state: state) { spectating = false }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: spectating)
+        .onChange(of: state.me.alive) { _, alive in if alive { spectating = false } }
         .onChange(of: state.me.canWatchCams) { _, can in
             // Walked away from Security long enough for the check-in to lapse.
             if can != true { showingCams = false }
@@ -254,6 +263,8 @@ struct HUDMapSquare: View {
     @Environment(GameStore.self) private var store
     let state: GameState
     let selectTask: (String) -> Void
+    /// Ghosts: open everyone's cameras.
+    var spectate: () -> Void = {}
 
     private struct Pin {
         let station: POCStation
@@ -286,18 +297,11 @@ struct HUDMapSquare: View {
                 }
             )
             .overlay(alignment: .topTrailing) {
-                if store.isStreamingCamera {
-                    // Someone is watching the cameras, so yours is on.
-                    HStack(spacing: 4) {
-                        Circle().fill(Color.red).frame(width: 7, height: 7)
-                        Text("CAM ON").font(.system(size: 10, weight: .black, design: .rounded))
-                    }
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(.black.opacity(0.75), in: Capsule())
-                    .padding(10)
-                    .accessibilityLabel("Your camera is on: someone is watching Security")
+                VStack(alignment: .trailing, spacing: 6) {
+                    if !state.me.alive { SpectateButton(action: spectate) }
+                    cameraOnTag
                 }
+                .padding(10)
             }
             .overlay(alignment: .bottom) {
                 if !state.me.alive {
@@ -318,6 +322,20 @@ struct HUDMapSquare: View {
                         .padding(10)
                 }
             }
+        }
+    }
+
+    /// Someone is watching the cameras (Security or a ghost spectating), so yours is on.
+    @ViewBuilder private var cameraOnTag: some View {
+        if store.isStreamingCamera {
+            HStack(spacing: 4) {
+                Circle().fill(Color.red).frame(width: 7, height: 7)
+                Text("CAM ON").font(.system(size: 10, weight: .black, design: .rounded))
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(.black.opacity(0.75), in: Capsule())
+            .accessibilityLabel("Your camera is on: someone is watching")
         }
     }
 
@@ -532,18 +550,18 @@ struct HUDActionsPanel: View {
             HStack(alignment: .bottom, spacing: 10) {
                 Text(state.me.alive
                      ? "Point the camera at a task's sign to check in and start it."
-                     : "You're a ghost: you can't report or vote, but your tasks still count. Watch the cameras any time.")
+                     : "You're a ghost: you can't report or vote, but your tasks still count. Tap Spectate on the map to watch everyone.")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if state.me.canWatchCams == true { camsButton(size: button * 0.86) }
+                if state.me.alive, state.me.canWatchCams == true { camsButton(size: button * 0.86) }
                 if state.me.alive { reportButton(size: button * 0.86) }
                 if state.me.alive || state.settings.ghostTasks { HUDScanButton(size: button, action: scan) }
             }
         }
     }
 
-    /// Among Us's Security button: every other player's camera. Ghosts always; the living at Security.
+    /// Among Us's Security button: every other player's camera, while checked in at the Security sign.
     private func camsButton(size: CGFloat) -> some View {
         Button(action: showCams) {
             Image("SecurityActionIcon").resizable().scaledToFit().frame(width: size, height: size)
