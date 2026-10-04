@@ -263,6 +263,10 @@ struct Me: Decodable, Equatable {
     let killTargets: [String]
     let nearbyBodies: [String]
     let sabotageAvailableAt: Double?
+    /// Security cameras: whether you may watch (dead, or just scanned the Security sign), and whether
+    /// someone else is watching so your phone should send its front camera. Optional for older servers.
+    let canWatchCams: Bool?
+    let camWanted: Bool?
 }
 
 struct GameTask: Decodable, Identifiable, Equatable {
