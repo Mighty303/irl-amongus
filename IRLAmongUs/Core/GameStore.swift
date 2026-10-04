@@ -52,6 +52,9 @@ final class GameStore {
     var livePositionsOn: Bool { state?.settings.livePositions == true }
 
     @ObservationIgnored private let killAudio = KillAudioPlayer()
+    @ObservationIgnored private let gameAudio = GameAudioPlayer()
+    @ObservationIgnored private var bodyReportSound = BodyReportSoundState()
+    @ObservationIgnored private var victorySound = VictorySoundState()
     @ObservationIgnored private var deathSound = DeathSoundState()
     @ObservationIgnored private var killPresentationState = KillPresentationState()
     @ObservationIgnored private var awaitingKillAck = false
@@ -457,6 +460,20 @@ final class GameStore {
 
     private func apply(_ newState: GameState) {
         let old = state
+        if old?.code != newState.code || (old?.phase != newState.phase
+            && (newState.phase == .LOBBY || newState.phase == .ROLE_REVEAL)) {
+            bodyReportSound.reset()
+            victorySound.reset()
+        }
+        if old != nil, old?.phase != .GAME_OVER, newState.phase == .GAME_OVER,
+           let winner = newState.winner {
+            playVictorySound(winner: winner)
+        }
+        // Play on a confirmed transition if the report event was missed.
+        if old?.phase == .PLAYING, newState.phase == .MEETING,
+           newState.meeting?.kind == "body", let bodyID = newState.meeting?.bodyId {
+            playBodyReportSound(bodyID: bodyID)
+        }
         if (old?.phase != newState.phase && (newState.phase == .LOBBY || newState.phase == .ROLE_REVEAL))
             || (old?.me.alive == false && newState.me.alive) {
             killPresentation = nil
@@ -515,6 +532,16 @@ final class GameStore {
         }
     }
 
+    private func playBodyReportSound(bodyID: String) {
+        guard bodyReportSound.accept(bodyID: bodyID) else { return }
+        gameAudio.play(.bodyReport)
+    }
+
+    private func playVictorySound(winner: String) {
+        guard let sound = victorySound.accept(winner: winner) else { return }
+        gameAudio.play(sound)
+    }
+
     private func handleEvent(_ event: String, data: [String: Any]) {
         switch event {
         case "ROLE_ASSIGNED":
@@ -534,6 +561,9 @@ final class GameStore {
             }
             if data["victimId"] as? String == session?.playerId { Haptics.alarm(times: 2) } else { Haptics.success() }
         case "BODY_REPORTED":
+            if let bodyID = data["bodyId"] as? String ?? state?.meeting?.bodyId {
+                playBodyReportSound(bodyID: bodyID)
+            }
             let body = data["bodyName"] as? String
             alert = Alert(title: "🚨 BODY REPORTED", subtitle: "\(body.map { "\($0)'s body was found. " } ?? "")Return to the meeting area.", color: .red)
             Haptics.alarm()
@@ -550,7 +580,11 @@ final class GameStore {
             Haptics.alarm(times: 2)
         case "SABOTAGE_RESOLVED":
             Haptics.success()
-        case "CREWMATES_WIN", "IMPOSTORS_WIN":
+        case "CREWMATES_WIN":
+            playVictorySound(winner: "crewmates")
+            Haptics.alarm(times: 1)
+        case "IMPOSTORS_WIN":
+            playVictorySound(winner: "impostors")
             Haptics.alarm(times: 1)
         case "KICKED":
             errorMessage = "You were removed from the lobby."
