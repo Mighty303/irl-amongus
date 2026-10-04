@@ -43,6 +43,7 @@ settings = dict(
     reactorSec=60,
     reactorWindowSec=5,
 )
+initial_settings = settings.copy()
 players = []
 phase = 'LOBBY'
 events = []
@@ -56,7 +57,7 @@ def snapshot():
         mapId='default',
         phase=phase,
         phaseDeadline=time.time() * 1000 + 30000,
-        hostId='ben',
+        hostId=os.environ.get('LOCAL_LOBBY_TEST_HOST_ID', 'ben'),
         settings=settings,
         stations=[],
         players=players,
@@ -120,10 +121,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
-        global phase, players, kill_cooldown_until
+        global phase, players, kill_cooldown_until, settings
         data = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
         events.append(dict(path=self.path, data=data))
         phase = 'LOBBY'
+        settings = initial_settings.copy()
         kill_cooldown_until = None
         players = [player('ben', data['name'], True)]
         self.json(dict(code='ABCD', playerId='ben', token='test-token'))

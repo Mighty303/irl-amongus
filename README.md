@@ -126,6 +126,12 @@ are added, and the connection is synced. The button explains what is still
 needed. Start and all settings changes are validated by the server. Gameplay uses the existing
 portrait server POC screens; returning to the lobby restores landscape.
 
+Lobby **SETTINGS** opens a dark console with Game, Tasks, Timers, Signs, Players,
+and Advanced categories. Changes sync immediately; **DONE** returns to the
+crew room. Non-host players can browse settings but cannot edit host controls.
+Saved-game selection and venue signs live under Signs; Bluetooth calibration
+and diagnostics live under Advanced.
+
 Saved sessions resume in LOCAL when the app launches. During reconnects, actions
 pause until a fresh snapshot arrives, and **Leave Game** remains available.
 A running POC server is required. Nearby discovery and Hide n Seek are not yet

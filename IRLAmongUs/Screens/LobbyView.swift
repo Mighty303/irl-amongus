@@ -1,116 +1,436 @@
 import SwiftUI
 
+private enum LobbySettingsCategory: String, CaseIterable, Identifiable {
+    case game = "Game", tasks = "Tasks", timers = "Timers", signs = "Signs", players = "Players", advanced = "Advanced"
+    var id: String { rawValue }
+    var icon: String {
+        switch self {
+        case .game: "gearshape.fill"
+        case .tasks: "checklist"
+        case .timers: "stopwatch"
+        case .signs: "signpost.right"
+        case .players: "person.2.fill"
+        case .advanced: "wrench.and.screwdriver"
+        }
+    }
+}
+
+private enum LobbySettingsDestination: Hashable {
+    case savedGames, diagnostics
+}
+
+/// Live lobby settings: changes still go straight to the server, with no separate Apply step.
 struct LobbyView: View {
     @Environment(GameStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
     let state: GameState
+    var onClose: (() -> Void)? = nil
+    @State private var category: LobbySettingsCategory = .game
     @State private var addingStation = false
     @State private var addingMySign = false
     @State private var qrStation: Station?
 
+    private var current: GameState { store.state ?? state }
+    private static let accent = Color(red: 0.22, green: 0.63, blue: 0.62)
+    private static let panel = Color(red: 0.045, green: 0.065, blue: 0.08)
+    private static let well = Color(red: 0.075, green: 0.10, blue: 0.12)
+
     var body: some View {
         NavigationStack {
-            List {
-                Section {
+            GeometryReader { geometry in
+                let landscape = geometry.size.width > geometry.size.height
+                ZStack {
+                    Color.black.opacity(0.8).ignoresSafeArea()
                     VStack(spacing: 8) {
-                        Text(state.code).font(.system(size: 56, weight: .black, design: .monospaced))
-                        QRCodeImage(payload: QRPayload.join(code: state.code, server: store.serverURLString).string, size: 180)
-                        Text("Scan in the IRL Among Us app or the iPhone Camera").font(.caption).foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-
-                Section {
-                    ForEach(state.players) { p in
-                        HStack {
-                            Circle().fill(p.connected ? .green : .gray).frame(width: 8, height: 8)
-                            Text(p.name + (p.id == state.me.id ? " (you)" : ""))
-                            if p.isHost { Image(systemName: "crown.fill").foregroundStyle(.yellow) }
-                            if p.isBot == true { Image(systemName: "cpu").foregroundStyle(.secondary) }
-                            Spacer()
-                            if state.isHost && p.id != state.me.id {
-                                Button("Kick", role: .destructive) { Task { await store.perform("kick", ["playerId": p.id]) } }
-                                    .buttonStyle(.borderless)
-                            }
-                        }
-                    }
-                    if state.isHost {
-                        Button("Add bot") { Task { await store.perform("add_bot") } }
-                    }
-                } header: {
-                    Text("Players (\(state.players.count))")
-                } footer: {
-                    if state.isHost {
-                        Text("Bots acknowledge their role, gather at meetings and vote skip. They never kill, so pick a human impostor in the settings below.")
-                    }
-                }
-
-                if state.requiredSigns > 0 {
-                    let required = state.requiredSigns
-                    let mine = state.mySigns
-                    Section {
-                        ForEach(mine) { StationRow(station: $0) }
-                        if mine.count < required {
-                            Button("Add a sign (\(mine.count + 1) of \(required))") { addingMySign = true }
-                        }
-                    } header: {
-                        Text("My signs (\(min(mine.count, required))/\(required))")
-                    } footer: {
-                        let missing = state.playersMissingSigns
-                        Text(missing.isEmpty
-                             ? "Everyone's signs are in."
-                             : "Waiting on \(missing.map(\.name).joined(separator: ", ")) to add signs. Each player photographs \(required) signs; together they become the task stations.")
-                    }
-                }
-
-                Section {
-                    ForEach(state.stations) { s in
-                        StationRow(station: s)
-                            .swipeActions {
-                                if state.isHost || s.addedBy == state.me.id {
-                                    Button("Delete", role: .destructive) { Task { await store.perform("delete_station", ["stationId": s.id]) } }
+                        header
+                        if landscape {
+                            HStack(alignment: .top, spacing: 12) {
+                                sidebar.frame(width: geometry.size.width < 760 ? 116 : 154)
+                                VStack(spacing: 8) {
+                                    content(twoColumns: true)
+                                    footer
                                 }
-                                Button("QR") { qrStation = s }
                             }
+                            .frame(maxHeight: .infinity)
+                        } else {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(LobbySettingsCategory.allCases) { categoryButton($0) }
+                                }
+                            }
+                            content(twoColumns: false)
+                            footer
+                        }
                     }
-                    if state.isHost { Button("Add a sign (photograph it)") { addingStation = true } }
-                } header: {
-                    Text("Map: \(state.mapId) · \(state.stations.count) signs")
-                } footer: {
-                    Text("Signs are saved on the server, so you set up a venue once. Each game assigns random tasks to the \"Sign (tasks)\" signs; add a meeting point so meetings wait for everyone to gather. Swipe for the fallback QR.")
-                }
-
-                if state.isHost {
-                    SettingsSection(settings: state.settings, players: state.players)
-                    GamesetSection(state: state)
-                    Section {
-                        Button("Start game") { Task { await store.perform("start_game") } }
-                            .font(.headline)
-                            .disabled(!state.playersMissingSigns.isEmpty)
-                    }
-                } else {
-                    Section { Text("Waiting for the host to start…").foregroundStyle(.secondary) }
-                }
-
-                Section {
-                    NavigationLink("Diagnostics (BLE / camera / GPS)") { DebugView() }
-                    Button("Leave lobby", role: .destructive) { store.leave() }
+                    .padding(12)
+                    .frame(maxWidth: 1060, maxHeight: 620)
+                    .foregroundStyle(.white)
+                    .background(Self.panel, in: RoundedRectangle(cornerRadius: 18))
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(.white.opacity(0.3), lineWidth: 1.5))
+                    .padding(12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .navigationTitle("Lobby")
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: LobbySettingsDestination.self) { destination in
+                Group {
+                    switch destination {
+                    case .savedGames: GamesetsView()
+                    case .diagnostics: DebugView()
+                    }
+                }
+                .toolbar(.visible, for: .navigationBar)
+            }
             .sheet(isPresented: $addingStation) { StationEditorView() }
             .sheet(isPresented: $addingMySign) {
-                StationEditorView(signOnly: true, title: "Sign \(state.mySigns.count + 1) of \(state.requiredSigns)",
-                                  fallbackName: "Sign \(state.mySigns.count + 1)")
+                StationEditorView(signOnly: true, title: "Sign \(current.mySigns.count + 1) of \(current.requiredSigns)",
+                                  fallbackName: "Sign \(current.mySigns.count + 1)")
             }
-            .sheet(item: $qrStation) { s in
+            .sheet(item: $qrStation) { station in
                 VStack(spacing: 16) {
-                    Text(s.name).font(.title.bold())
-                    QRCodeImage(payload: QRPayload.station(id: s.id).string, size: 260)
+                    Text(station.name).font(.title.bold())
+                    QRCodeImage(payload: QRPayload.station(id: station.id).string, size: 220)
                     Text("Fallback check-in QR. Print it and tape it next to the sign.").font(.caption)
+                    Button("Done") { qrStation = nil }.frame(minHeight: 44)
                 }
-                .presentationDetents([.medium])
+                .padding()
             }
         }
+        .preferredColorScheme(.dark)
+        .accessibilityIdentifier("settings.panel")
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Text("LOBBY SETTINGS")
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .lineLimit(1).minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
+            VStack(alignment: .trailing, spacing: 0) {
+                Text("ROOM CODE").font(.system(size: 9, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.55))
+                Text(current.code).font(.system(size: 17, weight: .bold, design: .monospaced))
+            }
+            Button {
+                if let onClose { onClose() } else { dismiss() }
+            } label: {
+                Label("DONE", systemImage: "checkmark")
+                    .font(.system(size: 15, weight: .heavy, design: .rounded))
+                    .padding(.horizontal, 16).frame(minHeight: 44)
+            }
+            .buttonStyle(SettingsActionStyle(filled: true))
+            .accessibilityIdentifier("settings.done")
+            .accessibilityLabel("Done with lobby settings")
+            .opacity(onClose == nil ? 0 : 1)
+            .disabled(onClose == nil)
+        }
+    }
+
+    private var sidebar: some View {
+        ScrollView {
+            VStack(spacing: 1) {
+                ForEach(LobbySettingsCategory.allCases) { categoryButton($0) }
+            }
+        }
+        .accessibilityIdentifier("settings.categories")
+    }
+
+    private func categoryButton(_ item: LobbySettingsCategory) -> some View {
+        Button { category = item } label: {
+            Label(item.rawValue, systemImage: item.icon)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .padding(.horizontal, 10)
+                .contentShape(Rectangle())
+                .background(category == item ? Self.accent.opacity(0.7) : .clear, in: RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("settings.category.\(item.rawValue.lowercased())")
+        .accessibilityAddTraits(category == item ? .isSelected : [])
+    }
+
+    private func content(twoColumns: Bool) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                if !current.isHost {
+                    Text("Only the host can change game settings.")
+                        .font(.system(size: 13, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.65))
+                }
+                switch category {
+                case .game: gameSettings(twoColumns: twoColumns)
+                case .tasks: taskSettings(twoColumns: twoColumns)
+                case .timers: timerSettings(twoColumns: twoColumns)
+                case .signs: signSettings
+                case .players: playerSettings
+                case .advanced: advancedSettings(twoColumns: twoColumns)
+                }
+            }
+            .padding(2)
+        }
+        .id(category)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityIdentifier("settings.content")
+    }
+
+    private func columns(_ two: Bool) -> [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 6, alignment: .top), count: two ? 2 : 1)
+    }
+
+    private func gameSettings(twoColumns: Bool) -> some View {
+        LazyVGrid(columns: columns(twoColumns), spacing: 6) {
+            integer("Impostors", \.impostors, "impostors", 1...3)
+            integer("Minimum players", \.minPlayers, "minPlayers", 2...12)
+            if current.settings.signsPerPlayer != nil {
+                numberCard("Signs per player", value: "\(current.requiredSigns)", key: "signsPerPlayer",
+                           canDecrease: current.requiredSigns > 0, canIncrease: current.requiredSigns < 10,
+                           decrease: { store.updateSetting("signsPerPlayer", current.requiredSigns - 1) },
+                           increase: { store.updateSetting("signsPerPlayer", current.requiredSigns + 1) })
+            }
+            integer("Tasks per player", \.tasksPerPlayer, "tasksPerPlayer", 1...8)
+            settingCard("Choose impostor") {
+                Picker("Choose impostor", selection: Binding(
+                    get: { current.settings.forcedImpostorIds.first ?? "" },
+                    set: { store.updateSetting("forcedImpostorIds", $0.isEmpty ? [String]() : [$0]) }
+                )) {
+                    Text("Random").tag("")
+                    ForEach(current.players) { Text($0.name).tag($0.id) }
+                }
+                .pickerStyle(.menu).tint(.white)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+                .disabled(!current.isHost || !store.isSynced)
+                .accessibilityIdentifier("settings.forcedImpostorIds")
+            }
+            toggle("Anonymous votes", \.anonymousVotes, "anonymousVotes")
+        }
+    }
+
+    private func taskSettings(twoColumns: Bool) -> some View {
+        LazyVGrid(columns: columns(twoColumns), spacing: 6) {
+            ForEach(TaskType.allCases) { type in
+                settingCard(type.label) {
+                    Toggle(type.label, isOn: Binding(
+                        get: { current.settings.taskTypes.contains(type) },
+                        set: { on in
+                            var types = current.settings.taskTypes.filter { $0 != type && $0 != .unknown }
+                            if on { types.append(type) }
+                            store.updateSetting("taskTypes", types.map(\.rawValue))
+                        }
+                    ))
+                    .labelsHidden().tint(Self.accent).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .disabled(!current.isHost || !store.isSynced)
+                    .accessibilityIdentifier("settings.task.\(type.rawValue)")
+                }
+            }
+            toggle("Ghosts can do tasks", \.ghostTasks, "ghostTasks")
+        }
+    }
+
+    private func timerSettings(twoColumns: Bool) -> some View {
+        LazyVGrid(columns: columns(twoColumns), spacing: 6) {
+            integer("Role reveal", \.roleRevealSec, "roleRevealSec", 3...60, unit: "s")
+            integer("Gather for meeting", \.gatherTimeoutSec, "gatherTimeoutSec", 0...300, step: 15, unit: "s")
+            integer("Discussion", \.discussionSec, "discussionSec", 0...300, step: 15, unit: "s")
+            integer("Voting", \.votingSec, "votingSec", 10...300, step: 15, unit: "s")
+            integer("Results screen", \.resultSec, "resultSec", 2...30, unit: "s")
+            integer("Kill cooldown", \.killCooldownSec, "killCooldownSec", 0...120, step: 5, unit: "s")
+            integer("Emergency cooldown", \.emergencyCooldownSec, "emergencyCooldownSec", 0...120, step: 5, unit: "s")
+            integer("Sabotage cooldown", \.sabotageCooldownSec, "sabotageCooldownSec", 0...180, step: 5, unit: "s")
+            integer("Reactor meltdown", \.reactorSec, "reactorSec", 15...180, step: 5, unit: "s")
+            integer("Upload task", \.uploadSec, "uploadSec", 3...30, unit: "s")
+        }
+    }
+
+    private var signSettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SettingsSavedGameCard(state: current)
+            if current.requiredSigns > 0 {
+                settingCard("My signs · \(min(current.mySigns.count, current.requiredSigns))/\(current.requiredSigns)") {
+                    ForEach(current.mySigns) { StationRow(station: $0) }
+                    if current.mySigns.count < current.requiredSigns {
+                        action("Add my next sign", icon: "camera") { addingMySign = true }
+                    }
+                }
+            }
+            settingCard("Venue · \(current.mapId) · \(current.stations.count) signs") {
+                ForEach(current.stations) { station in
+                    HStack {
+                        StationRow(station: station)
+                        Spacer(minLength: 4)
+                        Button { qrStation = station } label: { Image(systemName: "qrcode").frame(width: 44, height: 44) }
+                            .accessibilityLabel("QR for \(station.name)")
+                        if current.isHost || station.addedBy == current.me.id {
+                            Button(role: .destructive) {
+                                Task { await store.perform("delete_station", ["stationId": station.id]) }
+                            } label: { Image(systemName: "trash").frame(width: 44, height: 44) }
+                            .disabled(!store.isSynced)
+                            .accessibilityLabel("Delete \(station.name)")
+                        }
+                    }
+                }
+                if current.stations.isEmpty {
+                    Text("No venue signs yet.").font(.caption).foregroundStyle(.white.opacity(0.6))
+                }
+                if current.isHost { action("Add venue sign", icon: "camera") { addingStation = true }.disabled(!store.isSynced) }
+                Text("Photograph signs to create task stations. Add a meeting point so everyone knows where to gather.")
+                    .font(.caption).foregroundStyle(.white.opacity(0.6))
+            }
+        }
+    }
+
+    private var playerSettings: some View {
+        settingCard("Players · \(current.players.count)") {
+            ForEach(current.players) { player in
+                HStack(spacing: 8) {
+                    Circle().fill(player.connected ? .green : .gray).frame(width: 8, height: 8)
+                    Text(player.name + (player.id == current.me.id ? " (you)" : ""))
+                    if player.isHost { Image(systemName: "crown.fill").foregroundStyle(.yellow) }
+                    if player.isBot == true { Image(systemName: "cpu").foregroundStyle(.white.opacity(0.5)) }
+                    Spacer()
+                    if current.isHost && player.id != current.me.id {
+                        Button("Kick", role: .destructive) { Task { await store.perform("kick", ["playerId": player.id]) } }
+                            .frame(minWidth: 44, minHeight: 44).disabled(!store.isSynced)
+                            .accessibilityLabel("Kick \(player.name)")
+                    }
+                }
+                .font(.system(size: 14, weight: .medium, design: .rounded)).frame(minHeight: 44)
+            }
+            if current.isHost {
+                action("Add bot", icon: "plus") { Task { await store.perform("add_bot") } }
+                    .disabled(!store.isSynced).accessibilityIdentifier("settings.addBot")
+                Text("Bots gather at meetings and vote skip. They never kill; choose a human impostor when testing.")
+                    .font(.caption).foregroundStyle(.white.opacity(0.6))
+            }
+        }
+    }
+
+    private func advancedSettings(twoColumns: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: columns(twoColumns), spacing: 6) {
+                distance("Kill distance", \.killDistanceM, "killDistanceM")
+                distance("Report distance", \.reportDistanceM, "reportDistanceM")
+                decimal("RSSI at 1 m", \.rssiAt1m, "rssiAt1m", -100...(-30), step: 1, format: "%.0f dBm")
+                decimal("Indoor factor", \.pathLossExponent, "pathLossExponent", 1.5...4, step: 0.1, format: "%.1f")
+                integer("Emergency meetings", \.emergencyMeetingsPerPlayer, "emergencyMeetingsPerPlayer", 0...5)
+                toggle("Reveal role on ejection", \.revealRoleOnEject, "revealRoleOnEject")
+                toggle("QR fallback", \.qrFallback, "qrFallback")
+                toggle("Skip BLE proximity (dev)", \.devSkipProximity, "devSkipProximity")
+                toggle("Skip checkpoints (dev)", \.devSkipCheckpoint, "devSkipCheckpoint")
+            }
+            Text("Bluetooth range is approximate. Use diagnostics to calibrate two phones 1 m apart; raise the indoor factor if kills trigger from too far away.")
+                .font(.caption).foregroundStyle(.white.opacity(0.6))
+            NavigationLink(value: LobbySettingsDestination.diagnostics) {
+                Label("Diagnostics · Bluetooth / camera / GPS", systemImage: "waveform.path.ecg")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(SettingsActionStyle())
+        }
+    }
+
+    private var footer: some View {
+        HStack(spacing: 12) {
+            Label(store.isSynced ? (current.isHost ? "Changes sync with the lobby" : "Settings set by the host") : "Reconnecting · changes paused",
+                  systemImage: store.isSynced ? "wifi" : "wifi.slash")
+            Spacer(minLength: 0)
+            if onClose == nil {
+                Button("Leave lobby", role: .destructive) { store.leave() }.frame(minHeight: 44)
+                if current.isHost {
+                    Button("Start game") { Task { await store.perform("start_game") } }
+                        .frame(minHeight: 44)
+                        .disabled(!store.isSynced || current.players.count < current.settings.minPlayers || !current.playersMissingSigns.isEmpty)
+                }
+            } else {
+                Text(current.requiredSigns > 0 ? "Add \(current.requiredSigns) signs each before start" : "No signs required")
+            }
+        }
+        .font(.system(size: 10, weight: .medium, design: .rounded))
+        .foregroundStyle(.white.opacity(0.6))
+        .lineLimit(1).minimumScaleFactor(0.8)
+    }
+
+    private func settingCard<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.system(size: 14, weight: .bold, design: .rounded)).lineLimit(1).minimumScaleFactor(0.75)
+            content()
+        }
+        .padding(6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Self.well, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.12), lineWidth: 1))
+    }
+
+    private func numberCard(_ title: String, value: String, key: String, canDecrease: Bool, canIncrease: Bool,
+                            decrease: @escaping () -> Void, increase: @escaping () -> Void, detail: String? = nil) -> some View {
+        settingCard(title) {
+            HStack(spacing: 6) {
+                Button(action: decrease) { Image(systemName: "minus").frame(width: 44, height: 44) }
+                    .buttonStyle(SettingsActionStyle()).disabled(!canDecrease || !current.isHost || !store.isSynced)
+                    .accessibilityLabel("Decrease \(title)").accessibilityIdentifier("settings.\(key).decrease")
+                Text(value).font(.system(size: 20, weight: .heavy, design: .rounded))
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .lineLimit(1).minimumScaleFactor(0.7)
+                    .accessibilityIdentifier("settings.\(key).value")
+                Button(action: increase) { Image(systemName: "plus").frame(width: 44, height: 44) }
+                    .buttonStyle(SettingsActionStyle(filled: true)).disabled(!canIncrease || !current.isHost || !store.isSynced)
+                    .accessibilityLabel("Increase \(title)").accessibilityIdentifier("settings.\(key).increase")
+            }
+            if let detail {
+                Text(detail).font(.system(size: 10, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.6))
+            }
+        }
+    }
+
+    private func integer(_ title: String, _ path: KeyPath<Settings, Int>, _ key: String, _ range: ClosedRange<Int>, step: Int = 1, unit: String = "") -> some View {
+        let value = current.settings[keyPath: path]
+        return numberCard(title, value: "\(value)\(unit)", key: key,
+                          canDecrease: value > range.lowerBound, canIncrease: value < range.upperBound,
+                          decrease: { store.updateSetting(key, max(range.lowerBound, value - step)) },
+                          increase: { store.updateSetting(key, min(range.upperBound, value + step)) })
+    }
+
+    private func decimal(_ title: String, _ path: KeyPath<Settings, Double>, _ key: String, _ range: ClosedRange<Double>, step: Double, format: String) -> some View {
+        let value = current.settings[keyPath: path]
+        return numberCard(title, value: String(format: format, value), key: key,
+                          canDecrease: value > range.lowerBound, canIncrease: value < range.upperBound,
+                          decrease: { store.updateSetting(key, (max(range.lowerBound, value - step) * 10).rounded() / 10) },
+                          increase: { store.updateSetting(key, (min(range.upperBound, value + step) * 10).rounded() / 10) })
+    }
+
+    private func distance(_ title: String, _ path: KeyPath<Settings, Double>, _ key: String) -> some View {
+        let value = current.settings[keyPath: path]
+        return numberCard(title, value: String(format: "~%.1f m", value), key: key,
+                          canDecrease: value >= 0.5, canIncrease: true,
+                          decrease: { store.updateSetting(key, max(0, value - 0.5)) },
+                          increase: { store.updateSetting(key, value + 0.5) },
+                          detail: "Signal threshold: ≥ \(Int(BLEDistance.rssi(atMeters: value, rssiAt1m: current.settings.rssiAt1m, exponent: current.settings.pathLossExponent).rounded())) dBm")
+    }
+
+    private func toggle(_ title: String, _ path: KeyPath<Settings, Bool>, _ key: String) -> some View {
+        settingCard(title) {
+            Toggle(title, isOn: Binding(get: { current.settings[keyPath: path] }, set: { store.updateSetting(key, $0) }))
+                .labelsHidden().tint(Self.accent).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .disabled(!current.isHost || !store.isSynced)
+                .accessibilityLabel(title).accessibilityIdentifier("settings.\(key)")
+        }
+    }
+
+    private func action(_ title: String, icon: String, perform: @escaping () -> Void) -> some View {
+        Button(action: perform) {
+            Label(title, systemImage: icon).font(.system(size: 14, weight: .bold, design: .rounded))
+                .frame(maxWidth: .infinity, minHeight: 44)
+        }
+        .buttonStyle(SettingsActionStyle())
+    }
+}
+
+private struct SettingsActionStyle: ButtonStyle {
+    var filled = false
+    @Environment(\.isEnabled) private var enabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.white.opacity(enabled ? 1 : 0.35))
+            .background(filled ? Color(red: 0.18, green: 0.50, blue: 0.50) : Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(filled ? 0.4 : 0.2), lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }
 
@@ -137,137 +457,45 @@ struct StationRow: View {
     }
 }
 
-private struct SettingsSection: View {
-    @Environment(GameStore.self) private var store
-    let settings: Settings
-    let players: [PlayerView]
 
-    var body: some View {
-        Section {
-            stepper("Impostors", \.impostors, "impostors", 1...3)
-            Picker("Impostor", selection: Binding(
-                get: { settings.forcedImpostorIds.first ?? "" },
-                set: { store.updateSetting("forcedImpostorIds", $0.isEmpty ? [String]() : [$0]) }
-            )) {
-                Text("Random").tag("")
-                ForEach(players) { Text($0.name).tag($0.id) }
-            }
-            stepper("Min players", \.minPlayers, "minPlayers", 2...12)
-            if let signsPerPlayer = settings.signsPerPlayer {
-                Stepper("Signs per player: \(signsPerPlayer)",
-                        value: Binding(get: { signsPerPlayer }, set: { store.updateSetting("signsPerPlayer", $0) }),
-                        in: 0...10)
-            }
-            stepper("Tasks per player", \.tasksPerPlayer, "tasksPerPlayer", 1...8)
-            ForEach(TaskType.allCases) { type in
-                Toggle(type.label, isOn: Binding(
-                    get: { settings.taskTypes.contains(type) },
-                    set: { on in
-                        var types = settings.taskTypes.filter { $0 != type && $0 != .unknown }
-                        if on { types.append(type) }
-                        store.updateSetting("taskTypes", types.map(\.rawValue))
-                    }
-                ))
-            }
-        } header: {
-            Text("Players & tasks")
-        } footer: {
-            Text("Signs per player: how many signs each player must photograph in the lobby before START unlocks (0 = no requirement). Bots don't add signs; everyone's signs become the task stations.")
-        }
-        Section {
-            meters("Kill distance", \.killDistanceM, "killDistanceM")
-            meters("Report distance", \.reportDistanceM, "reportDistanceM")
-            Stepper("RSSI at 1 m: \(Int(settings.rssiAt1m)) dBm",
-                    value: Binding(get: { settings.rssiAt1m }, set: { store.updateSetting("rssiAt1m", $0.rounded()) }),
-                    in: -100...(-30), step: 1)
-            Stepper(String(format: "Indoor factor: %.1f", settings.pathLossExponent),
-                    value: Binding(get: { settings.pathLossExponent },
-                                   set: { store.updateSetting("pathLossExponent", ($0 * 10).rounded() / 10) }),
-                    in: 1.5...4, step: 0.1)
-        } header: {
-            Text("Bluetooth range")
-        } footer: {
-            Text("Approximate: phones only measure signal strength. Calibrate \"RSSI at 1 m\" with the Bluetooth proximity test (Developer Mode) and two phones 1 m apart. Raise the indoor factor if kills trigger from too far away.")
-        }
-        Section("Timers (seconds)") {
-            stepper("Role reveal", \.roleRevealSec, "roleRevealSec", 3...60, step: 1)
-            stepper("Gather for meeting", \.gatherTimeoutSec, "gatherTimeoutSec", 0...300, step: 15)
-            stepper("Discussion", \.discussionSec, "discussionSec", 0...300, step: 15)
-            stepper("Voting", \.votingSec, "votingSec", 10...300, step: 15)
-            stepper("Results screen", \.resultSec, "resultSec", 2...30, step: 1)
-            stepper("Kill cooldown", \.killCooldownSec, "killCooldownSec", 0...120, step: 5)
-            stepper("Emergency cooldown", \.emergencyCooldownSec, "emergencyCooldownSec", 0...120, step: 5)
-            stepper("Sabotage cooldown", \.sabotageCooldownSec, "sabotageCooldownSec", 0...180, step: 5)
-            stepper("Reactor meltdown", \.reactorSec, "reactorSec", 15...180, step: 5)
-            stepper("Upload task", \.uploadSec, "uploadSec", 3...30, step: 1)
-        }
-        Section("Rules") {
-            stepper("Emergency meetings", \.emergencyMeetingsPerPlayer, "emergencyMeetingsPerPlayer", 0...5)
-            toggle("Anonymous votes", \.anonymousVotes, "anonymousVotes")
-            toggle("Reveal role on ejection", \.revealRoleOnEject, "revealRoleOnEject")
-            toggle("Player/station QR fallback", \.qrFallback, "qrFallback")
-            toggle("Ghosts can do tasks", \.ghostTasks, "ghostTasks")
-            toggle("DEV: skip BLE proximity", \.devSkipProximity, "devSkipProximity")
-            toggle("DEV: skip checkpoint check", \.devSkipCheckpoint, "devSkipCheckpoint")
-        }
-    }
-
-    private func stepper(_ label: String, _ path: KeyPath<Settings, Int>, _ key: String, _ range: ClosedRange<Int>, step: Int = 1) -> some View {
-        Stepper("\(label): \(settings[keyPath: path])",
-                value: Binding(get: { settings[keyPath: path] }, set: { store.updateSetting(key, $0) }),
-                in: range, step: step)
-    }
-
-    private func meters(_ label: String, _ path: KeyPath<Settings, Double>, _ key: String) -> some View {
-        let dbm = BLEDistance.rssi(atMeters: settings[keyPath: path], rssiAt1m: settings.rssiAt1m, exponent: settings.pathLossExponent)
-        return Stepper(String(format: "%@: ~%.1f m (≥ %d dBm)", label, settings[keyPath: path], Int(dbm.rounded())),
-                       value: Binding(get: { settings[keyPath: path] }, set: { store.updateSetting(key, $0) }),
-                       in: 0.5...15, step: 0.5)
-    }
-
-    private func toggle(_ label: String, _ path: KeyPath<Settings, Bool>, _ key: String) -> some View {
-        Toggle(label, isOn: Binding(get: { settings[keyPath: path] }, set: { store.updateSetting(key, $0) }))
-    }
-}
-
-/// Host: use a saved game's signs (no-setup demo) or none, where players photograph their own.
-private struct GamesetSection: View {
+/// Keep saved-game selection alongside sign management, with the existing server API.
+private struct SettingsSavedGameCard: View {
     @Environment(GameStore.self) private var store
     let state: GameState
     @State private var games: [GameStore.GamesetSummary] = []
     @State private var busy = false
 
     var body: some View {
-        Section {
-            Picker("Game", selection: Binding(
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SAVED GAME").font(.system(size: 14, weight: .bold, design: .rounded))
+            Picker("Saved game", selection: Binding(
                 get: { state.gameset?.id ?? "" },
-                set: { id in use(id.isEmpty ? nil : id) }
+                set: { id in
+                    busy = true
+                    Task { await store.useGameset(id.isEmpty ? nil : id); busy = false }
+                }
             )) {
-                Text("None: players photograph signs").tag("")
-                ForEach(games) { game in Text("\(game.name) · \(game.signs) signs").tag(game.id) }
+                Text("None · players photograph signs").tag("")
+                ForEach(games) { Text("\($0.name) · \($0.signs) signs").tag($0.id) }
                 if let current = state.gameset, !games.contains(where: { $0.id == current.id }) {
                     Text(current.name).tag(current.id)
                 }
             }
-            .disabled(busy)
-            NavigationLink("Manage saved games…") { GamesetsView() }
-        } header: {
-            Text("Saved game")
-        } footer: {
-            if let current = state.gameset {
-                Text("Using “\(current.name)”. The per-player sign requirement is off; players can still add their own. Pick None to go back.")
-            } else {
-                Text("Pick a saved game to use its already-photographed signs, so a demo needs no setup.")
+            .pickerStyle(.menu).tint(.white).frame(minHeight: 44)
+            .disabled(busy || !state.isHost || !store.isSynced)
+            if state.isHost {
+                NavigationLink(value: LobbySettingsDestination.savedGames) {
+                    Label("Manage saved games", systemImage: "folder")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(SettingsActionStyle())
             }
+            Text(state.gameset.map { "Using “\($0.name)”. Per-player sign requirements are off." }
+                 ?? "Choose a saved game to reuse photographed signs, or None to have players add their own.")
+                .font(.caption).foregroundStyle(.white.opacity(0.6))
         }
+        .padding(10)
+        .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
         .task { games = (try? await store.gamesets()) ?? [] }
-    }
-
-    private func use(_ id: String?) {
-        busy = true
-        Task {
-            await store.useGameset(id)
-            busy = false
-        }
     }
 }

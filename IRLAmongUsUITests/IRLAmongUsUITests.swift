@@ -133,6 +133,104 @@ final class IRLAmongUsUITests: XCTestCase {
     }
 
     @MainActor
+    func testLobbySettingsConsoleUpdatesLiveAndNavigates() async throws {
+        guard let server = ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_SERVER"] else {
+            throw XCTSkip("Requires the local lobby fixture")
+        }
+        let guest = ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_HOST_ID"] == "other"
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-playerName", "Ben", "-serverURL", server, "-session", ""]
+        app.launch()
+        app.buttons["Local"].tap()
+        XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
+        app.buttons["local.createGame"].tap()
+        XCTAssertTrue(app.buttons["SETTINGS"].waitForExistence(timeout: 10))
+        app.buttons["SETTINGS"].tap()
+        XCTAssertTrue(app.buttons["settings.done"].waitForExistence(timeout: 5))
+        let screen = app.windows.firstMatch.frame
+        for key in ["impostors", "minPlayers", "signsPerPlayer", "tasksPerPlayer"] {
+            for suffix in ["increase", "decrease"] {
+                let button = app.buttons["settings.\(key).\(suffix)"]
+                XCTAssertTrue(button.exists)
+                XCTAssertTrue(screen.contains(button.frame), "\(key) \(suffix) should fit")
+                XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+            }
+        }
+        for category in ["game", "tasks", "timers", "signs", "players", "advanced"] {
+            let button = app.buttons["settings.category.\(category)"]
+            XCTAssertTrue(screen.contains(button.frame), "\(category) category should fit")
+            XCTAssertGreaterThanOrEqual(button.frame.height, 44)
+        }
+        captureVoting(app, name: "Dark lobby settings · Game")
+        if guest {
+            XCTAssertFalse(app.buttons["settings.signsPerPlayer.increase"].isEnabled)
+            XCTAssertFalse(app.switches["settings.anonymousVotes"].isEnabled)
+            XCTAssertFalse(app.buttons["settings.forcedImpostorIds"].isEnabled)
+        } else {
+            app.buttons["settings.signsPerPlayer.increase"].tap()
+            let signs = app.staticTexts["settings.signsPerPlayer.value"]
+            let signExpectation = expectation(for: NSPredicate { _, _ in signs.label == "4" }, evaluatedWith: nil)
+            await fulfillment(of: [signExpectation], timeout: 5)
+            app.switches["settings.anonymousVotes"].tap()
+        }
+        app.buttons["settings.category.tasks"].tap()
+        let scan = app.switches["settings.task.scan"]
+        XCTAssertTrue(scan.waitForExistence(timeout: 5))
+        if guest {
+            XCTAssertFalse(scan.isEnabled)
+        } else {
+            scan.tap()
+            let scanExpectation = expectation(for: NSPredicate { _, _ in scan.value as? String == "1" }, evaluatedWith: nil)
+            await fulfillment(of: [scanExpectation], timeout: 5)
+        }
+        app.buttons["settings.category.timers"].tap()
+        XCTAssertTrue(app.staticTexts["settings.roleRevealSec.value"].waitForExistence(timeout: 5))
+        app.buttons["settings.category.signs"].tap()
+        XCTAssertTrue(app.staticTexts["SAVED GAME"].waitForExistence(timeout: 5))
+        if !guest {
+            app.buttons["Manage saved games"].tap()
+            XCTAssertTrue(app.navigationBars["Games"].waitForExistence(timeout: 5))
+            app.navigationBars["Games"].buttons.element(boundBy: 0).tap()
+            XCTAssertTrue(app.buttons["settings.done"].waitForExistence(timeout: 5))
+        }
+        app.buttons["settings.category.players"].tap()
+        if guest {
+            XCTAssertFalse(app.buttons["settings.addBot"].exists)
+        } else {
+            app.buttons["settings.addBot"].tap()
+            XCTAssertTrue(app.buttons["Kick Test Bot"].waitForExistence(timeout: 5))
+        }
+        let advanced = app.buttons["settings.category.advanced"]
+        if !advanced.isHittable { app.scrollViews["settings.categories"].swipeUp() }
+        advanced.tap()
+        XCTAssertTrue(app.staticTexts["settings.killDistanceM.value"].waitForExistence(timeout: 5))
+        if guest {
+            XCTAssertFalse(app.buttons["settings.killDistanceM.increase"].isEnabled)
+        } else {
+            app.buttons["settings.killDistanceM.increase"].tap()
+            let distance = app.staticTexts["settings.killDistanceM.value"]
+            let distanceExpectation = expectation(for: NSPredicate { _, _ in distance.label == "~2.5 m" }, evaluatedWith: nil)
+            await fulfillment(of: [distanceExpectation], timeout: 5)
+            let (data, _) = try await URLSession.shared.data(from: URL(string: server + "/events")!)
+            let events = try JSONSerialization.jsonObject(with: data) as! [[String: Any]]
+            let updates = events.filter { $0["action"] as? String == "update_settings" }.compactMap { $0["payload"] as? [String: Any] }
+            XCTAssertTrue(updates.contains { $0["signsPerPlayer"] as? Int == 4 })
+            XCTAssertTrue(updates.contains { $0["anonymousVotes"] as? Bool == true })
+            XCTAssertTrue(updates.contains { ($0["taskTypes"] as? [String])?.contains("scan") == true })
+            XCTAssertTrue(updates.contains { $0["killDistanceM"] as? Double == 2.5 })
+        }
+        app.buttons["settings.done"].tap()
+        XCTAssertTrue(app.buttons["SETTINGS"].waitForExistence(timeout: 5))
+        app.buttons["SETTINGS"].tap()
+        XCTAssertTrue(app.staticTexts["settings.signsPerPlayer.value"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["settings.signsPerPlayer.value"].label, guest ? "3" : "4")
+        app.buttons["settings.done"].tap()
+        app.buttons["Leave Game"].tap()
+        XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     func testLaunchesToMainMenu() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()

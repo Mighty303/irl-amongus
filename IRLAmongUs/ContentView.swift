@@ -847,8 +847,10 @@ private struct GameLobbyView: View {
 
             if !joinedPlayerIDs.isEmpty { spawningAudio.play() }
         }
-        .sheet(isPresented: $showingSettings) {
-            LobbyView(state: store.state ?? state)
+        .accessibilityHidden(showingSettings)
+        .fullScreenCover(isPresented: $showingSettings) {
+            LobbyView(state: state, onClose: { showingSettings = false })
+                .presentationBackground(.clear)
         }
         .sheet(isPresented: $showingInvite) {
             VStack(spacing: 16) {
