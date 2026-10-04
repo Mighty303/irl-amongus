@@ -116,9 +116,8 @@ struct FloorPlanPinMap: View {
                     for building in buildings {
                         for room in shown[building.id]?.rooms ?? [] {
                             let path = room.path(using: projection)
-                            let corridor = room.roomType.localizedCaseInsensitiveContains("corridor")
                             let highlight = building.id == pinBuilding?.id
-                            context.fill(path, with: .color(corridor ? .cyan.opacity(0.10) : .white.opacity(highlight ? 0.2 : 0.12)))
+                            context.fill(path, with: .color(room.mapCategory.color.opacity(highlight ? 0.9 : 0.65)))
                             context.stroke(path, with: .color(.white.opacity(0.4)), lineWidth: 0.8 / s)
                         }
                     }

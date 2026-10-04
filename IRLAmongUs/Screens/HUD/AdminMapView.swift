@@ -113,7 +113,8 @@ struct AdminFloorPlan: View {
                     for room in rooms {
                         let path = room.path(using: projection)
                         let busy = (counts[room.id] ?? 0) > 0
-                        context.fill(path, with: .color(busy ? POCPinStyle.admin.color.opacity(0.28) : .white.opacity(0.08)))
+                        context.fill(path, with: .color(room.mapFill))
+                        if busy { context.fill(path, with: .color(POCPinStyle.admin.color.opacity(0.28))) }
                         context.stroke(path, with: .color(.white.opacity(0.4)), lineWidth: 0.8)
                     }
                 }

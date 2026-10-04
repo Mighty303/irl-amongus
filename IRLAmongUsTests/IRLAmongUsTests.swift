@@ -1140,3 +1140,21 @@ private final class FaceHTTPStub: URLProtocol, @unchecked Sendable {
     }
     override func stopLoading() {}
 }
+
+struct RoomMapPaletteTests {
+    @Test func overlappingTeachingAndAmenityNamesResolveAsTeaching() {
+        #expect(RoomMapCategory(roomType: "Lecture Theatre") == .teaching)
+        #expect(RoomMapCategory(roomType: "THEATRE") == .amenity)
+        #expect(RoomMapCategory(roomType: "Seminar Room") == .teaching)
+    }
+
+    @Test func publicAndStaffSpacesRemainDistinct() {
+        #expect(RoomMapCategory(roomType: "Student Lounge") == .amenity)
+        #expect(RoomMapCategory(roomType: "Staff Lounge/Lunch Room") == .general)
+        #expect(RoomMapCategory(roomType: "Research Laboratory") == .general)
+        #expect(RoomMapCategory(roomType: "Meeting Room") == .general)
+        #expect(RoomMapCategory(roomType: "Accessible Washroom") == .washroom)
+        #expect(RoomMapCategory(roomType: "Corridor") == .corridor)
+        #expect(RoomMapCategory(roomType: "") == .general)
+    }
+}
