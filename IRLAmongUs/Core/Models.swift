@@ -11,6 +11,15 @@ enum Role: String, Codable {
     case crewmate, impostor
 }
 
+enum PlayerColor: String, Decodable, CaseIterable {
+    case red, blue, green, pink, orange, yellow, black, white
+    case purple, brown, cyan, lime, maroon, rose, banana
+
+    var lobbyAssetName: String {
+        "LobbyPlayer\(rawValue.capitalized)"
+    }
+}
+
 enum StationKind: String, Codable, CaseIterable, Identifiable {
     /// `task` stations are plain signs; the server assigns a random mini-game to each at game start.
     case task, meeting, emergency, reactor, electrical
@@ -134,6 +143,8 @@ struct Station: Codable, Identifiable, Hashable {
 struct PlayerView: Decodable, Identifiable, Equatable {
     let id: String
     let name: String
+    /// Server-assigned and persisted. Optional while older deployed servers roll forward.
+    let color: PlayerColor?
     let isHost: Bool
     /// Server-run test bot. Optional so phones still decode snapshots from servers without bots.
     let isBot: Bool?

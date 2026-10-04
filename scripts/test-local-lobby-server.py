@@ -92,6 +92,7 @@ def player(id, name, host=False, bot=False):
     return dict(
         id=id,
         name=name,
+        color='red' if host else 'blue',
         isHost=host,
         isBot=bot,
         connected=True,
