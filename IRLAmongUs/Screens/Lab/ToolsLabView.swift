@@ -28,7 +28,7 @@ struct ToolsLabView: View {
                     NavigationLink("Submit Scan (10s, stand still)") {
                         MiniGameHost { ScanGame(seconds: 10, playerName: "Red", start: { true }, onDone: $0) }
                     }
-                    NavigationLink("Divert Power") { MiniGameHost { DivertPowerGame(target: .random(in: 0..<8), onDone: $0) } }
+                    NavigationLink("Divert Power") { MiniGameHost { DivertPowerGame(onDone: $0) } }
                     NavigationLink("Accept Diverted Power") { MiniGameHost { AcceptPowerGame(onDone: $0) } }
                 }
             }

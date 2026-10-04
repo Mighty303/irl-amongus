@@ -3,9 +3,11 @@ import SwiftUI
 /// Divert Power, step 1: push the one lit switch all the way up. Its power line on the screen lights
 /// up. Coordinates are pixels of the 500×500 Electrical panel art.
 struct DivertPowerGame: View {
-    /// Which of the eight switches to push (the art's labels are the game's rooms).
-    let target: Int
     let onDone: () -> Void
+
+    /// Which of the eight switches to push (the art's labels are the game's rooms). A new one each
+    /// time the panel opens; kept in state so game updates don't swap it mid-drag.
+    @State private var target = Int.random(in: 0..<8)
 
     private static let trackX: [CGFloat] = [61, 115, 169, 223, 276, 330, 384, 438]
     private static let bottomY: CGFloat = 437
