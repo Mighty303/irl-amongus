@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Security, like Among Us: a grid of every other player's front camera, for the living right after
-/// scanning the Security sign. (Dead players have their own Spectate view.) Frames arrive a few times a
-/// second (it's choppy, like the real cams); a phone busy scanning a sign shows static until it's done.
+/// Security, like Among Us: a grid of every other player's camera (front, or what they're pointing at in AR
+/// position mode), for the living right after scanning the Security sign. (Dead players have their own
+/// Spectate view.) Frames arrive a few times a second (it's choppy, like the real cams); a phone busy
+/// scanning a sign shows static until it's done.
 struct SecurityCamsView: View {
     @Environment(GameStore.self) private var store
     let state: GameState

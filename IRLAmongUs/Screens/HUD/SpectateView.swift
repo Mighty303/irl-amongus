@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Spectate, for dead players: everyone's front camera at once, filling the screen like a video call
+/// Spectate, for dead players: everyone's camera at once (front, or the back camera in AR position mode), filling the screen like a video call
 /// in Among Us style. Opened from the Spectate button on a ghost's map.
 struct SpectateView: View {
     @Environment(GameStore.self) private var store

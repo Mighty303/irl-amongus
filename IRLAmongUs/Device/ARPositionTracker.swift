@@ -1,10 +1,15 @@
 import ARKit
+import UIKit
 
 /// The AR position mode: ARKit's camera tracking used as a far better step counter. It reports how far the
 /// phone moved east and north (ARKit lines its axes up with gravity and the compass), and `PositionEstimator`
 /// adds that to the last sign fix. No view: the camera runs headless at its smallest video format, but it's
 /// still the camera plus motion tracking, so it costs a lot of battery. Only tracks while the camera can see
 /// (phone held up); in a pocket the estimator falls back to steps.
+///
+/// It also stands in for the security camera: the phone can't run ARKit and another camera at once, so
+/// while someone is watching, small upright JPEGs of what ARKit sees (the back camera) are sent instead
+/// of the front camera, and tracking never has to stop.
 final class ARPositionTracker: NSObject, ARSessionDelegate {
     enum State: Equatable {
         case off
@@ -33,6 +38,8 @@ final class ARPositionTracker: NSObject, ARSessionDelegate {
     /// Main thread.
     var onState: ((State) -> Void)?
 
+    static var isSupported: Bool { ARWorldTrackingConfiguration.isSupported }
+
     private let session = ARSession()
     private let queue = DispatchQueue(label: "ar-position")
     /// Main thread only.
@@ -41,11 +48,21 @@ final class ARPositionTracker: NSObject, ARSessionDelegate {
     // Delegate queue only.
     private var lastPose: (position: SIMD3<Float>, time: TimeInterval)?
     private var lastSampleAt: TimeInterval = 0
+    private var lastCameraFrameAt: TimeInterval = 0
+    private let cameraContext = CIContext()
+    /// Security-camera frames: where they go and which way is up. Set on the main thread, read on the delegate queue.
+    private let cameraLock = NSLock()
+    private var cameraSink: ((String) -> Void)?
+    private var cameraOrientation = CGImagePropertyOrientation.up
+    private var orientationTimer: Timer?
 
     /// Samples per second sent on: plenty for a map dot, and cheap.
     private static let sampleInterval: TimeInterval = 0.2
     /// Faster than this between samples is ARKit jumping (relocalizing), not a person walking.
     private static let maxSpeed = 4.0
+    /// Same as the front camera stream: a few tiny frames a second.
+    private static let cameraInterval: TimeInterval = 0.3
+    private static let cameraMaxDimension: CGFloat = 240
 
     override init() {
         super.init()
@@ -82,9 +99,50 @@ final class ARPositionTracker: NSObject, ARSessionDelegate {
         if state != .unsupported { report(reason.map { .paused($0) } ?? .off) }
     }
 
+    /// Sends what the camera sees to `sink` (base64 JPEG, on the delegate queue) while ARKit runs; nil stops.
+    func streamCamera(to sink: ((String) -> Void)?) {
+        cameraLock.withLock { cameraSink = sink }
+        orientationTimer?.invalidate()
+        orientationTimer = nil
+        guard sink != nil else { return }
+        updateCameraOrientation()
+        orientationTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.updateCameraOrientation()
+        }
+    }
+
+    /// The back camera's picture is sideways to the sensor; turn it the way the player holds the phone.
+    private func updateCameraOrientation() {
+        let interface = MainActor.assumeIsolated {
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.interfaceOrientation
+        }
+        let orientation: CGImagePropertyOrientation = switch interface {
+        case .landscapeLeft: .down
+        case .portrait: .right
+        case .portraitUpsideDown: .left
+        default: .up // landscapeRight: the sensor's own way up
+        }
+        cameraLock.withLock { cameraOrientation = orientation }
+    }
+
+    private func sendCameraFrame(_ frame: ARFrame) {
+        guard frame.timestamp - lastCameraFrameAt >= Self.cameraInterval else { return }
+        let (sink, orientation) = cameraLock.withLock { (cameraSink, cameraOrientation) }
+        guard let sink else { return }
+        lastCameraFrameAt = frame.timestamp
+        var image = CIImage(cvPixelBuffer: frame.capturedImage).oriented(orientation)
+        let scale = min(1, Self.cameraMaxDimension / max(image.extent.width, image.extent.height))
+        image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        guard let cg = cameraContext.createCGImage(image, from: image.extent),
+              let jpeg = UIImage(cgImage: cg).jpegData(compressionQuality: 0.45) else { return }
+        sink(jpeg.base64EncodedString())
+    }
+
     // MARK: - ARSessionDelegate (delegate queue)
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        // The camera feed doesn't need tracking, only the picture.
+        sendCameraFrame(frame)
         let time = frame.timestamp
         guard time - lastSampleAt >= Self.sampleInterval else { return }
         lastSampleAt = time
