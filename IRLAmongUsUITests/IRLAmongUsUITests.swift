@@ -40,12 +40,14 @@ final class IRLAmongUsUITests: XCTestCase {
         let screen = app.windows.firstMatch.frame
         XCTAssertTrue(screen.contains(room.frame))
         XCTAssertTrue(app.staticTexts["ABCD"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["lobby.playerSprite.0"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["START"].isEnabled)
         app.buttons["Add bot"].tap()
         let count = app.staticTexts["lobby.playerCount"]
         let hasTwoPlayers = NSPredicate { _, _ in count.label == "2" }
         expectation(for: hasTwoPlayers, evaluatedWith: nil)
         waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.descendants(matching: .any)["lobby.playerSprite.1"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["START"].isEnabled)
         captureVoting(app, name: "LOCAL live server lobby")
         app.buttons["START"].tap()

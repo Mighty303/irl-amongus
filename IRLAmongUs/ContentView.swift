@@ -585,6 +585,7 @@ private struct GameLobbyView: View {
     @State private var showingInvite = false
     @StateObject private var spawningAudio = PlayerSpawningAudioPlayer()
     @State private var knownPlayerIDs: Set<String> = []
+    @State private var visiblePlayerIDs: Set<String> = []
 
     var body: some View {
         GeometryReader { geometry in
@@ -626,9 +627,16 @@ private struct GameLobbyView: View {
         }
         .background(Color.black)
         .onChange(of: Set(state.players.map(\.id)), initial: true) { _, playerIDs in
-            let hasNewPlayers = !playerIDs.subtracting(knownPlayerIDs).isEmpty
+            let joinedPlayerIDs = playerIDs.subtracting(knownPlayerIDs)
+            let departedPlayerIDs = knownPlayerIDs.subtracting(playerIDs)
             knownPlayerIDs = playerIDs
-            if hasNewPlayers { spawningAudio.play() }
+
+            withAnimation(.spring(response: 0.55, dampingFraction: 0.62)) {
+                visiblePlayerIDs.subtract(departedPlayerIDs)
+                visiblePlayerIDs.formUnion(joinedPlayerIDs)
+            }
+
+            if !joinedPlayerIDs.isEmpty { spawningAudio.play() }
         }
         .sheet(isPresented: $showingSettings) {
             LobbyView(state: store.state ?? state)
@@ -647,6 +655,7 @@ private struct GameLobbyView: View {
     private var waitingRoom: some View {
         ZStack(alignment: .bottomLeading) {
             WaitingRoomScene()
+            LobbyPlayerStage(players: state.players, visiblePlayerIDs: visiblePlayerIDs)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text(state.isHost ? "Waiting for players…" : "Waiting for the host to start…")
@@ -785,6 +794,85 @@ private struct GameLobbyView: View {
         .frame(width: 132, height: 105)
         .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 14))
         .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.35), lineWidth: 1.5))
+    }
+}
+
+private struct LobbyPlayerStage: View {
+    let players: [PlayerView]
+    let visiblePlayerIDs: Set<String>
+
+    private static let roomAspectRatio: CGFloat = 1229 / 995
+    private static let anchors = [
+        CGPoint(x: 0.50, y: 0.54),
+        CGPoint(x: 0.59, y: 0.55),
+        CGPoint(x: 0.41, y: 0.55),
+        CGPoint(x: 0.55, y: 0.63),
+        CGPoint(x: 0.46, y: 0.63),
+        CGPoint(x: 0.65, y: 0.62),
+        CGPoint(x: 0.36, y: 0.62),
+        CGPoint(x: 0.63, y: 0.47),
+        CGPoint(x: 0.38, y: 0.47),
+        CGPoint(x: 0.54, y: 0.45),
+        CGPoint(x: 0.46, y: 0.45),
+        CGPoint(x: 0.70, y: 0.54)
+    ]
+
+    var body: some View {
+        GeometryReader { geometry in
+            let roomFrame = aspectFitFrame(in: geometry.size)
+            let spriteHeight = min(max(roomFrame.height * 0.095, 38), 58)
+
+            ForEach(Array(players.enumerated()), id: \.element.id) { index, player in
+                if visiblePlayerIDs.contains(player.id) {
+                    let anchor = Self.anchors[index % Self.anchors.count]
+
+                    VStack(spacing: 2) {
+                        ZStack(alignment: .topTrailing) {
+                            Image("LobbyPlayer")
+                                .resizable()
+                                .interpolation(.high)
+                                .scaledToFit()
+                                .frame(height: spriteHeight)
+
+                            if player.isHost {
+                                Image(systemName: "crown.fill")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundStyle(.yellow)
+                                    .shadow(color: .black, radius: 1)
+                            }
+                        }
+
+                        Text(player.name)
+                            .font(.system(size: 9, weight: .bold, design: .rounded))
+                            .lineLimit(1)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(.black.opacity(0.72), in: Capsule())
+                    }
+                    .position(
+                        x: roomFrame.minX + roomFrame.width * anchor.x,
+                        y: roomFrame.minY + roomFrame.height * anchor.y
+                    )
+                    .transition(.scale(scale: 0.05, anchor: .bottom).combined(with: .opacity))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier("lobby.playerSprite.\(index)")
+                    .accessibilityLabel("\(player.name) player icon\(player.isHost ? ", host" : "")")
+                }
+            }
+        }
+        .allowsHitTesting(false)
+        .animation(.spring(response: 0.55, dampingFraction: 0.62), value: visiblePlayerIDs)
+    }
+
+    private func aspectFitFrame(in size: CGSize) -> CGRect {
+        if size.width / size.height > Self.roomAspectRatio {
+            let width = size.height * Self.roomAspectRatio
+            return CGRect(x: (size.width - width) / 2, y: 0, width: width, height: size.height)
+        }
+
+        let height = size.width / Self.roomAspectRatio
+        return CGRect(x: 0, y: (size.height - height) / 2, width: size.width, height: height)
     }
 }
 

@@ -28,3 +28,15 @@ unchanged (sounds re-encoded to AAC) by `scripts/import-task-assets.py`:
 
 Among Us and its original artwork and audio belong to Innersloth. Use and
 redistribution remain subject to the applicable source and game-asset terms.
+
+## Lobby player sprite
+
+`LobbyPlayer.imageset` is an unchanged crop of the standing crewmate frame
+from the following user-supplied sprite sheet:
+
+- **Sheet:** `Player-sharedassets0.assets-55.png`
+- **Source:** https://github.com/AlvajoyAsante/among-us-assets/blob/main/Players/Player-sharedassets0.assets-55.png
+
+The source repository does not declare a license. Among Us and its original
+artwork belong to Innersloth; confirm the applicable permissions before
+redistributing the extracted sprite.
