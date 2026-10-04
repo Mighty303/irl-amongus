@@ -151,10 +151,6 @@ struct LobbyView: View {
     private func content(twoColumns: Bool) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                if !current.isHost {
-                    Text("Only the host can change game settings.")
-                        .font(.system(size: 13, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.65))
-                }
                 switch category {
                 case .game: gameSettings(twoColumns: twoColumns)
                 case .tasks: taskSettings(twoColumns: twoColumns)
@@ -186,19 +182,21 @@ struct LobbyView: View {
                            increase: { store.updateSetting("signsPerPlayer", current.requiredSigns + 1) })
             }
             integer("Tasks per player", \.tasksPerPlayer, "tasksPerPlayer", 1...8)
-            settingCard("Choose impostor") {
-                Picker("Choose impostor", selection: Binding(
-                    get: { current.settings.forcedImpostorIds.first ?? "" },
-                    set: { store.updateSetting("forcedImpostorIds", $0.isEmpty ? [String]() : [$0]) }
-                )) {
-                    Text("Random").tag("")
-                    ForEach(current.players) { Text($0.name).tag($0.id) }
+            if current.isHost { // nobody else can see who it is, so nobody else picks it
+                settingCard("Choose impostor") {
+                    Picker("Choose impostor", selection: Binding(
+                        get: { current.settings.forcedImpostorIds.first ?? "" },
+                        set: { store.updateSetting("forcedImpostorIds", $0.isEmpty ? [String]() : [$0]) }
+                    )) {
+                        Text("Random").tag("")
+                        ForEach(current.players) { Text($0.name).tag($0.id) }
+                    }
+                    .pickerStyle(.menu).tint(.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+                    .disabled(!store.isSynced)
+                    .accessibilityIdentifier("settings.forcedImpostorIds")
                 }
-                .pickerStyle(.menu).tint(.white)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
-                .disabled(!current.isHost || !store.isSynced)
-                .accessibilityIdentifier("settings.forcedImpostorIds")
             }
             toggle("Anonymous votes", \.anonymousVotes, "anonymousVotes")
         }
@@ -217,7 +215,7 @@ struct LobbyView: View {
                         }
                     ))
                     .labelsHidden().tint(Self.accent).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    .disabled(!current.isHost || !store.isSynced)
+                    .disabled(!store.isSynced)
                     .accessibilityIdentifier("settings.task.\(type.rawValue)")
                 }
             }
@@ -328,7 +326,7 @@ struct LobbyView: View {
 
     private var footer: some View {
         HStack(spacing: 12) {
-            Label(store.isSynced ? (current.isHost ? "Changes sync with the lobby" : "Settings set by the host") : "Reconnecting · changes paused",
+            Label(store.isSynced ? "Anyone can change settings · they sync with the lobby" : "Reconnecting · changes paused",
                   systemImage: store.isSynced ? "wifi" : "wifi.slash")
             Spacer(minLength: 0)
             if onClose == nil {
@@ -363,14 +361,14 @@ struct LobbyView: View {
         settingCard(title) {
             HStack(spacing: 6) {
                 Button(action: decrease) { Image(systemName: "minus").frame(width: 44, height: 44) }
-                    .buttonStyle(SettingsActionStyle()).disabled(!canDecrease || !current.isHost || !store.isSynced)
+                    .buttonStyle(SettingsActionStyle()).disabled(!canDecrease || !store.isSynced)
                     .accessibilityLabel("Decrease \(title)").accessibilityIdentifier("settings.\(key).decrease")
                 Text(value).font(.system(size: 20, weight: .heavy, design: .rounded))
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .lineLimit(1).minimumScaleFactor(0.7)
                     .accessibilityIdentifier("settings.\(key).value")
                 Button(action: increase) { Image(systemName: "plus").frame(width: 44, height: 44) }
-                    .buttonStyle(SettingsActionStyle(filled: true)).disabled(!canIncrease || !current.isHost || !store.isSynced)
+                    .buttonStyle(SettingsActionStyle(filled: true)).disabled(!canIncrease || !store.isSynced)
                     .accessibilityLabel("Increase \(title)").accessibilityIdentifier("settings.\(key).increase")
             }
             if let detail {
@@ -408,7 +406,7 @@ struct LobbyView: View {
         settingCard(title) {
             Toggle(title, isOn: Binding(get: { current.settings[keyPath: path] }, set: { store.updateSetting(key, $0) }))
                 .labelsHidden().tint(Self.accent).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .disabled(!current.isHost || !store.isSynced)
+                .disabled(!store.isSynced)
                 .accessibilityLabel(title).accessibilityIdentifier("settings.\(key)")
         }
     }
@@ -482,14 +480,12 @@ private struct SettingsSavedGameCard: View {
                 }
             }
             .pickerStyle(.menu).tint(.white).frame(minHeight: 44)
-            .disabled(busy || !state.isHost || !store.isSynced)
-            if state.isHost {
-                NavigationLink(value: LobbySettingsDestination.savedGames) {
-                    Label("Manage saved games", systemImage: "folder")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(SettingsActionStyle())
+            .disabled(busy || !store.isSynced)
+            NavigationLink(value: LobbySettingsDestination.savedGames) {
+                Label("Manage saved games", systemImage: "folder")
+                    .frame(maxWidth: .infinity, minHeight: 44)
             }
+            .buttonStyle(SettingsActionStyle())
             Text(state.gameset.map { "Using “\($0.name)”. Per-player sign requirements are off." }
                  ?? "Choose a saved game to reuse photographed signs, or None to have players add their own.")
                 .font(.caption).foregroundStyle(.white.opacity(0.6))
