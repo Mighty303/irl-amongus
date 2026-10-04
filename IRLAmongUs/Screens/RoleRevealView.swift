@@ -1,5 +1,6 @@
 import SwiftUI
 
+/// Reveals the server-assigned role automatically, then acknowledges it after the presentation.
 struct RoleRevealView: View {
     @Environment(GameStore.self) private var store
     let state: GameState
@@ -7,34 +8,50 @@ struct RoleRevealView: View {
     @StateObject private var revealAudio = RoleRevealAudioPlayer()
 
     var body: some View {
-        VStack(spacing: 24) {
-            if state.me.ackedRole {
-                ProgressView()
-                Text("Waiting for everyone to see their role…")
-                Countdown(deadline: state.phaseDeadline, font: .title.monospaced())
-            } else if !revealed {
-                Text("Make sure nobody can see your screen").font(.title2).multilineTextAlignment(.center)
-                Button("Reveal my role") {
-                    revealed = true
-                    revealAudio.play()
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let role = state.me.role {
+                if revealed {
+                    RoleRevealArtwork(role: role, impostorCount: state.settings.impostors)
+                    VStack {
+                        Spacer()
+                        let partners = state.players.filter { $0.role == .impostor && $0.id != state.me.id }
+                        if role == .impostor && !partners.isEmpty {
+                            Text("Fellow impostors: \(partners.map(\.name).joined(separator: ", "))")
+                                .foregroundStyle(.red)
+                        }
+                        if state.me.ackedRole {
+                            Text("Waiting for everyone to see their role…")
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                    }
+                    .font(.system(size: 14, design: .monospaced))
+                    .padding(.bottom, 24)
+                } else {
+                    RoleRevealIntroView {
+                        guard !revealed else { return }
+                        revealed = true
+                        revealAudio.play()
+                    }
+                    .accessibilityLabel("Shhh. Keep your role secret.")
+                    .accessibilityIdentifier("roles.intro")
                 }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
             } else {
-                let impostor = state.me.role == .impostor
-                Text(impostor ? "IMPOSTOR" : "CREWMATE")
-                    .font(.system(size: 52, weight: .black))
-                    .foregroundStyle(impostor ? .red : .cyan)
-                Text(impostor ? "Kill crewmates without getting caught. Fake your tasks." : "Complete your tasks and find the impostor.")
-                    .multilineTextAlignment(.center)
-                let partners = state.players.filter { $0.role == .impostor && $0.id != state.me.id }
-                if impostor && !partners.isEmpty {
-                    Text("Fellow impostors: \(partners.map(\.name).joined(separator: ", "))").foregroundStyle(.red)
-                }
-                Button("Got it") { Task { await store.perform("ack_role") } }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
+                ProgressView("Receiving your role…")
             }
         }
-        .padding(32)
+        .preferredColorScheme(.dark)
+        .task(id: revealed) {
+            guard revealed else { return }
+            do {
+                // Let the full round-start music finish before advancing to gameplay.
+                try await Task.sleep(for: .seconds(5))
+            } catch { return }
+            guard store.isSynced, store.state?.phase == .ROLE_REVEAL,
+                  store.state?.me.ackedRole == false else { return }
+            await store.perform("ack_role")
+        }
+        .onAppear { OrientationDelegate.requestLandscape() }
         .onDisappear { revealAudio.stop() }
     }
 }

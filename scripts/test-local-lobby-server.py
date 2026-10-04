@@ -7,6 +7,7 @@ Run this before the opt-in simulator test. The HTTP/WebSocket server binds only
 import base64
 import hashlib
 import json
+import os
 import struct
 import time
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
@@ -166,6 +167,8 @@ class Handler(BaseHTTPRequestHandler):
                         players.append(player('bot', 'Test Bot', bot=True))
                     if message['action'] == 'start_game':
                         phase = 'ROLE_REVEAL'
+                    if message['action'] == 'ack_role':
+                        phase = 'PLAYING'
                     send(dict(type='ack', id=message['id'], ok=True))
                     send(dict(type='state', state=snapshot()))
             except (EOFError, ConnectionError, OSError):
@@ -174,5 +177,6 @@ class Handler(BaseHTTPRequestHandler):
             self.json(events)
         else:
             self.json(dict(ok=True))
-print('Fixture listening on 39872', flush=True)
-ThreadingHTTPServer(('127.0.0.1', 39872), Handler).serve_forever()
+port = int(os.environ.get('LOCAL_LOBBY_TEST_PORT', '39872'))
+print(f'Fixture listening on {port}', flush=True)
+ThreadingHTTPServer(('127.0.0.1', port), Handler).serve_forever()

@@ -51,7 +51,12 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["START"].isEnabled)
         captureVoting(app, name: "LOCAL live server lobby")
         app.buttons["START"].tap()
-        XCTAssertTrue(app.buttons["Reveal my role"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Reveal my role"].exists)
+        XCTAssertTrue(app.staticTexts["There is 1 Impostor among us"].waitForExistence(timeout: 8))
+        XCTAssertFalse(app.buttons["Got it"].exists)
+        XCTAssertGreaterThan(app.windows.firstMatch.frame.width, app.windows.firstMatch.frame.height)
+        captureVoting(app, name: "Automatic multiplayer role reveal")
+        XCTAssertTrue(app.staticTexts["0 / 1 tasks"].waitForExistence(timeout: 12))
         let portrait = NSPredicate { _, _ in app.windows.firstMatch.frame.height > app.windows.firstMatch.frame.width }
         expectation(for: portrait, evaluatedWith: nil)
         waitForExpectations(timeout: 5)

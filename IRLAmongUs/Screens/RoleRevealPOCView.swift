@@ -32,7 +32,7 @@ struct RoleRevealPOCView: View {
                             .padding(.bottom, 12)
                         }
                     } else {
-                        ShhhIntroView {
+                        RoleRevealIntroView {
                             revealed = true
                             revealAudio.play()
                         }
@@ -167,7 +167,7 @@ private struct PixelRoleTitle: View {
     }
 }
 
-private struct ShhhIntroView: View {
+struct RoleRevealIntroView: View {
     let onComplete: () -> Void
     var body: some View { IntroMovieView(onComplete: onComplete) }
 }
