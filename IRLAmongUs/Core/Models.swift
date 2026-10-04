@@ -24,10 +24,18 @@ enum PlayerColor: String, Decodable, CaseIterable {
 
 enum StationKind: String, Codable, CaseIterable, Identifiable {
     /// `task` stations are plain signs; the server assigns a random mini-game to each at game start.
-    /// The rest are special signs: the red button (required), sabotage fixes, and the optional
-    /// Security (cameras) and Admin (room occupancy) rooms.
-    case task, meeting, emergency, reactor, electrical, security, admin
+    /// The rest are special signs: the red button (required), sabotage fixes (reactor, O2), and the optional
+    /// Security (cameras) and Admin (room occupancy) rooms. `electrical` is the old lights sabotage.
+    case task, meeting, emergency, reactor, oxygen, electrical, security, admin
     var id: String { rawValue }
+
+    /// The kinds anyone can pick (the old lights sabotage is gone).
+    static let allCases: [StationKind] = [.task, .meeting, .emergency, .reactor, .oxygen, .security, .admin]
+
+    /// A kind from a newer server than this app reads as a plain sign, instead of failing the whole game state.
+    init(from decoder: Decoder) throws {
+        self = StationKind(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .task
+    }
 
     var label: String {
         switch self {
@@ -35,6 +43,7 @@ enum StationKind: String, Codable, CaseIterable, Identifiable {
         case .meeting: return "Meeting point"
         case .emergency: return "Emergency button"
         case .reactor: return "Reactor"
+        case .oxygen: return "O2 keypad"
         case .electrical: return "Electrical (lights)"
         case .security: return "Security (cameras)"
         case .admin: return "Admin (room map)"
@@ -47,6 +56,7 @@ enum StationKind: String, Codable, CaseIterable, Identifiable {
         case .meeting: return "person.3.fill"
         case .emergency: return "light.beacon.max.fill"
         case .reactor: return "atom"
+        case .oxygen: return "aqi.medium"
         case .electrical: return "bolt.fill"
         case .security: return "video.fill"
         case .admin: return "map.fill"
@@ -181,6 +191,10 @@ struct Settings: Codable, Equatable {
     var sabotageCooldownSec: Int
     var reactorSec: Int
     var reactorWindowSec: Int
+    /// Seconds to fix the oxygen. Optional for older servers.
+    var oxygenSec: Int?
+    /// Sabotages use existing signs the server picks instead of dedicated reactor/O2 signs. Optional for older servers.
+    var autoSabotageSigns: Bool?
     /// Testing: everyone sees everyone's estimated position on the map. Optional for older servers.
     var livePositions: Bool?
     /// Play area: the SFU building and floor the game is on (campus map ids). Empty = not set.
@@ -270,6 +284,8 @@ struct Me: Decodable, Equatable {
     /// someone else is watching so your phone should send its front camera. Optional for older servers.
     let canWatchCams: Bool?
     let camWanted: Bool?
+    /// Just scanned the Admin sign: may open the admin map. Optional for older servers.
+    let canViewAdmin: Bool?
 }
 
 struct GameTask: Decodable, Identifiable, Equatable {
@@ -312,6 +328,14 @@ struct VoteResult: Decodable, Equatable {
     let impostorsRemaining: Int?
 }
 
+/// Someone on the Admin map: where they are, without who (the server sends no names).
+struct AdminPerson: Decodable, Equatable {
+    let lat: Double
+    let lng: Double
+    let buildingId: String?
+    let floorId: String?
+}
+
 struct SabotageView: Decodable, Equatable {
     struct FixStation: Decodable, Equatable {
         let stationId: String
@@ -320,6 +344,8 @@ struct SabotageView: Decodable, Equatable {
     let kind: String
     let deadline: Double?
     let stations: [FixStation]
+    /// Oxygen: the code to type at each keypad (on the note beside it). Optional for older servers.
+    let code: String?
 }
 
 /// Log-distance path-loss model, matching the server's `rssiAtDistance`. BLE RSSI is noisy, so these are estimates.

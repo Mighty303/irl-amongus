@@ -94,3 +94,10 @@ The `Sound*` data assets under `IRLAmongUs/Assets.xcassets/Sounds` (emergency al
 eject text, voting, panels, player leaving) are re-encoded to AAC by `scripts/import-game-sounds.py` from
 the "General Sounds" and "Player" packs on https://www.sounds-resource.com/pc_computer/amongus/,
 uploaded by imJJ. Among Us and its original audio belong to Innersloth.
+
+## Sabotage panels
+
+`SabotageReactorHand` and `SabotageReactorGlow` (reactor meltdown hand scanner, unchanged) and `SabotageKeypad`
+and `SabotageKeypadNote` (O2 keypad and its sticky note, cropped from the KeypadGame atlas) come from the Tasks
+folder of https://github.com/AlvajoyAsante/among-us-assets. Regenerate with
+`swift scripts/import-sabotage-assets.swift`. Among Us and its original artwork belong to Innersloth.

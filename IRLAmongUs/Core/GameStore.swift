@@ -68,6 +68,9 @@ final class GameStore {
     /// Security cameras: the latest frame from each player's front camera, while you're watching.
     private(set) var camFeeds: [String: (image: UIImage, at: Date)] = [:]
     private(set) var isWatchingCams = false
+    /// Admin map: everyone's whereabouts (no names) while it's open, for the room counts.
+    private(set) var adminPeople: [AdminPerson] = []
+    private(set) var isWatchingAdmin = false
     /// True while this phone's front camera is being sent to someone watching.
     private(set) var isStreamingCamera = false
     @ObservationIgnored private let frontCamera = FrontCameraStreamer()
@@ -502,6 +505,7 @@ final class GameStore {
         let positions: [LivePosition]?
         let playerId: String?
         let jpeg: String?
+        let people: [AdminPerson]?
     }
 
     private func handleMessage(_ data: Data) {
@@ -528,6 +532,9 @@ final class GameStore {
             guard isWatchingCams, let id = envelope.playerId, let jpeg = envelope.jpeg,
                   let data = Data(base64Encoded: jpeg), let image = UIImage(data: data) else { return }
             camFeeds[id] = (image, Date())
+        case "admin":
+            guard isWatchingAdmin else { return }
+            adminPeople = envelope.people ?? []
         default:
             break
         }
@@ -593,6 +600,7 @@ final class GameStore {
             Task { await perform("set_face", ["faceId": face]) }
         }
         if newState.me.canWatchCams != true, isWatchingCams { isWatchingCams = false; camFeeds = [:] }
+        if newState.me.canViewAdmin != true, isWatchingAdmin { isWatchingAdmin = false; adminPeople = [] }
         updateCameraStream()
         // The local map follows movement even when position sharing is disabled.
         updateLocalTracking()
@@ -668,11 +676,12 @@ final class GameStore {
             Haptics.heavy()
         case "SABOTAGE_STARTED":
             let kind = data["kind"] as? String
-            alert = Alert(title: kind == "reactor" ? "☢️ REACTOR MELTDOWN" : "💡 LIGHTS SABOTAGED",
-                          subtitle: kind == "reactor" ? "Two people must activate both reactor stations!" : "Fix the lights at Electrical.",
+            alert = Alert(title: kind == "reactor" ? "☢️ REACTOR MELTDOWN" : kind == "oxygen" ? "🫁 OXYGEN DEPLETED" : "💡 LIGHTS SABOTAGED",
+                          subtitle: kind == "reactor" ? "Two people must hold both reactor scanners at the same time!"
+                              : kind == "oxygen" ? "Type the code at both O2 keypads before it runs out!" : "Fix the lights at Electrical.",
                           color: .orange)
-            // Among Us sounds the alarm until the reactor is fixed; lights go out silently.
-            if kind == "reactor" { GameSoundEffect.sabotageAlarm.play(loop: true) }
+            // Among Us sounds the alarm until the reactor or oxygen is fixed; lights go out silently.
+            if kind == "reactor" || kind == "oxygen" { GameSoundEffect.sabotageAlarm.play(loop: true) }
             Haptics.alarm(times: 2)
         case "SABOTAGE_RESOLVED":
             GameSoundEffect.sabotageAlarm.stop()
@@ -739,8 +748,8 @@ final class GameStore {
            old.players.contains(where: { p in p.id != new.me.id && !new.players.contains { $0.id == p.id } }) {
             GameSoundEffect.playerLeft.play()
         }
-        // The reactor alarm stops with the reactor (fixed, a meeting, the game ending), however we hear of it.
-        if new.sabotage?.kind != "reactor" || new.phase != .PLAYING { GameSoundEffect.sabotageAlarm.stop() }
+        // The alarm stops with the sabotage (fixed, a meeting, the game ending), however we hear of it.
+        if !["reactor", "oxygen"].contains(new.sabotage?.kind ?? "") || new.phase != .PLAYING { GameSoundEffect.sabotageAlarm.stop() }
     }
 
     func dismissBodyReport(_ id: UUID) {
@@ -826,6 +835,20 @@ final class GameStore {
 
     /// Start or stop watching every player's camera (dead players, or right after scanning Security).
     @discardableResult
+    /// Admin map: open it (the server checks you just scanned the Admin sign) or close it.
+    func watchAdmin(_ on: Bool) async -> Bool {
+        if !on {
+            isWatchingAdmin = false
+            adminPeople = []
+            try? await send("admin_watch", ["on": false])
+            return true
+        }
+        isWatchingAdmin = true
+        if await perform("admin_watch", ["on": true]) { return true }
+        isWatchingAdmin = false
+        return false
+    }
+
     func watchCams(_ on: Bool) async -> Bool {
         if !on {
             isWatchingCams = false
@@ -959,13 +982,15 @@ final class GameStore {
         }
     }
 
-    /// While live positions are on, sends this phone's estimate every 2 seconds.
+    /// Sends this phone's estimate every 2 seconds during play (the Admin map counts rooms from them; only
+    /// room counts reach other players) and whenever live positions (testing) are on.
     private func startPositionReporting() {
         positionTask?.cancel()
         positionTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(2))
-                guard let self, let socket = self.socket, self.isSynced, self.livePositionsOn,
+                guard let self, let socket = self.socket, self.isSynced,
+                      self.livePositionsOn || self.state?.phase == .PLAYING,
                       let e = self.positions.estimate else { continue }
                 var payload: [String: Any] = ["lat": e.lat, "lng": e.lng, "accuracyM": e.accuracyM,
                                               "levelDelta": e.levelDelta, "sources": e.sources]

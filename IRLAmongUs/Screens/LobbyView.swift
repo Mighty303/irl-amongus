@@ -260,6 +260,13 @@ struct LobbyView: View {
             integer("Emergency cooldown", \.emergencyCooldownSec, "emergencyCooldownSec", 0...120, step: 5, unit: "s")
             integer("Sabotage cooldown", \.sabotageCooldownSec, "sabotageCooldownSec", 0...180, step: 5, unit: "s")
             integer("Reactor meltdown", \.reactorSec, "reactorSec", 15...180, step: 5, unit: "s")
+            if let oxygen = current.settings.oxygenSec {
+                numberCard("Oxygen depleted", value: "\(oxygen)s", key: "oxygenSec",
+                           canDecrease: oxygen > 15, canIncrease: oxygen < 180,
+                           decrease: { store.updateSetting("oxygenSec", oxygen - 5) },
+                           increase: { store.updateSetting("oxygenSec", oxygen + 5) },
+                           detail: nil)
+            }
             integer("Upload task", \.uploadSec, "uploadSec", 3...30, unit: "s")
         }
     }
@@ -289,7 +296,16 @@ struct LobbyView: View {
                     .frame(minHeight: 30)
                 }
                 action("Set up special signs", icon: "light.beacon.max") { showingSpecialSigns = true }.disabled(!store.isSynced)
-                Text("The red button is needed to start; meetings gather there too. Reactor (two signs) and Lights enable sabotages; Security and Admin are optional rooms.")
+                if let auto = current.settings.autoSabotageSigns {
+                    Toggle("Use any signs for sabotage", isOn: Binding(get: { auto }, set: { store.updateSetting("autoSabotageSigns", $0) }))
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .tint(Self.accent).frame(minHeight: 44)
+                        .disabled(!store.isSynced)
+                        .accessibilityIdentifier("settings.autoSabotageSigns")
+                }
+                Text(current.settings.autoSabotageSigns == true
+                     ? "The red button is needed to start; meetings gather there too. Sabotages use signs the game picks when it starts, spread far apart (no reactor or O2 signs needed). Security and Admin are optional rooms."
+                     : "The red button is needed to start; meetings gather there too. Reactor (two signs) and O2 (two keypads) enable sabotages, or turn on Use any signs for sabotage. Security and Admin are optional rooms.")
                     .font(.caption).foregroundStyle(.white.opacity(0.6))
             }
             settingCard("Venue · \(current.mapId) · \(current.stations.count) signs") {
