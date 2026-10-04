@@ -40,6 +40,7 @@ final class GameStore {
     /// Local opt-in; the sign requirement itself remains authoritative on the server.
     var demoModeEnabled: Bool { didSet { preferences.set(demoModeEnabled, forKey: "demoModeEnabled") } }
     private(set) var isUpdatingDemoSigns = false
+    private(set) var isUpdatingDemoVoting = false
     @ObservationIgnored private var demoSignRequirements: [String: Int] = [:]
 
     let ble = BLEProximity()
@@ -722,6 +723,15 @@ final class GameStore {
         isUpdatingDemoSigns = true
         defer { isUpdatingDemoSigns = false }
         await perform("update_settings", ["signsPerPlayer": count])
+    }
+
+    func setDemoContinueAtParity(_ enabled: Bool) async {
+        guard demoModeEnabled, isSynced, !isUpdatingDemoVoting,
+              let state, state.isHost, state.phase == .LOBBY,
+              state.settings.demoContinueAtParity != nil else { return }
+        isUpdatingDemoVoting = true
+        defer { isUpdatingDemoVoting = false }
+        await perform("update_settings", ["demoContinueAtParity": enabled])
     }
 
     // MARK: - Security cameras

@@ -172,6 +172,9 @@ struct Settings: Codable, Equatable {
     /// Signs each non-bot player must add in the lobby before START (0 = no requirement).
     /// Optional so phones still decode snapshots from servers without lobby signs.
     var signsPerPlayer: Int?
+    /// Demo: keep playing at impostor/crew parity so small games can reach a vote.
+    /// Optional for compatibility with servers without this demo rule.
+    var demoContinueAtParity: Bool?
     var uploadSec: Int
     /// Optional so phones still decode snapshots from servers without Submit Scan.
     var scanSec: Int?

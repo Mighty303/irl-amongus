@@ -184,7 +184,10 @@ struct LobbyView: View {
             integer("Impostors", \.impostors, "impostors", 1...3)
             integer("Minimum players", \.minPlayers, "minPlayers", 2...12)
             if store.demoModeEnabled {
-                settingCard("Demo mode") { DemoSignsControl(state: current) }
+                settingCard("Demo mode") {
+                    DemoSignsControl(state: current)
+                    DemoVotingControl(state: current)
+                }
             }
             if current.settings.signsPerPlayer != nil {
                 let perPlayer = current.settings.signsPerPlayer ?? 0

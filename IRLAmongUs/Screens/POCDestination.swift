@@ -67,7 +67,7 @@ struct POCDestinationView: View {
     }
 }
 
-/// Shake-menu opt-in for hosts demonstrating a game without photographing signs.
+/// Shake-menu opt-in for hosts demonstrating a game with simplified setup and win rules.
 private struct DemoModeView: View {
     @Environment(GameStore.self) private var store
 
@@ -78,22 +78,50 @@ private struct DemoModeView: View {
                 Toggle("Enable demo controls", isOn: $store.demoModeEnabled)
                     .accessibilityIdentifier("demo.enabled")
             } footer: {
-                Text("Adds a Require signs switch to the host's lobby settings. Create or join a game from the main menu, then open Settings → Game.")
+                Text("Adds sign setup and small-game voting controls to the host's lobby settings. Create or join a game from the main menu, then open Settings → Game.")
             }
             if store.demoModeEnabled {
                 Section("Current lobby") {
                     if let state = store.state, state.phase == .LOBBY {
                         DemoSignsControl(state: state)
                     } else {
-                        Text("Host a lobby to turn off its sign requirement.")
+                        Text("Host a lobby to change its demo rules.")
                     }
+                    DemoVotingControl(state: store.state)
                 }
             }
             Section {
                 Text("Turning off Require signs lets everyone start without adding signs. Existing signs and tasks stay available. Player counts and other game rules still apply.")
-                Text("Turning off demo controls hides the switch; it does not change the lobby's sign requirement.")
+                Text("Allow voting after a kill keeps a three-player game running when one crewmate and one impostor remain. Votes still need a clear winner; ties and skips eject no one. Impostors win when no living crewmates remain.")
+                Text("Turning off demo controls hides the switches; it does not reset the lobby's demo rules.")
             }
         }
+    }
+}
+
+struct DemoVotingControl: View {
+    @Environment(GameStore.self) private var store
+    let state: GameState?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle("Allow voting after a kill", isOn: Binding(
+                get: { state?.settings.demoContinueAtParity ?? false },
+                set: { enabled in Task { await store.setDemoContinueAtParity(enabled) } }
+            ))
+            .disabled(state?.isHost != true || state?.phase != .LOBBY || !store.isSynced
+                      || store.isUpdatingDemoVoting || state?.settings.demoContinueAtParity == nil)
+            .accessibilityIdentifier("demo.continueAtParity")
+            Text(detail).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var detail: String {
+        guard let state else { return "Host a lobby to enable voting after a kill." }
+        if state.phase != .LOBBY { return "Change this rule in the lobby before starting the game." }
+        if state.settings.demoContinueAtParity == nil { return "Update the server to enable small-game demo voting." }
+        if !state.isHost { return "Only the host can change demo voting." }
+        return "Keep playing when impostors match the crew, so survivors can report and vote."
     }
 }
 

@@ -62,6 +62,9 @@ In a Debug build, shake the phone and choose **Demo mode**, then turn on **Enabl
 
 Turn **Require signs** back on to restore the previous count for that lobby (or three after relaunching). Guests cannot change it. With a saved game loaded, its signs count toward the requirement and players split the rest. Either way the red button sign is still needed to start. The feature flag is saved on this device; hiding demo controls does not reset the server's lobby setting.
 
+Enable **Allow voting after a kill** in **Demo mode** or **Settings → Game → Demo mode** to let three-player demos continue after a kill. The option stays visible before hosting and becomes editable for the synced lobby host. Survivors can report and vote while impostors match the crew; ties and skips still eject no one. Impostors win when no living crewmates remain. The setting is off by default. Hiding demo controls does not reset the lobby's rule.
+
+
 ### Test lab (no server needed)
 
 Developer Mode (shake) also has test benches for each device component:
