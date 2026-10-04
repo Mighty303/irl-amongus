@@ -84,8 +84,9 @@ extension View {
 }
 
 /// Camera (or a photo from Photos) as a square on the left, controls on the right. The app reads
-/// what the sign says; nobody names signs. Library photos use their own saved location, never the
-/// phone's current one. After a save it resets, ready for the next sign.
+/// what the sign says; nobody names signs. Once there's a photo the square becomes a map with a pin
+/// that starts at the GPS fix (library photos: their own saved location, never the phone's current
+/// one) and the player drags it onto the sign. After a save it resets, ready for the next sign.
 struct SignCaptureStep: View {
     @Environment(GameStore.self) private var store
     let compact: Bool
@@ -101,6 +102,11 @@ struct SignCaptureStep: View {
     @State private var photo: UIImage?
     @State private var fromLibrary = false
     @State private var photoCoordinate: CLLocationCoordinate2D?
+    /// Where the map opened, and where its pin is now (what gets saved).
+    @State private var pinStart: CLLocationCoordinate2D?
+    @State private var pin: CLLocationCoordinate2D?
+    /// Shows the photo in the square instead of the map.
+    @State private var showingPhoto = false
     @State private var readText: String?
     @State private var reading = false
     @State private var saving = false
@@ -113,8 +119,10 @@ struct SignCaptureStep: View {
             // An overlay, so the photo fills this frame instead of resizing it to the photo.
             SignPanel.well
                 .overlay {
-                    if let photo {
+                    if let photo, showingPhoto {
                         Image(uiImage: photo).resizable().scaledToFill()
+                    } else if photo != nil {
+                        SignPinMap(start: pinStart, pin: $pin)
                     } else {
                         CameraView(onFrame: { buffer in latestFrame.buffer = buffer }, frameInterval: 0.2)
                     }
@@ -122,6 +130,20 @@ struct SignCaptureStep: View {
                 .frame(width: compact ? nil : 260)
                 .frame(maxWidth: compact ? .infinity : nil, maxHeight: compact ? 260 : .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(alignment: .topLeading) {
+                    if photo != nil {
+                        Button { showingPhoto.toggle() } label: {
+                            Label(showingPhoto ? "MAP" : "PHOTO", systemImage: showingPhoto ? "map.fill" : "photo.fill")
+                                .font(.system(size: 12, weight: .black, design: .rounded))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(SignPanel.ink, in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(8)
+                        .accessibilityLabel(showingPhoto ? "Show the map" : "Show the photo")
+                    }
+                }
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(white: 0.8), lineWidth: 2))
 
             VStack(alignment: .leading, spacing: 10) {
@@ -138,7 +160,7 @@ struct SignCaptureStep: View {
                         .font(.system(size: 14, weight: .heavy, design: .rounded))
                         .lineLimit(2)
                 }
-                Label(locationText, systemImage: hasLocation ? "location.fill" : "location.slash")
+                Label(locationText, systemImage: photo != nil ? "mappin.and.ellipse" : hasLocation ? "location.fill" : "location.slash")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundStyle(SignPanel.muted)
                     .lineLimit(2)
@@ -173,6 +195,12 @@ struct SignCaptureStep: View {
     }
 
     private var locationText: String {
+        if photo != nil {
+            if showingPhoto { return "Tap MAP to put the pin on the sign" }
+            if pin == nil { return "Zoom in and drag the map until the pin is on the sign" }
+            if pinStart == nil { return fromLibrary ? "This photo has no saved location: drag the map to the sign" : "No GPS yet: drag the map to the sign" }
+            return "Drag the map until the pin is on the sign"
+        }
         if fromLibrary {
             return photoCoordinate == nil ? "This photo has no saved location: no map pin" : "Location from the photo"
         }
@@ -185,6 +213,9 @@ struct SignCaptureStep: View {
         readText = nil
         fromLibrary = false
         photoCoordinate = nil
+        pinStart = nil
+        pin = nil
+        showingPhoto = false
         message = nil
     }
 
@@ -196,6 +227,7 @@ struct SignCaptureStep: View {
         message = nil
         photo = image
         fromLibrary = false
+        placePin(at: store.location.location?.coordinate)
         read(image)
     }
 
@@ -209,7 +241,14 @@ struct SignCaptureStep: View {
         photo = imported.image
         fromLibrary = true
         photoCoordinate = imported.coordinate
+        placePin(at: imported.coordinate)
         read(imported.image)
+    }
+
+    private func placePin(at coordinate: CLLocationCoordinate2D?) {
+        pinStart = coordinate
+        pin = coordinate
+        showingPhoto = false
     }
 
     private func read(_ image: UIImage) {
@@ -228,7 +267,7 @@ struct SignCaptureStep: View {
             defer { saving = false }
             var payload: [String: Any] = ["name": readText ?? fallbackName, "kind": "task", "radiusM": 15]
             if let readText { payload["signText"] = readText }
-            if let coordinate = fromLibrary ? photoCoordinate : store.location.location?.coordinate {
+            if let coordinate = pin {
                 payload["lat"] = coordinate.latitude
                 payload["lng"] = coordinate.longitude
             }
