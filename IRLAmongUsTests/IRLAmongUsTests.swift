@@ -1,9 +1,18 @@
 import AVFoundation
 import Foundation
 import Testing
+import UIKit
 @testable import IRLAmongUs
 
 struct IRLAmongUsTests {
+    @MainActor
+    @Test func roleRevealSoundIsBundledAndDecodable() throws {
+        let asset = try #require(NSDataAsset(name: "RoleRevealSound"))
+        let player = try AVAudioPlayer(data: asset.data)
+        #expect(player.duration > 4 && player.duration < 5)
+        #expect(player.prepareToPlay())
+    }
+
     @Test func playerSpawningAudioIsBundledAndDecodable() throws {
         let url = try #require(Bundle.main.url(forResource: "player-spawning", withExtension: "mp3"))
         let player = try AVAudioPlayer(contentsOf: url)
@@ -321,6 +330,7 @@ struct TaskTypeDecodingTests {
 }
 
 struct MiniGameRandomnessTests {
+    @MainActor
     @Test func wiringIsShuffledDifferentlyAndNeverStartsSolved() {
         let deals = (0..<500).map { _ in WiringGame.shuffledColors() }
         #expect(!deals.contains([0, 1, 2, 3]))

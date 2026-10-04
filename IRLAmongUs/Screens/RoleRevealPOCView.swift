@@ -8,6 +8,7 @@ struct RoleRevealPOCView: View {
     @State private var role: Role?
     @State private var revealed = false
     @State private var playbackID = UUID()
+    @StateObject private var revealAudio = RoleRevealAudioPlayer()
 
     var body: some View {
         GeometryReader { geometry in
@@ -31,7 +32,10 @@ struct RoleRevealPOCView: View {
                             .padding(.bottom, 12)
                         }
                     } else {
-                        ShhhIntroView { revealed = true }
+                        ShhhIntroView {
+                            revealed = true
+                            revealAudio.play()
+                        }
                             .id(playbackID)
                             .accessibilityLabel("Shhh. Keep your role secret.")
                             .accessibilityIdentifier("roles.intro")
@@ -69,6 +73,7 @@ struct RoleRevealPOCView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .onAppear { OrientationDelegate.requestLandscape() }
+        .onDisappear { revealAudio.stop() }
     }
 
     private func roleButton(_ role: Role, title: String, color: Color) -> some View {
@@ -81,6 +86,7 @@ struct RoleRevealPOCView: View {
     }
 
     private func start(_ nextRole: Role) {
+        revealAudio.stop()
         revealed = false
         role = nextRole
         playbackID = UUID()

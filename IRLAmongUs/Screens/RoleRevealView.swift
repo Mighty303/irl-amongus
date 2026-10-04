@@ -4,6 +4,7 @@ struct RoleRevealView: View {
     @Environment(GameStore.self) private var store
     let state: GameState
     @State private var revealed = false
+    @StateObject private var revealAudio = RoleRevealAudioPlayer()
 
     var body: some View {
         VStack(spacing: 24) {
@@ -13,7 +14,10 @@ struct RoleRevealView: View {
                 Countdown(deadline: state.phaseDeadline, font: .title.monospaced())
             } else if !revealed {
                 Text("Make sure nobody can see your screen").font(.title2).multilineTextAlignment(.center)
-                Button("Reveal my role") { revealed = true }
+                Button("Reveal my role") {
+                    revealed = true
+                    revealAudio.play()
+                }
                     .buttonStyle(.borderedProminent).controlSize(.large)
             } else {
                 let impostor = state.me.role == .impostor
@@ -31,5 +35,6 @@ struct RoleRevealView: View {
             }
         }
         .padding(32)
+        .onDisappear { revealAudio.stop() }
     }
 }
