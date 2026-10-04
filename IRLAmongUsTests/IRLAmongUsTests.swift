@@ -4,6 +4,73 @@ import Testing
 import UIKit
 @testable import IRLAmongUs
 
+struct NeckKillTests {
+    @Test func keepsSourceTimingAndRecolorsOnlyMaskedSuitPixels() throws {
+        let frames = try NeckKillFrames.load(attacker: .purple, victim: .cyan)
+        #expect(frames.images.count == 47)
+        #expect(abs(frames.duration - 1.6) < 0.0001)
+        #expect(frames.frameIndex(at: 0) == 0)
+        #expect(frames.frameIndex(at: 0.069) == 0)
+        #expect(frames.frameIndex(at: 0.071) == 1)
+        #expect(frames.frameIndex(at: 1.6) == 46)
+        func bytes(_ image: CGImage) throws -> [UInt8] {
+            let context = try #require(CGContext(data: nil, width: image.width, height: image.height,
+                bitsPerComponent: 8, bytesPerRow: image.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            return Array(UnsafeBufferPointer(start: try #require(context.data).assumingMemoryBound(to: UInt8.self),
+                                            count: image.width * image.height * 4))
+        }
+        var attackerPixels = 0, victimPixels = 0
+        for index in frames.images.indices {
+            let original = try #require(UIImage(named: String(format: "NeckKillFrame%02d", index))?.cgImage)
+            let mask = try #require(UIImage(named: String(format: "NeckKillMask%02d", index))?.cgImage)
+            #expect(original.width == 338 && original.height == 200)
+            let before = try bytes(original), labels = try bytes(mask)
+            let after = try bytes(try #require(frames.images[index].cgImage))
+            var preservesUnmaskedPixels = true
+            var suitsMatchPalette = true
+            for i in stride(from: 0, to: before.count, by: 4) {
+                if labels[i] == 0 && labels[i + 1] == 0 {
+                    if before[i..<(i + 4)] != after[i..<(i + 4)] { preservesUnmaskedPixels = false }
+                } else {
+                    let isAttacker = labels[i] > 0
+                    if isAttacker { attackerPixels += 1 } else { victimPixels += 1 }
+                    let rgb = isAttacker ? PlayerColor.purple.suitRGB : PlayerColor.cyan.suitRGB
+                    let shade = Double(before[i + (isAttacker ? 0 : 1)]) / (isAttacker ? 207 : 124)
+                    for (channel, value) in [rgb.0, rgb.1, rgb.2].enumerated() {
+                        if after[i + channel] != UInt8(min(255, (Double(value) * shade).rounded())) {
+                            suitsMatchPalette = false
+                        }
+                    }
+                }
+            }
+            #expect(preservesUnmaskedPixels, "background, visor and outline in frame \(index)")
+            #expect(suitsMatchPalette, "attacker and victim suit in frame \(index)")
+        }
+        #expect(attackerPixels > 1000 && victimPixels > 1000)
+        // An unidentified attacker retains the source artwork on older servers.
+        let fallback = try NeckKillFrames.load(attacker: nil, victim: .yellow)
+        let source = try bytes(try #require(UIImage(named: "NeckKillFrame04")?.cgImage))
+        let labels = try bytes(try #require(UIImage(named: "NeckKillMask04")?.cgImage))
+        let result = try bytes(try #require(fallback.images[4].cgImage))
+        #expect(stride(from: 0, to: source.count, by: 4).allSatisfy {
+            labels[$0] == 0 || source[$0..<($0 + 4)] == result[$0..<($0 + 4)]
+        })
+    }
+
+    @Test func duplicateKillsStayDismissedUntilNextLife() {
+        var state = KillPresentationState()
+        let first = state.accept(victimID: "cyan")
+        let duplicate = state.accept(victimID: "cyan")
+        let another = state.accept(victimID: "pink")
+        #expect(first && !duplicate && another)
+        state.reset()
+        let nextLife = state.accept(victimID: "cyan")
+        #expect(nextLife)
+    }
+}
+
 struct IRLAmongUsTests {
     @Test func roleRevealLineupUsesRosterColorsAndHidesCrewFromImpostors() {
         func player(_ id: String, color: PlayerColor?, role: Role?) -> PlayerView {

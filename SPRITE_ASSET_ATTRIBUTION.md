@@ -1,5 +1,21 @@
 # UI sprite attribution
 
+## Neck kill animation
+
+`IRLAmongUs/Assets/KillAnimation/Neck_Kill.gif` is the original user-supplied
+animation, retained byte-for-byte. Despite its filename, the file contains
+animated WebP: 47 frames at 338×200, lasting 1.6 seconds.
+
+`KillAnimation/NeckKillFrame*` assets are full composited frames extracted without
+redrawing. `NeckKillMask*` assets identify the attacker (including hands) and
+victim suit regions. Playback recolours those regions with the existing lobby
+palette while retaining the source shading, background, visors and outlines.
+Regenerate the assets from the repository root with
+`swift scripts/import-neck-kill.swift` (requires ImageMagick).
+
+Among Us and its original artwork belong to Innersloth. The supplied file does
+not include source or licence metadata.
+
 The UI image assets added under `IRLAmongUs/Assets.xcassets` were extracted
 without redrawing from the supplied sprite sheet:
 

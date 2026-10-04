@@ -6,6 +6,30 @@ final class IRLAmongUsUITests: XCTestCase {
     }
 
     @MainActor
+    func testNeckKillPreviewPlaysAndDismisses() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Developer Mode"].waitForExistence(timeout: 5))
+        app.collectionViews.firstMatch.swipeUp()
+        XCTAssertTrue(app.buttons["developer.tools"].waitForExistence(timeout: 5))
+        app.buttons["developer.tools"].tap()
+        let portrait = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            app.windows.firstMatch.frame.height > app.windows.firstMatch.frame.width
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [portrait], timeout: 5), .completed)
+        app.collectionViews.firstMatch.swipeUp()
+        app.buttons["Kill animation & colours"].tap()
+        let play = app.buttons["kill.preview.play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 5))
+        play.tap()
+        let animation = app.descendants(matching: .any)["kill.animation"].firstMatch
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in !animation.exists }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 5), .completed)
+        XCTAssertTrue(play.waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testLocalLobbyRequiresNameAndValidServer() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()

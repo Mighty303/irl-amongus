@@ -34,9 +34,23 @@ struct GameRootView: View {
             if let alert = store.alert {
                 AlertOverlay(alert: alert) { store.alert = nil }
             }
+            if let presentation = store.killPresentation {
+                KillAnimationView(presentation: presentation) { store.dismissKill(presentation.id) }
+                    .id(presentation.id)
+                    .zIndex(10)
+            }
         }
         .onChange(of: store.state?.phase, initial: true) { _, phase in
+            guard store.killPresentation == nil else { return }
             if phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == nil {
+                OrientationDelegate.requestLandscape()
+            } else {
+                OrientationDelegate.requestPortrait()
+            }
+        }
+        .onChange(of: store.killPresentation?.id) { _, id in
+            let phase = store.state?.phase
+            if id != nil || phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == nil {
                 OrientationDelegate.requestLandscape()
             } else {
                 OrientationDelegate.requestPortrait()
@@ -47,6 +61,7 @@ struct GameRootView: View {
             if store.session != nil && store.state?.phase != .ROLE_REVEAL
                 && (!store.isSynced || (lobbyContent != nil && store.state?.phase != .LOBBY && store.state?.phase != .PLAYING)) {
                 Button("Leave Game", role: .destructive) { store.leave() }
+                    .allowsHitTesting(store.killPresentation == nil)
                     .padding(8)
                     .frame(maxWidth: .infinity)
                     .background(.bar)

@@ -1,0 +1,54 @@
+diff --git a/src/game.ts b/src/game.ts
+index a504193..e8e460a 100644
+--- a/src/game.ts
++++ b/src/game.ts
+@@ -577,7 +577,7 @@ export class Game {
+     p.killCooldownUntil = now + this.settings.killCooldownSec * 1000;
+ 
+     const impostors = [...this.players.values()].filter((pl) => pl.role === "impostor").map((pl) => pl.id);
+-    this.emit([target.id, ...impostors], "PLAYER_KILLED", { victimId: target.id });
++    this.emit([target.id, ...impostors], "PLAYER_KILLED", { victimId: target.id, killerId: p.id });
+     this.checkWin();
+   }
+ 
+@@ -1018,6 +1018,7 @@ export class Game {
+         role: me.role,
+         alive: me.alive,
+         isBody: !!me.body && !me.body.reported,
++        killedBy: me.killedBy,
+         ackedRole: me.ackedRole,
+         bleToken: me.bleToken,
+         qrToken: me.qrToken,
+@@ -1097,6 +1098,7 @@ export interface StateView {
+     role: string | null;
+     alive: boolean;
+     isBody: boolean;
++    killedBy: string | null;
+     ackedRole: boolean;
+     bleToken: string;
+     qrToken: string;
+diff --git a/test/game.test.ts b/test/game.test.ts
+index c1c6c0b..99d1dc4 100644
+--- a/test/game.test.ts
++++ b/test/game.test.ts
+@@ -25,7 +25,7 @@ function setup(n = 4, stations?: Partial<Station>[]) {
+   };
+   const events = (p: Player) => (inbox.get(p.id) ?? []).filter((m) => m.type === "event").map((m: any) => m.event);
+   const station = (name: string) => game.stations.find((s) => s.name === name)!;
+-  return { game, players, host, act, advance, events, station };
++  return { game, players, host, act, advance, events, station, inbox };
+ }
+ 
+ function startPlaying(ctx: ReturnType<typeof setup>) {
+@@ -132,6 +132,11 @@ test("full loop: kill -> report -> gather -> discuss -> vote -> crewmates win",
+   assert.ok(events(victim).includes("PLAYER_KILLED"));
+   assert.ok(!events(finder).includes("PLAYER_KILLED"), "kills are not broadcast");
+   assert.equal(game.viewFor(victim.id).me.isBody, true);
++  assert.equal(game.viewFor(victim.id).me.killedBy, impostor.id);
++  assert.equal(game.viewFor(finder.id).me.killedBy, null);
++  const killEvent = ctx.inbox.get(victim.id)!.find((msg) => msg.type === "event" && msg.event === "PLAYER_KILLED");
++  assert.ok(killEvent && killEvent.type === "event");
++  assert.deepEqual(killEvent.data, { victimId: victim.id, killerId: impostor.id });
+   // Other crew can't tell anyone died yet.
+   assert.equal(game.viewFor(finder.id).players.find((p) => p.id === victim.id)!.alive, true);
+ 

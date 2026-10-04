@@ -9,6 +9,7 @@ struct MapKillButton: View {
     @State private var choosingTarget = false
     @State private var submitting = false
     @State private var previewCooldown: Date?
+    @State private var previewKill: KillPresentation?
 
     private var targets: [PlayerView] {
         guard let state else { return [] }
@@ -25,6 +26,7 @@ struct MapKillButton: View {
                 guard available else { return }
                 if state == nil {
                     audio.play()
+                    previewKill = KillPresentation(victimID: "preview", attackerColor: .red, victimColor: .green)
                     previewCooldown = .now.addingTimeInterval(10)
                 } else if targets.count == 1, let target = targets.first {
                     kill(target)
@@ -59,6 +61,10 @@ struct MapKillButton: View {
             Button("Cancel", role: .cancel) {}
         }
         .onDisappear { audio.stop() }
+        .fullScreenCover(item: $previewKill) { presentation in
+            KillAnimationView(presentation: presentation) { previewKill = nil }
+                .interactiveDismissDisabled()
+        }
     }
 
     private func kill(_ target: PlayerView) {

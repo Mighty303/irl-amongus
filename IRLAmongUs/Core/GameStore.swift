@@ -31,6 +31,7 @@ final class GameStore {
     private(set) var isSynced = false
     var errorMessage: String?
     var alert: Alert?
+    var killPresentation: KillPresentation?
     /// serverTime - localTime, in ms
     private(set) var clockOffset: Double = 0
     var signThreshold: Float { didSet { preferences.set(signThreshold, forKey: "signThreshold") } }
@@ -46,6 +47,9 @@ final class GameStore {
 
     @ObservationIgnored private let killAudio = KillAudioPlayer()
     @ObservationIgnored private var deathSound = DeathSoundState()
+    @ObservationIgnored private var killPresentationState = KillPresentationState()
+    @ObservationIgnored private var awaitingKillAck = false
+    @ObservationIgnored private var pendingKillVictims = Set<String>()
     @ObservationIgnored private var initializedCooldownForLobby: String? {
         didSet { preferences.set(initializedCooldownForLobby, forKey: "initializedKillCooldownLobby") }
     }
@@ -314,6 +318,8 @@ final class GameStore {
         alert = nil
         killAudio.stop()
         deathSound = DeathSoundState()
+        killPresentation = nil
+        killPresentationState.reset()
         initializedCooldownForLobby = nil
         session = nil
         state = nil
@@ -441,10 +447,18 @@ final class GameStore {
 
     private func apply(_ newState: GameState) {
         let old = state
+        if (old?.phase != newState.phase && (newState.phase == .LOBBY || newState.phase == .ROLE_REVEAL))
+            || (old?.me.alive == false && newState.me.alive) {
+            killPresentation = nil
+            killPresentationState.reset()
+        }
         clockOffset = newState.serverTime - Date().timeIntervalSince1970 * 1000
         state = newState
         if deathSound.update(wasAlive: old?.me.alive, isAlive: newState.me.alive, isBody: newState.me.isBody) {
             killAudio.play(.victim)
+        }
+        if old?.me.alive == true && !newState.me.alive && newState.me.isBody {
+            presentKill(victimID: newState.me.id, killerID: newState.me.killedBy)
         }
         connection = .connected
         isSynced = true
@@ -497,6 +511,15 @@ final class GameStore {
         case "ROLE_ASSIGNED":
             Haptics.heavy()
         case "PLAYER_KILLED":
+            if let victimID = data["victimId"] as? String {
+                let killerID = data["killerId"] as? String
+                if awaitingKillAck && (killerID == nil || killerID == session?.playerId) {
+                    pendingKillVictims.insert(victimID)
+                }
+                if victimID == session?.playerId || killerID == session?.playerId {
+                    presentKill(victimID: victimID, killerID: killerID)
+                }
+            }
             if deathSound.killed(victimID: data["victimId"] as? String, localID: session?.playerId) {
                 killAudio.play(.victim)
             }
@@ -530,9 +553,33 @@ final class GameStore {
 
     // MARK: - Actions
 
+    private func presentKill(victimID: String, killerID: String?) {
+        guard let state else { return }
+        let attacker = killerID.flatMap { PlayerColor.rosterColor(for: $0, in: state.players) }
+        if killPresentationState.accept(victimID: victimID) {
+            killPresentation = KillPresentation(victimID: victimID, attackerColor: attacker,
+                victimColor: PlayerColor.rosterColor(for: victimID, in: state.players) ?? .green)
+        } else if killPresentation?.victimID == victimID, let attacker {
+            // A snapshot can precede the event that identifies the attacker.
+            killPresentation?.attackerColor = attacker
+        }
+    }
+
+    func dismissKill(_ id: UUID) {
+        if killPresentation?.id == id { killPresentation = nil }
+    }
+
     /// Sends an action and waits for the server's ack. Throws the server's rejection reason.
     func send(_ action: String, _ payload: [String: Any] = [:]) async throws {
         guard let socket, isSynced else { throw ClientError.server("Not connected. Reconnecting…") }
+        let isKill = action == "kill"
+        if isKill {
+            awaitingKillAck = true
+            pendingKillVictims.removeAll()
+        }
+        defer {
+            if isKill { awaitingKillAck = false; pendingKillVictims.removeAll() }
+        }
         let id = nextRequestId
         nextRequestId += 1
         let data = try JSONSerialization.data(withJSONObject: ["id": id, "action": action, "payload": payload])
@@ -547,7 +594,13 @@ final class GameStore {
                 self.pending.removeValue(forKey: id)?.resume(throwing: ClientError.server("Server didn't respond"))
             }
         }
-        if action == "kill" { killAudio.play(.killer) }
+        if isKill {
+            killAudio.play(.killer)
+            // Direct and QR kills share this path; old servers identify QR victims in the event.
+            let victimID = payload["targetId"] as? String
+                ?? (pendingKillVictims.count == 1 ? pendingKillVictims.first : nil)
+            if let victimID { presentKill(victimID: victimID, killerID: session?.playerId) }
+        }
     }
 
     /// `send` that surfaces errors to the user. Returns whether the server accepted the action.

@@ -213,6 +213,8 @@ struct Me: Decodable, Equatable {
     let role: Role?
     let alive: Bool
     let isBody: Bool
+    /// Sent only to this victim by newer servers, for their kill animation.
+    var killedBy: String? = nil
     let ackedRole: Bool
     let bleToken: String
     let qrToken: String
