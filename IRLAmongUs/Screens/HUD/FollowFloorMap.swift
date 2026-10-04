@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// The in-game map: zoomed in to a little more than a room across, and locked on the player, who stays
-/// in the middle while the floor plan glides underneath. Pinch changes how much it shows (within limits);
-/// there's no panning. Task signs off the edge get an arrow with their distance.
+/// in the middle while the floor plan glides underneath. The zoom is fixed and there's no panning:
+/// seeing further than you could in person would be cheating. Task signs off the edge get an arrow with
+/// their distance.
 ///
 /// Fog of war, like Among Us vision: you see out to `visionM`, and walls block the view, so other rooms
 /// are dark. Other players only show where you can see them; your task signs, the red button and the
@@ -22,20 +23,16 @@ struct FollowFloorMap: View {
     var visionM: Double? = nil
     let onSelectStation: (POCStation) -> Void
 
-    /// Meters across the shorter side: a little over a room's width.
-    @State private var spanM: Double = 16
-    @GestureState private var pinch: CGFloat = 1
+    /// Meters across the shorter side: a little over a room's width. Fixed, so nobody can zoom out to look around.
+    private static let spanM: Double = 16
     /// The floor plan is drawn around this point (three views wide) and slid so `center` stays put;
     /// it moves when the player gets far from it.
     @State private var anchor: CGPoint?
 
-    private static let minSpan = 8.0
-    private static let maxSpan = 120.0
-
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
-            let span = min(max(spanM / Double(pinch), Self.minSpan), Self.maxSpan)
+            let span = Self.spanM
             let ppm = min(size.width, size.height) / span // points per meter
             let a = anchor ?? center
             let big = CGSize(width: size.width * 3, height: size.height * 3)
@@ -108,11 +105,6 @@ struct FollowFloorMap: View {
             .frame(width: size.width, height: size.height)
             .clipShape(RoundedRectangle(cornerRadius: 22))
             .contentShape(Rectangle())
-            .gesture(
-                MagnificationGesture()
-                    .updating($pinch) { value, state, _ in state = value }
-                    .onEnded { value in spanM = min(max(spanM / Double(value), Self.minSpan), Self.maxSpan) }
-            )
             .onAppear { anchor = center }
             .onChange(of: center) { _, new in
                 // Far from where the plan is drawn: redraw around here, without sliding.
@@ -126,7 +118,7 @@ struct FollowFloorMap: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("map.floorPlan")
-        .accessibilityLabel("Map, centered on you. Pinch to zoom.")
+        .accessibilityLabel("Map, centered on you")
     }
 
     // MARK: - Pieces
