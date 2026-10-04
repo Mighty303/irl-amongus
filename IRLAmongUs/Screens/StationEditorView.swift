@@ -33,6 +33,8 @@ struct StationEditorView: View {
     /// drags the map until the pin sits on the sign.
     @State private var pinStart: CLLocationCoordinate2D?
     @State private var pin: CLLocationCoordinate2D?
+    /// SFU building and floor under the pin, saved with the sign.
+    @State private var place: CampusPlace?
 
     var body: some View {
         NavigationStack {
@@ -51,7 +53,7 @@ struct StationEditorView: View {
                             }
                         }
                         .font(.subheadline)
-                        Button("Retake") { self.photo = nil; readText = nil; fromLibrary = false; photoCoordinate = nil; pinStart = nil; pin = nil }
+                        Button("Retake") { self.photo = nil; readText = nil; fromLibrary = false; photoCoordinate = nil; pinStart = nil; pin = nil; place = nil }
                     } else {
                         CameraView(onFrame: { buffer in latestFrame.buffer = buffer }, frameInterval: 0.2)
                             .frame(height: 300)
@@ -81,7 +83,7 @@ struct StationEditorView: View {
 
                 Section {
                     if photo != nil {
-                        SignPinPicker(start: pinStart, pin: $pin, others: store.state?.stations ?? [])
+                        SignPinPicker(start: pinStart, pin: $pin, place: $place, others: store.state?.stations ?? [])
                             .frame(height: 260)
                             .listRowInsets(EdgeInsets())
                         Label(pin == nil ? "Zoom in and drag the map until the pin is on the sign"
@@ -171,6 +173,10 @@ struct StationEditorView: View {
             if let coordinate = photo != nil ? pin : store.location.location?.coordinate {
                 payload["lat"] = coordinate.latitude
                 payload["lng"] = coordinate.longitude
+            }
+            if let place {
+                payload["buildingId"] = place.buildingId
+                payload["floorId"] = place.floorId
             }
             if let photo {
                 do {

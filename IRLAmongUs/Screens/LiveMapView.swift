@@ -3,13 +3,14 @@ import SwiftUI
 extension GameStore {
     /// Map dots while live positions are on: everyone from the server, with this phone's own estimate
     /// (fresher than the server's copy) for YOU. Empty when it's off.
-    func liveDots(state: GameState) -> [POCPlayerDot] {
+    func liveDots(state: GameState, campus: CampusView = CampusView()) -> [POCPlayerDot] {
         guard livePositionsOn else { return [] }
         var dots: [POCPlayerDot] = livePositions.compactMap { pos in
             guard pos.playerId != state.me.id, let player = state.player(pos.playerId) else { return nil }
+            // Faded when quiet, or on another floor than the map shows.
             return POCPlayerDot(id: pos.playerId, name: player.name, color: (player.color ?? .white).swatch,
-                                position: CGPoint(x: pos.lng, y: pos.lat), accuracyM: pos.accuracyM,
-                                isMe: false, faded: pos.stale)
+                                position: CGPoint(x: pos.lng, y: pos.lat), accuracyM: pos.accuracyM, isMe: false,
+                                faded: pos.stale || campus.isOffFloor(buildingId: pos.buildingId, floorId: pos.floorId))
         }
         if let mine = positions.estimate {
             dots.append(POCPlayerDot(id: state.me.id, name: state.me.name, color: .cyan,
@@ -42,17 +43,27 @@ struct LiveMapView: View {
         GeometryReader { geo in
             let landscape = geo.size.width > geo.size.height
             let layout = landscape ? AnyLayout(HStackLayout(spacing: 14)) : AnyLayout(VStackLayout(spacing: 14))
+            let campus = store.campusView(points: state.locatedStationPoints + store.livePositions.map { CGPoint(x: $0.lng, y: $0.lat) },
+                                          stations: state.stations)
             layout {
                 POCFloorPlan(
-                    rooms: SUBLevel2Map.rooms,
-                    stations: state.otherSignPins(excluding: []),
+                    rooms: campus.rooms,
+                    stations: state.otherSignPins(excluding: [], campus: campus),
                     meetingPoint: state.meetingPointPin,
                     completedStationIDs: [],
                     selectedStation: nil,
                     ownLastCheckpoint: checkpoint(state),
                     onSelectStation: { _ in },
-                    players: store.liveDots(state: state)
+                    players: store.liveDots(state: state, campus: campus)
                 )
+                .overlay(alignment: .bottomTrailing) {
+                    if let building = campus.focus, building.floors.count > 1, let floor = campus.floors[building.id] {
+                        CampusFloorControl(building: building, floor: floor) { step in
+                            store.campus.stepFloor(building, by: step, hint: store.shownFloorHint(building, stations: state.stations))
+                        }
+                        .padding(12)
+                    }
+                }
                 .frame(width: landscape ? min(geo.size.height, geo.size.width * 0.56) : nil,
                        height: landscape ? nil : min(geo.size.width, geo.size.height * 0.5))
                 TimelineView(.periodic(from: .now, by: 1)) { _ in
@@ -101,7 +112,8 @@ struct LiveMapView: View {
             if let e {
                 HStack(alignment: .firstTextBaseline) {
                     Text("±\(meters(e.accuracyM))").font(.title2.bold().monospacedDigit())
-                    Text(place(room: e.room, level: e.levelDelta)).font(.subheadline).foregroundStyle(.secondary)
+                    Text(place(room: [e.place, e.room].compactMap { $0 }.joined(separator: " · ").nilIfEmpty, level: e.levelDelta))
+                        .font(.subheadline).foregroundStyle(.secondary)
                 }
                 sourcesRow(e.sources)
             } else {
@@ -111,6 +123,8 @@ struct LiveMapView: View {
                 Text(message).font(.caption).foregroundStyle(.red)
             }
             Group {
+                row("Campus", store.campus.isFullCampus ? "\(store.campus.buildings.count) SFU buildings"
+                    : store.campus.loading ? "Downloading the SFU campus…" : "SUB only until the campus downloads")
                 row("Last sign", d.lastFixName.map { name in "\(name) · \(ago(d.lastFixAt))" } ?? "none yet")
                 row("Since then", "\(d.stepsSinceFix) steps · \(meters(d.metersSinceFix))"
                     + (d.stepsAvailable ? "" : " (no step counter)"))
@@ -145,7 +159,9 @@ struct LiveMapView: View {
                             Spacer()
                             Text(seconds((now - pos.at) / 1000)).font(.caption).foregroundStyle(pos.stale ? .red : .secondary)
                         }
-                        Text(place(room: pos.room, level: pos.levelDelta)).font(.caption).foregroundStyle(.secondary)
+                        Text(place(room: [pos.buildingId, pos.floorId, pos.room].compactMap { $0 }.joined(separator: " · ").nilIfEmpty,
+                                   level: pos.levelDelta))
+                            .font(.caption).foregroundStyle(.secondary)
                         sourcesRow(pos.sources)
                     }
                 }
@@ -216,4 +232,5 @@ struct LiveMapView: View {
 
 private extension String {
     func ifEmpty(_ fallback: String) -> String { isEmpty ? fallback : self }
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

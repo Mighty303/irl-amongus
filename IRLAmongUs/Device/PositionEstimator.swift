@@ -26,6 +26,11 @@ final class PositionEstimator {
         var accuracyM: Double
         var roomId: String?
         var room: String?
+        /// SFU building and floor (campus map), when known.
+        var buildingId: String?
+        var floorId: String?
+        /// e.g. "SUB · 2000 Level", for display.
+        var place: String?
         /// Floors up (+) or down (-) from the last sign check-in.
         var levelDelta: Int
         /// What fed the estimate recently: sign, steps, compass, gps, map, baro.
@@ -82,7 +87,11 @@ final class PositionEstimator {
     @ObservationIgnored private var altitudeAtFix: Double?
     @ObservationIgnored private var levelDelta = 0
 
-    @ObservationIgnored private lazy var floorPlan = FloorPlanIndex(rooms: SUBLevel2Map.rooms)
+    /// The campus floor plans, for which building, floor and room the estimate is in.
+    @ObservationIgnored weak var campus: CampusMap?
+    /// Building and floor of the last sign check-in: the barometer counts floors from there.
+    @ObservationIgnored private var fixBuildingId: String?
+    @ObservationIgnored private var fixFloorId: String?
 
     // Tuning. Indoor GPS radii are optimistic and successive fixes share the same error, so they're
     // inflated and thinned out; the pedometer's step length is decent, the phone's heading less so.
@@ -142,12 +151,16 @@ final class PositionEstimator {
         diagnostics = Diagnostics()
         altitudeAtFix = nil
         levelDelta = 0
+        fixBuildingId = nil
+        fixFloorId = nil
     }
 
     // MARK: - Inputs
 
     /// A verified sign check-in: we know exactly where the player is.
-    func fix(lat: Double, lng: Double, name: String) {
+    func fix(lat: Double, lng: Double, name: String, buildingId: String? = nil, floorId: String? = nil) {
+        fixBuildingId = buildingId
+        fixFloorId = floorId
         let p = meters(lat: lat, lng: lng)
         x = p.x
         y = p.y
@@ -293,17 +306,25 @@ final class PositionEstimator {
         var room: POCRoom?
         diagnostics.snappedToMap = false
 
-        // The floor plan is one level: only use it while the barometer says we're on the floor of the last sign.
-        if levelDelta == 0, !floorPlan.isEmpty {
-            room = floorPlan.room(containing: coordinate)
-            if room == nil, let nearest = floorPlan.nearestInside(to: coordinate),
+        // Which building and floor: the building we're in (campus map), and the floor counted by the barometer
+        // from the last sign scanned in that building. Elsewhere the floor isn't known, so no room or snapping.
+        let (building, floor) = MainActor.assumeIsolated { () -> (CampusBuilding?, CampusFloor?) in
+            guard let campus, let building = campus.building(at: coordinate) else { return (nil, nil) }
+            guard building.id == fixBuildingId, let fixIndex = building.floorIndex(fixFloorId) else { return (building, nil) }
+            let index = min(max(fixIndex + levelDelta, 0), building.floors.count - 1)
+            return (building, building.floors[index])
+        }
+        if let building, let floor {
+            let plan = MainActor.assumeIsolated { campus?.index(building, floor) }
+            room = plan?.room(containing: coordinate)
+            if room == nil, let nearest = plan?.nearestInside(to: coordinate),
                nearest.distanceM <= min(variance.squareRoot(), 8) {
                 // Just outside a room and within our uncertainty: they're in the room, not the wall.
                 coordinate = nearest.coordinate
                 let p = meters(lat: coordinate.latitude, lng: coordinate.longitude)
                 x = p.x
                 y = p.y
-                room = floorPlan.room(containing: coordinate)
+                room = plan?.room(containing: coordinate)
                 diagnostics.snappedToMap = true
             }
         }
@@ -323,7 +344,10 @@ final class PositionEstimator {
             lng: coordinate.longitude,
             accuracyM: (variance.squareRoot() * 10).rounded() / 10,
             roomId: room?.roomID,
-            room: room.map { $0.label.hasPrefix("SUB ") ? $0.label : "\($0.roomID) \($0.label)" },
+            room: room.map { r in building.map { r.label.hasPrefix("\($0.id) ") } == true ? r.label : "\(r.roomID) \(r.label)" },
+            buildingId: building?.id,
+            floorId: floor?.id,
+            place: building.map { b in [b.id, floor?.name].compactMap { $0 }.joined(separator: " · ") },
             levelDelta: levelDelta,
             sources: sources,
             updatedAt: now
