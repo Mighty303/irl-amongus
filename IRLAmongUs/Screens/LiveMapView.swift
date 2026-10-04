@@ -78,17 +78,10 @@ struct LiveMapView: View {
                     Text("LIVE MAP").font(.caption.weight(.bold)).tracking(2).foregroundStyle(.cyan)
                     Text("Testing: everyone sees everyone").font(.headline)
                 }
-                if state.isHost {
-                    Toggle("Share everyone's position", isOn: Binding(
-                        get: { store.livePositionsOn },
-                        set: { store.updateSetting("livePositions", $0) }))
-                        .font(.subheadline.weight(.semibold))
-                } else {
-                    Label(store.livePositionsOn ? "On. The host turned it on." : "Off. Ask the host to turn it on here.",
-                          systemImage: store.livePositionsOn ? "dot.radiowaves.left.and.right" : "eye.slash")
-                        .font(.subheadline)
-                        .foregroundStyle(store.livePositionsOn ? .green : .secondary)
-                }
+                Toggle("Share everyone's position", isOn: Binding(
+                    get: { store.livePositionsOn },
+                    set: { store.updateSetting("livePositions", $0) }))
+                    .font(.subheadline.weight(.semibold))
                 you
                 if store.livePositionsOn { others(state) }
                 Text("Scan signs as you go: each scan pins you exactly. Keep the phone held up while walking so steps follow the compass. Dots fade when a phone goes quiet.")

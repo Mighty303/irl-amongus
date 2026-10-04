@@ -5,7 +5,7 @@ import UIKit
 /// GPS is used to tag stations during setup, place pins on the mini-map, and as a coarse
 /// checkpoint method (server-side geofence). Indoors it's only a rough hint; sign recognition is
 /// the primary way to prove presence. It also feeds `PositionEstimator`, whose estimate is only
-/// sent to the server while the host has live positions (testing) turned on.
+/// sent to the server while live positions (testing) are turned on.
 @Observable
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private(set) var location: CLLocation?

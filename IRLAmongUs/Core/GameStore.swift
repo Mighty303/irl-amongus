@@ -40,7 +40,7 @@ final class GameStore {
     let signs = SignRecognizer()
     /// This phone's own position estimate (sensors only).
     let positions = PositionEstimator()
-    /// Everyone's estimated positions, while the host has live positions on.
+    /// Everyone's estimated positions, while live positions are on.
     private(set) var livePositions: [LivePosition] = []
     var livePositionsOn: Bool { state?.settings.livePositions == true }
 
@@ -611,7 +611,7 @@ final class GameStore {
         }
     }
 
-    /// While the host has live positions on, sends this phone's estimate every 2 seconds.
+    /// While live positions are on, sends this phone's estimate every 2 seconds.
     private func startPositionReporting() {
         positionTask?.cancel()
         positionTask = Task { [weak self] in
