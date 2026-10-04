@@ -64,6 +64,7 @@ struct MySignsView: View {
         .padding(.horizontal, 18)
         .padding(.top, 14)
         .padding(.bottom, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading) // same size for every step
         .foregroundStyle(Self.ink)
         .background(.white, in: RoundedRectangle(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(Self.ink, lineWidth: 4))
@@ -179,18 +180,19 @@ struct MySignsView: View {
     private func captureStep(compact: Bool, number: Int, required: Int) -> some View {
         let layout = compact ? AnyLayout(VStackLayout(spacing: 14)) : AnyLayout(HStackLayout(alignment: .top, spacing: 18))
         return layout {
-            ZStack {
-                if let photo {
-                    Image(uiImage: photo).resizable().scaledToFill()
-                } else {
-                    CameraView(onFrame: { buffer in latestFrame.buffer = buffer }, frameInterval: 0.2)
+            // An overlay, so the photo fills this frame instead of resizing it to the photo.
+            Self.well
+                .overlay {
+                    if let photo {
+                        Image(uiImage: photo).resizable().scaledToFill()
+                    } else {
+                        CameraView(onFrame: { buffer in latestFrame.buffer = buffer }, frameInterval: 0.2)
+                    }
                 }
-            }
-            .frame(width: compact ? nil : 300)
-            .frame(maxWidth: compact ? .infinity : nil, maxHeight: compact ? 260 : .infinity)
-            .background(Self.well)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(white: 0.8), lineWidth: 2))
+                .frame(width: compact ? nil : 300)
+                .frame(maxWidth: compact ? .infinity : nil, maxHeight: compact ? 260 : .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(white: 0.8), lineWidth: 2))
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("Sign \(number) of \(required)").font(.system(size: 20, weight: .black, design: .rounded))
