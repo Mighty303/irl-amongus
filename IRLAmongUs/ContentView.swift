@@ -381,23 +381,30 @@ private struct LocalLobbyView: View {
                             lobbyButton("Classic") {
                                 Task { await store.createGame() }
                             }
-
-                            lobbyButton("Hide n Seek") {
-                                showLobbyMessage(
-                                    title: "Hide n Seek",
-                                    message: "Hide n Seek is coming soon. Classic is available now."
-                                )
-                            }
                         }
                     }
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text("Join a Game")
                             .font(.system(size: 19, design: .rounded))
-                        TextField("Room code", text: $code)
+                        TextField(
+                            "Room code",
+                            text: $code,
+                            prompt: Text("Room code").foregroundStyle(.white.opacity(0.75))
+                        )
+                            .font(.system(size: 24, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.white)
                             .textInputAutocapitalization(.characters)
                             .autocorrectionDisabled()
-                            .textFieldStyle(.roundedBorder)
+                            .textFieldStyle(.plain)
+                            .padding(.horizontal, 18)
+                            .frame(minHeight: 64)
+                            .background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 12))
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(.white, lineWidth: 3)
+                                    .allowsHitTesting(false)
+                            }
                             .accessibilityIdentifier("local.roomCode")
                         HStack(spacing: 12) {
                             lobbyButton("Join game") { Task { await store.joinGame(code: code) } }

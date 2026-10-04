@@ -94,7 +94,7 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["HOST"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Create"].exists)
         XCTAssertTrue(app.buttons["Classic"].exists)
-        XCTAssertTrue(app.buttons["Hide n Seek"].exists)
+        XCTAssertFalse(app.buttons["Hide n Seek"].exists)
         XCTAssertTrue(app.buttons["Back"].exists)
         XCTAssertTrue(app.textFields["local.playerName"].exists)
         XCTAssertFalse(app.textFields["local.serverURL"].exists, "The hosted server is fixed; no address field")
