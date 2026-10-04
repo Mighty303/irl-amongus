@@ -84,6 +84,7 @@ struct ContentView: View {
 
     @Environment(GameStore.self) private var store
     @State private var selectedHotspot: MenuHotspot?
+    @State private var showingAppSettings = false
     @State private var developerDestination: DeveloperDestination?
     @State private var pendingDeveloperDestination: DeveloperDestination?
     @State private var showingDeveloperMenu = ProcessInfo.processInfo.arguments.contains("-showDeveloperMenu")
@@ -210,6 +211,7 @@ struct ContentView: View {
         .onChange(of: store.pendingJoinCode, initial: true) { _, code in
             if code != nil { isShowingLocalLobby = true }
         }
+        .sheet(isPresented: $showingAppSettings) { AppSettingsView() }
         .alert(item: $selectedHotspot) { hotspot in
             Alert(
                 title: Text(hotspot.title),
@@ -251,6 +253,8 @@ struct ContentView: View {
             buttonAudio.play()
             if hotspot.title == "Local" {
                 isShowingLocalLobby = true
+            } else if hotspot.title == "Settings" {
+                showingAppSettings = true
             } else {
                 selectedHotspot = hotspot
             }
@@ -735,6 +739,13 @@ private struct GameLobbyView: View {
                 }
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingCustomize)
+            .overlay {
+                if showingMySigns {
+                    MySignsView { showingMySigns = false }
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingMySigns)
         }
         .background(Color.black)
         .onChange(of: Set(state.players.map(\.id)), initial: true) { _, playerIDs in
@@ -751,9 +762,6 @@ private struct GameLobbyView: View {
         }
         .sheet(isPresented: $showingSettings) {
             LobbyView(state: store.state ?? state)
-        }
-        .sheet(isPresented: $showingMySigns) {
-            MySignsView()
         }
         .sheet(isPresented: $showingInvite) {
             VStack(spacing: 16) {
@@ -869,7 +877,8 @@ private struct GameLobbyView: View {
             let names = missing.map { $0.id == state.me.id ? "you" : $0.name }.joined(separator: ", ")
             return "Waiting on \(missing.count) player\(missing.count == 1 ? "" : "s") to add signs (\(names))"
         }
-        return state.isHost ? "Minimum \(state.settings.minPlayers) players to start" : "The host will start the game"
+        let base = state.isHost ? "Minimum \(state.settings.minPlayers) players to start" : "The host will start the game"
+        return state.gameset.map { "Using saved game “\($0.name)” · \(base)" } ?? base
     }
 
     @ViewBuilder
