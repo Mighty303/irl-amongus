@@ -44,7 +44,8 @@ struct GameHUDView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .overlay(alignment: .top) {
-            if let sabotage = state.sabotage { HUDSabotageBanner(state: state, sabotage: sabotage) }
+            // Reactor and O2 show as red text over the map instead (CrisisText); this is the old lights banner.
+            if let sabotage = state.sabotage, sabotage.kind == "lights" { HUDSabotageBanner(state: state, sabotage: sabotage) }
         }
         .onAppear { store.location.start() }
         .onChange(of: state.me.lastCheckpoint) { old, new in
@@ -314,6 +315,8 @@ struct HUDMapSquare: View {
                                       stations: state.stations, playArea: state.playArea)
         let pins = taskPins(campus)
         let sabotage = sabotagePins(campus)
+        // Reactor or O2: only their signs on the map, so everyone heads for them.
+        let crisis = !sabotage.isEmpty
         let (center, isPlayer) = mapCenter(campus)
         ZStack {
             // Zoomed in to a little over a room across, locked on you.
@@ -321,10 +324,9 @@ struct HUDMapSquare: View {
                 rooms: campus.rooms,
                 // This player's task signs and the special signs (red button, security…); other players'
                 // signs aren't yours to find, so they stay off.
-                stations: pins.map(\.station) + sabotage
-                    + state.otherSignPins(excluding: Set(pins.map(\.station.id) + sabotage.map { String($0.id.dropFirst(4)) }),
-                                          campus: campus, includeSigns: false, includeMeeting: true),
-                completedStationIDs: Set(pins.filter(\.completed).map(\.station.id)),
+                stations: crisis ? sabotage : pins.map(\.station)
+                    + state.otherSignPins(excluding: Set(pins.map(\.station.id)), campus: campus, includeSigns: false, includeMeeting: true),
+                completedStationIDs: crisis ? [] : Set(pins.filter(\.completed).map(\.station.id)),
                 meetingPoint: nil,
                 players: store.liveDots(state: state, campus: campus),
                 center: center,
@@ -333,6 +335,7 @@ struct HUDMapSquare: View {
                 myColor: PlayerColor.rosterColor(for: state.me.id, in: state.players),
                 myFaceURL: store.faceURL(state.player(state.me.id)?.faceId),
                 isGhost: !state.me.alive,
+                crisis: crisis,
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }
                     else { selectSign(station.id.hasPrefix("sab-") ? String(station.id.dropFirst(4)) : station.id) }
@@ -365,6 +368,11 @@ struct HUDMapSquare: View {
                         .background(.black.opacity(0.75), in: Capsule())
                         .overlay(Capsule().stroke(.white.opacity(0.4), lineWidth: 1))
                         .padding(10)
+                }
+            }
+            .overlay(alignment: .top) {
+                if crisis, let sabotage = state.sabotage {
+                    CrisisText(sabotage: sabotage).padding(.top, 34).allowsHitTesting(false)
                 }
             }
             .overlay(alignment: .top) {
@@ -1036,5 +1044,25 @@ struct HUDSabotageSquare: View {
             try? await Task.sleep(for: .milliseconds(1400))
             close()
         }
+    }
+}
+
+/// A reactor or O2 sabotage, as Among Us shows it: flashing red text over the map with the time left and how
+/// many of its fixes are done, e.g. "Oxygen depleted in 34 (1/2)".
+struct CrisisText: View {
+    @Environment(GameStore.self) private var store
+    let sabotage: SabotageView
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.5)) { timeline in
+            let flash = Int(timeline.date.timeIntervalSinceReferenceDate * 2) % 2 == 0
+            let seconds = store.secondsUntil(sabotage.deadline) ?? 0
+            let done = sabotage.stations.filter(\.active).count
+            AmongUsText("\(sabotage.kind == "reactor" ? "Reactor Meltdown" : "Oxygen depleted") in \(seconds) (\(done)/\(sabotage.stations.count))",
+                        size: 20, color: flash ? Color(red: 1, green: 0.15, blue: 0.15) : Color(red: 0.7, green: 0.05, blue: 0.05))
+                .lineLimit(1).minimumScaleFactor(0.6)
+                .padding(.horizontal, 10)
+        }
+        .accessibilityIdentifier("hud.crisis")
     }
 }
