@@ -61,7 +61,22 @@ struct CustomizePanel: View {
 
     private func panel(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            if photo == nil { tabs } else { fitHeader }
+            HStack(spacing: 12) {
+                Group {
+                    if photo == nil { tabs } else { fitHeader }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button(action: close) {
+                    Image("CloseMenuIcon")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 44, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close customize")
+                .accessibilityIdentifier("customize.close")
+            }
             let layout = compact ? AnyLayout(VStackLayout(spacing: 14)) : AnyLayout(HStackLayout(alignment: .top, spacing: 18))
             layout {
                 preview(height: compact ? 96 : (photo == nil ? 130 : 110))
@@ -85,13 +100,6 @@ struct CustomizePanel: View {
         .foregroundStyle(Self.ink)
         .background(.white, in: RoundedRectangle(cornerRadius: 18))
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(Self.ink, lineWidth: 4))
-        .overlay(alignment: .topLeading) {
-            Button { photo == nil ? close() : stopFitting() } label: {
-                Image("CloseMenuIcon").resizable().frame(width: 44, height: 44)
-            }
-            .offset(x: -16, y: -16)
-            .accessibilityLabel(photo == nil ? "Close customize" : "Back")
-        }
         .font(.system(size: 15, weight: .heavy, design: .rounded))
     }
 
@@ -102,7 +110,6 @@ struct CustomizePanel: View {
             tabButton("COLOR", systemImage: "paintpalette.fill", tab: .color)
             tabButton("FACE", systemImage: "face.smiling", tab: .face)
         }
-        .padding(.leading, 26)
     }
 
     private func tabButton(_ title: String, systemImage: String, tab: Tab) -> some View {
@@ -132,7 +139,6 @@ struct CustomizePanel: View {
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(height: 40)
-        .padding(.leading, 26)
     }
 
     // MARK: - Preview
