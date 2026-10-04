@@ -139,12 +139,11 @@ final class IRLAmongUsUITests: XCTestCase {
         captureVoting(app, name: "Automatic multiplayer role reveal")
         XCTAssertFalse(app.buttons["Leave Game"].exists)
         XCTAssertFalse(app.buttons["roles.close"].exists)
-        XCTAssertTrue(app.staticTexts["PHYSICAL MAP"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.buttons["Close physical map"].exists)
-        let portrait = NSPredicate { _, _ in app.windows.firstMatch.frame.height > app.windows.firstMatch.frame.width }
-        expectation(for: portrait, evaluatedWith: nil)
-        waitForExpectations(timeout: 5)
-        app.buttons["Leave Game"].tap()
+        // The real in-game HUD follows the reveal, with no proof-of-concept map in between.
+        XCTAssertTrue(app.buttons["hud.scan"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["PHYSICAL MAP"].exists)
+        app.buttons["Settings"].tap()
+        app.buttons["Leave game"].tap()
         XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
         let landscape = NSPredicate { _, _ in app.windows.firstMatch.frame.width > app.windows.firstMatch.frame.height }
         expectation(for: landscape, evaluatedWith: nil)
