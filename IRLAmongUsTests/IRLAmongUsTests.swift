@@ -7,6 +7,17 @@ import Testing
 import UIKit
 @testable import IRLAmongUs
 
+struct MeetingAudioTests {
+    @Test @MainActor func suppliedMeetingClipsAreBundledAndPlayable() throws {
+        for sound in [GameSoundEffect.emergencyMeeting, .ejectText] {
+            let asset = try #require(NSDataAsset(name: sound.rawValue))
+            let audio = try AVAudioPlayer(data: asset.data)
+            #expect(audio.duration > 1)
+            #expect(audio.prepareToPlay())
+        }
+    }
+}
+
 struct ARMapAlignmentTests {
     private func wallMarker() -> simd_float4x4 {
         simd_float4x4(columns: (SIMD4(1, 0, 0, 0), SIMD4(0, 0, 1, 0),

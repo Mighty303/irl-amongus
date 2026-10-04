@@ -90,8 +90,12 @@ as the body report. Playback recolours the crewmate and hand to the caller's sui
 
 ## Game sounds
 
+`SoundEmergencyMeeting` and `SoundEjectText` use the user-supplied
+`emergency-meeting.mp3` and `among-us-all-vote-out-typing.mp3`, retained without
+re-encoding. No source or licence metadata was provided with these files.
+
 The `Sound*` data assets under `IRLAmongUs/Assets.xcassets/Sounds` (emergency alarm, sabotage alarm,
-eject text, voting, panels, player leaving) are re-encoded to AAC by `scripts/import-game-sounds.py` from
+eject text, voting, panels, player leaving), except the two supplied clips above, are re-encoded to AAC by `scripts/import-game-sounds.py` from
 the "General Sounds" and "Player" packs on https://www.sounds-resource.com/pc_computer/amongus/,
 uploaded by imJJ. Among Us and its original audio belong to Innersloth.
 

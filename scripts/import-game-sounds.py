@@ -19,9 +19,7 @@ PACKS = {
     'player': 'https://www.sounds-resource.com/media/assets/428/431302.zip',
 }
 SOUNDS = {
-    'SoundEmergencyMeeting': ('general', 'alarm_emergencymeeting.wav'),
     'SoundSabotageAlarm': ('general', 'Alarm_sabotage.wav'),
-    'SoundEjectText': ('general', 'eject_text.wav'),
     'SoundVote': ('general', 'votescreen_avote.wav'),
     'SoundVoteLockIn': ('general', 'votescreen_lockin.wav'),
     'SoundVoteTimer': ('general', 'vote_timer.wav'),
@@ -31,6 +29,9 @@ SOUNDS = {
     'SoundImpostorKill': ('player', 'impostor_kill.wav'),
 }
 ASSETS = Path(__file__).resolve().parents[1] / 'IRLAmongUs/Assets.xcassets/Sounds'
+
+# SoundEmergencyMeeting and SoundEjectText use user-supplied MP3 clips. Keep
+# those assets intact when regenerating the downloaded sounds.
 
 
 def download(url):

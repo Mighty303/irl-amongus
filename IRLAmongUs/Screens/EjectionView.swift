@@ -2,7 +2,7 @@ import SwiftUI
 
 /// After a vote, like Among Us: black space with stars streaming past and the ejected player's crewmate
 /// tumbling across from right to left; the verdict ("Martin was An Impostor." / "1 Impostor remains.")
-/// appears from behind them as they pass over it, a click per letter. A skip or tie just types "No one
+/// appears from behind them as they pass over it, with a typing cue. A skip or tie just types "No one
 /// was ejected." Shown for the server's RESULT phase; play resumes (or the game ends) when that phase does.
 struct EjectionView: View {
     @Environment(GameStore.self) private var store
@@ -10,7 +10,7 @@ struct EjectionView: View {
     let ejected: PlayerView?
     @State private var start = Date()
     @State private var screen: CGSize = .zero
-    /// Letters showing so far, for the clicks.
+    /// Letters showing so far; the typing cue starts when the first letter appears.
     @State private var revealed = 0
     private let clock = Timer.publish(every: 1.0 / 30, on: .main, in: .common).autoconnect()
 
@@ -98,11 +98,12 @@ struct EjectionView: View {
         .preferredColorScheme(.dark)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([headline, remaining].compactMap { $0 }.joined(separator: " "))
-        // Letters revealed (each one clicked), for UI tests.
+        // Letters revealed, for UI tests.
         .accessibilityValue("\(revealed)")
         .accessibilityIdentifier("ejection.screen")
         .onAppear { start = Date() }
         .onReceive(clock) { now in click(at: now.timeIntervalSince(start)) }
+        .onDisappear { GameSoundEffect.ejectText.stop() }
     }
 
     /// The crewmate's centre: in from the right edge, out past the left, crossing the middle halfway.
@@ -114,7 +115,7 @@ struct EjectionView: View {
     private var letterCount: Int { headline.count + (remaining?.count ?? 0) }
     private var secondLineStart: Double { Self.typeStart + Double(headline.count) / Self.charsPerSecond + 0.4 }
 
-    /// The eject-text click for each letter as it appears.
+    /// Play the complete typing clip once when the first text appears.
     private func click(at t: Double) {
         let shown: Int
         if ejected != nil {
@@ -129,7 +130,7 @@ struct EjectionView: View {
             let first = typed(headline, after: Self.typeStart, at: t).count
             shown = first + (remaining.map { typed($0, after: secondLineStart, at: t).count } ?? 0)
         }
-        if shown > revealed { GameSoundEffect.ejectText.play() }
+        if revealed == 0, shown > 0 { GameSoundEffect.ejectText.play() }
         revealed = max(revealed, shown)
     }
 
