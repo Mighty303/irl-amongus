@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Fix Wiring: drag each wire on the left to the same color on the right. Like the game, the left
 /// side is shuffled, the right is always red/blue/yellow/magenta, and wrong connections are allowed
-/// but don't count. Coordinates are pixels of the 504×504 panel art.
+/// but don't count. Grab either end of a wire to move it; dropping it off a socket unplugs it.
+/// Coordinates are pixels of the 504×504 panel art.
 struct WiringGame: View {
     let onDone: () -> Void
 
@@ -38,6 +39,16 @@ struct WiringGame: View {
                         .contentShape(Rectangle())
                         .gesture(dragGesture(slot))
                         .at(22, Self.slotY[slot])
+                }
+                // The plugged-in (or carried) end can be grabbed too, to unplug or move it.
+                ForEach(0..<4, id: \.self) { slot in
+                    if let end = end(of: slot) {
+                        Color.clear
+                            .frame(width: 80, height: 70)
+                            .contentShape(Rectangle())
+                            .gesture(dragGesture(slot))
+                            .at(end.x, end.y)
+                    }
                 }
             }
             .coordinateSpace(name: "wires")
