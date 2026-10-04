@@ -301,6 +301,8 @@ struct VoteResult: Decodable, Equatable {
     let ejectedWasImpostor: Bool?
     let tie: Bool
     let ejectedRole: Role?
+    /// Impostors left after this vote (only when roles are revealed on ejection). Optional for older servers.
+    let impostorsRemaining: Int?
 }
 
 struct SabotageView: Decodable, Equatable {
