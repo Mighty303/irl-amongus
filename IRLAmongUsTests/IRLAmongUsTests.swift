@@ -10,7 +10,7 @@ struct NeckKillTests {
         let renderer = NeckKillHDRenderer()
         let first = renderer.image(at: 4, in: purple)
         let bitmap = try #require(first.cgImage)
-        #expect(bitmap.width == 1352 && bitmap.height == 800)
+        #expect(bitmap.width == 2028 && bitmap.height == 1200)
         #expect(renderer.image(at: 4, in: purple) === first)
 
         let yellow = try NeckKillFrames.load(attacker: .yellow, victim: .cyan)

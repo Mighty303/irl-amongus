@@ -67,14 +67,14 @@ struct NeckKillFrames: @unchecked Sendable {
 }
 
 /// Enhance after recolouring so interpolated suit edges use the selected palette.
-/// Keep only a few HD frames decoded, rather than all 47 (over 200 MB).
+/// Keep only a few HD frames decoded, rather than all 47 (over 450 MB).
 final class NeckKillHDRenderer {
     private let context = CIContext(options: [.cacheIntermediates: false])
     private let cache = NSCache<NSNumber, UIImage>()
 
     init() {
         cache.countLimit = 3
-        cache.totalCostLimit = 16 * 1024 * 1024
+        cache.totalCostLimit = 32 * 1024 * 1024
     }
 
     func image(at index: Int, in frames: NeckKillFrames) -> UIImage {
@@ -83,12 +83,20 @@ final class NeckKillHDRenderer {
         let source = frames.images[index]
         guard let bitmap = source.cgImage else { return source }
         let input = CIImage(cgImage: bitmap)
-        let enlarged = input.applyingFilter("CILanczosScaleTransform", parameters: [
-            kCIInputScaleKey: 4.0,
+        // Recover edge contrast at source-pixel scale. Sharpening only after
+        // enlargement leaves the original soft edges spread across many pixels.
+        let crisp = input.clampedToExtent()
+            .applyingFilter("CIUnsharpMask", parameters: [
+                kCIInputRadiusKey: 0.65,
+                kCIInputIntensityKey: 0.45
+            ])
+            .cropped(to: input.extent)
+        let enlarged = crisp.applyingFilter("CILanczosScaleTransform", parameters: [
+            kCIInputScaleKey: 6.0,
             kCIInputAspectRatioKey: 1.0
         ])
         let enhanced = enlarged.clampedToExtent()
-            .applyingFilter("CISharpenLuminance", parameters: [kCIInputSharpnessKey: 0.25])
+            .applyingFilter("CISharpenLuminance", parameters: [kCIInputSharpnessKey: 0.3])
             .cropped(to: enlarged.extent)
         guard let output = context.createCGImage(enhanced, from: enlarged.extent) else { return source }
         let result = UIImage(cgImage: output)
