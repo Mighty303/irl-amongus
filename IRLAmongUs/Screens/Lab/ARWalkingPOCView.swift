@@ -132,7 +132,8 @@ struct ARWalkingPOCView: View {
 
     private var progress: some View {
         HStack(spacing: 8) {
-            CrewmateView(color: .red, faceURL: nil, height: 38)
+            CrewmateView(color: store.state.flatMap { PlayerColor.rosterColor(for: $0.me.id, in: $0.players) } ?? store.preferredColor ?? .red,
+                         faceURL: store.state != nil ? store.faceURL(store.state?.player(store.state?.me.id ?? "")?.faceId) : store.faceURL(store.preferredFaceId), height: 38)
             VStack(alignment: .leading, spacing: 4) {
                 Text("TOTAL TASKS").font(.caption2.bold())
                 ProgressView(value: Double(session.completedCount), total: session.mapped ? 3 : 1)
@@ -320,7 +321,9 @@ struct ARWalkingPOCView: View {
             POCFloorPlan(rooms: campus.rooms, stations: state.otherSignPins(excluding: [], campus: campus),
                          meetingPoint: state.meetingPointPin, completedStationIDs: [], selectedStation: nil,
                          ownLastCheckpoint: liveCheckpoint(state), onSelectStation: { _ in },
-                         players: store.liveDots(state: state, campus: campus, includeMine: true))
+                         players: store.liveDots(state: state, campus: campus, includeMine: true),
+                         ownColor: PlayerColor.rosterColor(for: state.me.id, in: state.players),
+                         ownFaceURL: store.faceURL(state.player(state.me.id)?.faceId))
                 .frame(height: 135)
                 .accessibilityIdentifier("arWalking.liveFloorMap")
         } else { minimap }

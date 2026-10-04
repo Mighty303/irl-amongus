@@ -8,15 +8,17 @@ extension GameStore {
         var dots: [POCPlayerDot] = livePositions.compactMap { pos in
             guard livePositionsOn, pos.playerId != state.me.id, let player = state.player(pos.playerId) else { return nil }
             // Faded when quiet, or on another floor than the map shows.
-            return POCPlayerDot(id: pos.playerId, name: player.name, color: (player.color ?? .white).swatch,
+            return POCPlayerDot(id: pos.playerId, name: player.name, color: (PlayerColor.rosterColor(for: player.id, in: state.players) ?? .white).swatch,
                                 position: CGPoint(x: pos.lng, y: pos.lat), accuracyM: pos.accuracyM, isMe: false,
                                 faded: pos.stale || campus.isOffFloor(buildingId: pos.buildingId, floorId: pos.floorId),
-                                playerColor: player.color)
+                                playerColor: PlayerColor.rosterColor(for: player.id, in: state.players), faceURL: faceURL(player.faceId))
         }
         if let mine = positions.estimate {
             dots.append(POCPlayerDot(id: state.me.id, name: state.me.name, color: .cyan,
                                      position: CGPoint(x: mine.lng, y: mine.lat), accuracyM: mine.accuracyM,
-                                     isMe: true, faded: false))
+                                     isMe: true, faded: false,
+                                     playerColor: PlayerColor.rosterColor(for: state.me.id, in: state.players),
+                                     faceURL: faceURL(state.player(state.me.id)?.faceId)))
         }
         return dots
     }
@@ -57,7 +59,9 @@ struct LiveMapView: View {
                     selectedStation: nil,
                     ownLastCheckpoint: checkpoint(state),
                     onSelectStation: { _ in },
-                    players: store.liveDots(state: state, campus: campus, includeMine: true)
+                    players: store.liveDots(state: state, campus: campus, includeMine: true),
+                    ownColor: PlayerColor.rosterColor(for: state.me.id, in: state.players),
+                    ownFaceURL: store.faceURL(state.player(state.me.id)?.faceId)
                 )
                 .frame(width: landscape ? min(geo.size.height, geo.size.width * 0.56) : nil,
                        height: landscape ? nil : min(geo.size.width, geo.size.height * 0.5))

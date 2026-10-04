@@ -5,6 +5,7 @@ import SwiftUI
 /// appears from behind them as they pass over it, a click per letter. A skip or tie just types "No one
 /// was ejected." Shown for the server's RESULT phase; play resumes (or the game ends) when that phase does.
 struct EjectionView: View {
+    @Environment(GameStore.self) private var store
     let result: VoteResult?
     let ejected: PlayerView?
     @State private var start = Date()
@@ -82,10 +83,7 @@ struct EjectionView: View {
                     }
 
                     if let ejected {
-                        Image((ejected.color ?? .red).lobbyAssetName)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(height: height)
+                        CrewmateView(color: ejected.color ?? .red, faceURL: store.faceURL(ejected.faceId), height: height)
                             .rotationEffect(.degrees(-t * 140))
                             .position(x: crewX, y: size.height * 0.5 + sin(t * 1.3) * size.height * 0.04)
                             .accessibilityHidden(true)

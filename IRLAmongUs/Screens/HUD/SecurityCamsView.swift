@@ -126,7 +126,7 @@ struct CamTile: View {
                 .overlay(alignment: .bottomLeading) {
                     HStack(spacing: 4) {
                         if let suit = player.color {
-                            Image(suit.lobbyAssetName).resizable().scaledToFit().frame(width: nameSize * 1.7, height: nameSize * 1.7)
+                            CrewmateView(color: suit, faceURL: store.faceURL(player.faceId), height: nameSize * 1.7)
                                 .opacity(player.alive ? 1 : 0.5)
                         }
                         Text(player.name).font(.system(size: nameSize, weight: .black, design: .rounded)).foregroundStyle(.white)

@@ -1,0 +1,529 @@
+{
+  "width": 338,
+  "height": 200,
+  "frames": [
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 100.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 100.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.0,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 192.0,
+        "y": 96.5,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.0,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 192.0,
+        "y": 96.5,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.0,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 192.0,
+        "y": 96.5,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": {
+        "x": 193.0,
+        "y": 100.0,
+        "width": 32,
+        "rotation": 0
+      }
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.0,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 132.0,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 132.0,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 132.0,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    },
+    {
+      "attacker": {
+        "x": 131.5,
+        "y": 99.5,
+        "width": 32,
+        "rotation": 0
+      },
+      "victim": null
+    }
+  ]
+}

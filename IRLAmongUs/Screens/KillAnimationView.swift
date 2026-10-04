@@ -105,8 +105,24 @@ final class NeckKillHDRenderer {
     }
 }
 
+struct NeckKillFacePlacements: Decodable {
+    struct Frame: Decodable {
+        let attacker: CharacterFacePlacement?
+        let victim: CharacterFacePlacement?
+    }
+    let width: CGFloat
+    let height: CGFloat
+    let frames: [Frame]
+
+    static func load() -> Self? {
+        guard let data = NSDataAsset(name: "NeckKillFacePlacements")?.data else { return nil }
+        return try? JSONDecoder().decode(Self.self, from: data)
+    }
+}
+
 /// Uses source frame delays, including delays shorter than UIImage animation's uniform interval.
 struct KillAnimationView: View {
+    private let facePlacements = NeckKillFacePlacements.load()
     let presentation: KillPresentation
     let dismiss: () -> Void
     @State private var frames: NeckKillFrames?
@@ -119,11 +135,17 @@ struct KillAnimationView: View {
             if let frames, let startedAt {
                 TimelineView(.animation) { context in
                     let index = frames.frameIndex(at: context.date.timeIntervalSince(startedAt))
-                    Image(uiImage: renderer.image(at: index, in: frames))
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    ZStack {
+                        Image(uiImage: renderer.image(at: index, in: frames))
+                            .resizable().interpolation(.high).scaledToFit()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        if let poses = facePlacements, poses.frames.indices.contains(index) {
+                            CharacterFaceOverlay(url: presentation.faceURL(presentation.attackerFaceId),
+                                sourceSize: CGSize(width: poses.width, height: poses.height), placement: poses.frames[index].attacker)
+                            CharacterFaceOverlay(url: presentation.faceURL(presentation.victimFaceId),
+                                sourceSize: CGSize(width: poses.width, height: poses.height), placement: poses.frames[index].victim)
+                        }
+                    }
                 }
             }
         }

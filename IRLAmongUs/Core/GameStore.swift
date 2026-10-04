@@ -566,6 +566,7 @@ final class GameStore {
         }
         clockOffset = newState.serverTime - Date().timeIntervalSince1970 * 1000
         state = newState
+        PlayerFaceCache.shared.prefetch(newState.players.compactMap { faceURL($0.faceId) })
         playStateSounds(old: old, new: newState)
         if deathSound.update(wasAlive: old?.me.alive, isAlive: newState.me.alive, isBody: newState.me.isBody) {
             killAudio.play(.victim)
@@ -704,13 +705,11 @@ final class GameStore {
 
     private func presentKill(victimID: String, killerID: String?) {
         guard let state, bodyReportPresentation == nil else { return }
-        let attacker = killerID.flatMap { PlayerColor.rosterColor(for: $0, in: state.players) }
         if killPresentationState.accept(victimID: victimID) {
-            killPresentation = KillPresentation(victimID: victimID, attackerColor: attacker,
-                victimColor: PlayerColor.rosterColor(for: victimID, in: state.players) ?? .green)
-        } else if killPresentation?.victimID == victimID, let attacker {
-            // A snapshot can precede the event that identifies the attacker.
-            killPresentation?.attackerColor = attacker
+            killPresentation = KillPresentation.from(victimID: victimID, killerID: killerID, players: state.players, serverURL: serverURL)
+        } else if killPresentation?.victimID == victimID, let killerID {
+            // Resolve a late attacker by ID, even when another player has the same suit colour.
+            killPresentation?.resolveAttacker(killerID, players: state.players)
         }
     }
 
@@ -735,7 +734,8 @@ final class GameStore {
         alert = nil
         bodyReportBackdrop = backdrop
         bodyReportPresentation = BodyReportPresentation(bodyID: callerID ?? "emergency",
-            color: callerID.flatMap { PlayerColor.rosterColor(for: $0, in: roster) } ?? .red, kind: .emergency)
+            color: callerID.flatMap { PlayerColor.rosterColor(for: $0, in: roster) } ?? .red, kind: .emergency,
+            faceId: roster.first(where: { $0.id == callerID })?.faceId, faceBaseURL: serverURL)
     }
 
     /// Voting, lobby and sabotage sounds that follow from the snapshot rather than an event.

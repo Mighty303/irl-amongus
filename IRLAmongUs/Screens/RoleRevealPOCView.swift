@@ -4,6 +4,7 @@ import UIKit
 
 /// Isolated visual demo: no role assignment or network actions.
 struct RoleRevealPOCView: View {
+    @Environment(GameStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var role: Role?
     @State private var revealed = false
@@ -22,7 +23,7 @@ struct RoleRevealPOCView: View {
                         if let role {
                             if revealed {
                                 RoleRevealArtwork(role: role, impostorCount: role == .impostor ? 2 : 1,
-                                                  players: RoleRevealPlayer.preview(for: role))
+                                                  players: RoleRevealPlayer.preview(for: role, localFaceId: store.preferredFaceId))
                             } else {
                                 RoleRevealIntroView {
                                     revealed = true
@@ -100,22 +101,23 @@ struct RoleRevealPlayer: Identifiable, Equatable {
     let id: String
     let name: String
     let color: PlayerColor
+    var faceId: String? = nil
 
     static func lineup(from players: [PlayerView], localID: String, role: Role) -> [Self] {
         let visible = players.enumerated().compactMap { index, player -> Self? in
             guard role == .crewmate || player.id == localID || player.role == .impostor else { return nil }
             return Self(id: player.id, name: player.name,
-                        color: player.color ?? PlayerColor.allCases[index % PlayerColor.allCases.count])
+                        color: player.color ?? PlayerColor.allCases[index % PlayerColor.allCases.count], faceId: player.faceId)
         }
         return visible.filter { $0.id == localID } + visible.filter { $0.id != localID }
     }
 
-    static func preview(for role: Role) -> [Self] {
+    static func preview(for role: Role, localFaceId: String? = nil) -> [Self] {
         let colors: [PlayerColor] = role == .impostor
             ? [.red, .purple]
             : [.red, .blue, .green, .pink, .orange, .yellow, .black, .white, .purple, .brown]
         var players = colors.enumerated().map { index, color in
-            Self(id: "preview-\(index)", name: index == 0 ? "You" : "Player \(index + 1)", color: color)
+            Self(id: "preview-\(index)", name: index == 0 ? "You" : "Player \(index + 1)", color: color, faceId: index == 0 ? localFaceId : nil)
         }
         #if DEBUG
         let count = UserDefaults.standard.integer(forKey: "roleRevealPlayerCount")
@@ -166,6 +168,7 @@ struct RoleRevealArtwork: View {
 
 /// Staggered, overlapping rows keep the local player in front, like the game reveal.
 struct RoleRevealLineup: View {
+    @Environment(GameStore.self) private var store
     let players: [RoleRevealPlayer]
     let showsNames: Bool
     var accessibilityPrefix = "roles"
@@ -188,11 +191,7 @@ struct RoleRevealLineup: View {
                         ? size.width / 2 + (CGFloat(index) - CGFloat(players.count - 1) / 2) * height * 0.85
                         : size.width / 2 + direction * CGFloat(row) * spacing
                     VStack(spacing: 0) {
-                        Image(player.color.lobbyAssetName)
-                            .resizable()
-                            .interpolation(.high)
-                            .scaledToFit()
-                            .frame(height: height * scale)
+                        CrewmateView(color: player.color, faceURL: store.faceURL(player.faceId), height: height * scale)
                         if showsNames {
                             Text(player.name)
                                 .font(.system(size: max(11, size.height * 0.085), weight: .bold, design: .rounded))

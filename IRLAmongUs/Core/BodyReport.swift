@@ -9,6 +9,12 @@ struct BodyReportPresentation: Identifiable, Equatable {
     let bodyID: String
     let color: PlayerColor
     var kind: Kind = .body
+    var faceId: String? = nil
+    var faceBaseURL: URL? = nil
+    var faceURL: URL? {
+        guard let faceId, let faceBaseURL else { return nil }
+        return faceBaseURL.appendingPathComponent("faces/\(faceId).png")
+    }
 }
 
 /// Events and snapshots can arrive in either order. A body is reported once per round.

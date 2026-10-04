@@ -9,6 +9,7 @@ private let votingColors: [Color] = [
 ]
 
 struct VotingPOCView: View {
+    @Environment(GameStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var round = VotingRound(duration: Self.demoDuration)
@@ -243,8 +244,13 @@ struct VotingPOCView: View {
             Button { select(target) } label: {
                 HStack(spacing: 8) {
                     ZStack {
-                        Image(liveColor(for: player.id)?.lobbyAssetName ?? "VotingCrew\(player.colorIndex)").resizable().scaledToFit()
-                            .frame(width: compact ? 28 : 34, height: compact ? 30 : 36)
+                        if let color = liveColor(for: player.id) {
+                            CrewmateView(color: color, faceURL: store.faceURL(liveState?.player(player.id)?.faceId),
+                                         height: compact ? 30 : 36)
+                        } else {
+                            Image("VotingCrew\(player.colorIndex)").resizable().scaledToFit()
+                                .frame(width: compact ? 28 : 34, height: compact ? 30 : 36)
+                        }
                         if !player.isAlive {
                             Image("VotingDeadCross").resizable().scaledToFit().frame(width: 34, height: 34)
                         }
