@@ -239,6 +239,7 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["bodyReport.preview.play"].waitForExistence(timeout: 3))
     }
 
+    @MainActor
     func testEmergencyMeetingBannerShowsTheCallerAtTheButton() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
@@ -261,6 +262,7 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["bodyReport.preview.done"].waitForExistence(timeout: 5))
     }
 
+    @MainActor
     func testEjectionRevealsTheVerdictBehindTheCrewmate() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
@@ -866,5 +868,49 @@ extension IRLAmongUsUITests {
         XCTAssertTrue((1...10).contains(cooldownSeconds ?? 0))
         XCTAssertEqual(kills.count, 1)
         XCTAssertEqual((kills.first?["payload"] as? [String: Any])?["targetId"] as? String, "bot")
+    }
+}
+
+
+extension IRLAmongUsUITests {
+    @MainActor
+    func testTaskMapFitsDestinationsAndReturnsToMinimap() async throws {
+        guard let server = ProcessInfo.processInfo.environment["TASK_MAP_TEST_SERVER"] else {
+            throw XCTSkip("Requires local fixture with LOCAL_LOBBY_TEST_TASK_MAP=1")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-playerName", "Ben", "-serverURL", server, "-session", ""]
+        app.launch()
+        app.buttons["Local"].tap()
+        XCTAssertTrue(app.buttons["local.createGame"].waitForExistence(timeout: 5))
+        app.buttons["local.createGame"].tap()
+        XCTAssertTrue(app.buttons["Add bot"].waitForExistence(timeout: 10))
+        app.buttons["Add bot"].tap()
+        let ready = expectation(for: NSPredicate { _, _ in app.buttons["START"].isEnabled }, evaluatedWith: nil)
+        await fulfillment(of: [ready], timeout: 5)
+        app.buttons["START"].tap()
+        let mapButton = app.buttons["hud.openTaskMap"]
+        XCTAssertTrue(mapButton.waitForExistence(timeout: 15))
+        mapButton.tap()
+        XCTAssertTrue(app.buttons["taskMap.close"].waitForExistence(timeout: 5))
+        let near = app.buttons["taskMap.station.near"]
+        let far = app.buttons["taskMap.station.far"]
+        XCTAssertTrue(near.isHittable)
+        XCTAssertTrue(far.isHittable)
+        XCTAssertFalse(app.buttons["taskMap.station.done"].exists)
+        let window = app.windows.firstMatch.frame
+        XCTAssertTrue(window.contains(near.frame))
+        XCTAssertTrue(window.contains(far.frame))
+        let image = XCTAttachment(screenshot: app.screenshot())
+        image.name = "Task overview with nearby and distant tasks"
+        image.lifetime = .keepAlways
+        add(image)
+        app.buttons["taskMap.close"].tap()
+        XCTAssertTrue(mapButton.waitForExistence(timeout: 5))
+        mapButton.tap()
+        XCTAssertTrue(near.waitForExistence(timeout: 5))
+        near.tap()
+        XCTAssertTrue(app.buttons["hud.close"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["taskMap.close"].exists)
     }
 }
