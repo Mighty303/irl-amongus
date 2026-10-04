@@ -771,6 +771,8 @@ private struct GameLobbyView: View {
     @State private var showingMySigns = false
     @State private var showingLiveMap = false
     @State private var showingSpecialSigns = false
+    /// Which special sign to photograph straight away when the panel opens from a tile.
+    @State private var specialSignsStart: SpecialSignSlot?
     @StateObject private var spawningAudio = PlayerSpawningAudioPlayer()
     @State private var knownPlayerIDs: Set<String> = []
     @State private var visiblePlayerIDs: Set<String> = []
@@ -798,7 +800,7 @@ private struct GameLobbyView: View {
                         HStack(spacing: 12) {
                             waitingRoom
                             signsPanel
-                                .frame(width: min(220, size.width * 0.28))
+                                .frame(width: min(236, size.width * 0.3))
                         }
                         .frame(maxHeight: .infinity)
                     } else {
@@ -836,7 +838,7 @@ private struct GameLobbyView: View {
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingMySigns)
             .overlay {
                 if showingSpecialSigns {
-                    SpecialSignsView.lobby(store: store, stations: state.stations) { showingSpecialSigns = false }
+                    SpecialSignsView.lobby(store: store, stations: state.stations, startSlot: specialSignsStart) { showingSpecialSigns = false }
                         .transition(.scale(scale: 0.9).combined(with: .opacity))
                 }
             }
@@ -949,137 +951,160 @@ private struct GameLobbyView: View {
         .minimumScaleFactor(0.8)
     }
 
-    private static let signsReady = Color(red: 0.56, green: 0.84, blue: 0.69)
-    private static let signsMissing = Color(red: 0.96, green: 0.78, blue: 0.30)
 
+    /// Right-hand panel (black and white, like the rest of the lobby): my signs, the red button card,
+    /// and the optional rooms as tiles. Tapping a red button or room tile opens that sign's capture.
     private var signsPanel: some View {
         let required = state.requiredSigns
         let count = min(state.mySigns.count, required)
-        let done = count >= required
-        return ScrollView {
-            VStack(alignment: .leading, spacing: 4) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("MY SIGNS")
-                        .font(.system(size: 17, weight: .heavy, design: .rounded))
-                    Text(required > 0 ? "\(count) / \(required) added\(state.gameset == nil ? "" : " · your share")"
-                         : state.gameset == nil ? "No signs required" : "The saved game covers the signs")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.75))
-                }
-                .padding(.bottom, 4)
+        return ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 7) {
+                mySignsRow(required: required, count: count)
 
-                if required > 0 {
-                    signThumbnails
-                    Button { buttonAudio.play(); showingMySigns = true } label: {
-                        Label(done ? "VIEW SIGNS" : "ADD SIGN", systemImage: done ? "photo.on.rectangle" : "plus")
-                            .font(.system(size: 15, weight: .heavy, design: .rounded))
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                Text("RED BUTTON · REQUIRED").lobbyCaps()
+                    .padding(.top, 2)
+                redButtonCard
+
+                Text("OPTIONAL ROOMS").lobbyCaps()
+                    .padding(.top, 2)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
+                    ForEach(SpecialSignSlot.all.filter { !$0.required }) { slot in
+                        roomTile(slot)
                     }
-                    .buttonStyle(LobbyFilledButtonStyle())
-                    .accessibilityLabel(done ? "Edit my signs" : "Add signs")
                 }
 
-                specialSignsRow
-
-                Divider().overlay(.white.opacity(0.15))
-                Label {
-                    Text(state.playersMissingSigns.isEmpty ? "All signs added" : "\(state.playersMissingSigns.count) player\(state.playersMissingSigns.count == 1 ? "" : "s") still adding signs")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                } icon: {
-                    Image(systemName: state.playersMissingSigns.isEmpty ? "checkmark.circle.fill" : "person.2.fill")
-                        .foregroundStyle(state.playersMissingSigns.isEmpty ? Self.signsReady : Self.signsMissing)
-                }
-                if let gameset = state.gameset {
-                    Text("Saved game: \(gameset.name)")
-                        .font(.caption).foregroundStyle(.white.opacity(0.65))
-                }
-                if let area = state.playArea, let building = store.campus.building(area.buildingId) {
-                    Text("Play area: \(building.id) · \(building.floor(area.floorId)?.name ?? area.floorId)")
-                        .font(.caption).foregroundStyle(.white.opacity(0.65))
-                } else {
-                    Text("Pick the play area in Settings → Game")
-                        .font(.caption).foregroundStyle(.white.opacity(0.65))
-                }
-                if state.isHost {
-                    Button {
-                        buttonAudio.play()
-                        Task { await store.perform("add_bot") }
-                    } label: {
-                        Text("Add bot")
-                            .font(.system(size: 13, weight: .bold, design: .rounded))
-                            .frame(maxWidth: .infinity, minHeight: 44)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(state.playersMissingSigns.isEmpty ? "All signs added"
+                         : "\(state.playersMissingSigns.count) player\(state.playersMissingSigns.count == 1 ? "" : "s") still adding signs")
+                    if let gameset = state.gameset { Text("Saved game: \(gameset.name)") }
+                    if let area = state.playArea, let building = store.campus.building(area.buildingId) {
+                        Text("Play area: \(building.id) · \(building.floor(area.floorId)?.name ?? area.floorId)")
+                    } else {
+                        Text("Pick the play area in Settings → Game")
                     }
-                    .buttonStyle(LobbyOutlineButtonStyle())
                 }
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.6))
+                .padding(.top, 4)
             }
-            .padding(10)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
         }
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(red: 0.06, green: 0.09, blue: 0.11), in: RoundedRectangle(cornerRadius: 16))
+        .background(Color.black, in: RoundedRectangle(cornerRadius: 16))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(.white.opacity(0.35), lineWidth: 2))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("lobby.mySigns")
     }
 
-    /// The red button (required to start) and the optional special signs.
-    private var specialSignsRow: some View {
-        let optional = SpecialSignSlot.all.filter { !$0.required && $0.station(in: state.stations) != nil }.count
-        return Button { buttonAudio.play(); showingSpecialSigns = true } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "light.beacon.max.fill")
-                    .foregroundStyle(state.hasRedButton ? Self.signsReady : .red)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(state.hasRedButton ? "Red button set" : "Add the red button")
-                        .font(.system(size: 13, weight: .heavy, design: .rounded))
-                    Text("\(optional) of \(SpecialSignSlot.all.count - 1) optional rooms")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.65))
+    private func mySignsRow(required: Int, count: Int) -> some View {
+        HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("MY SIGNS").lobbyCaps()
+                if required > 0 {
+                    (Text("\(count)") + Text("/\(required)").foregroundColor(.white.opacity(0.45)))
+                        .font(.system(size: 22, weight: .heavy, design: .rounded))
+                } else {
+                    Text(state.gameset == nil ? "None needed" : "Saved game has them")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.white.opacity(0.6))
             }
-            .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(state.hasRedButton ? Self.signsReady : .red, lineWidth: 1.5))
+            Spacer(minLength: 4)
+            ForEach(state.mySigns.prefix(required > 0 ? required : 3)) { sign in
+                signPhoto(sign).frame(width: 34, height: 34)
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
+                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(.white, lineWidth: 2))
+                    .accessibilityLabel(sign.signText ?? sign.name)
+            }
+            if required > 0 {
+                Button { buttonAudio.play(); showingMySigns = true } label: {
+                    Image(systemName: count >= required ? "pencil" : "plus")
+                        .font(.system(size: 17, weight: .black))
+                        .foregroundStyle(.black)
+                        .frame(width: 34, height: 34)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 7))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(count >= required ? "Edit my signs" : "Add signs")
+            }
         }
-        .buttonStyle(.plain)
-        .padding(.top, 4)
-        .accessibilityLabel(state.hasRedButton ? "Special signs, red button set" : "Special signs, red button needed")
     }
 
-    private var signThumbnails: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(state.mySigns) { sign in
-                    ZStack {
-                        Color(white: 0.18)
-                        if let photoId = sign.photoId, let base = store.serverURL {
-                            AsyncImage(url: base.appendingPathComponent("photos/\(photoId).jpg")) { image in
-                                image.resizable().scaledToFill()
-                            } placeholder: {
-                                Image(systemName: "photo").foregroundStyle(.white.opacity(0.5))
-                            }
-                        } else {
-                            Image(systemName: "photo").foregroundStyle(.white.opacity(0.5))
-                        }
-                    }
-                    .frame(width: 44, height: 44)
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                    .overlay(RoundedRectangle(cornerRadius: 7).stroke(.white.opacity(0.6), lineWidth: 1))
-                    .accessibilityLabel(sign.signText ?? sign.name)
+    /// The red button sign: its photo and what it reads once set; a red dashed "add" card until then.
+    private var redButtonCard: some View {
+        let slot = SpecialSignSlot.all[0]
+        let station = slot.station(in: state.stations)
+        return Button { buttonAudio.play(); specialSignsStart = slot; showingSpecialSigns = true } label: {
+            HStack(spacing: 10) {
+                if let station {
+                    signPhoto(station).frame(width: 56, height: 42)
+                        .clipShape(RoundedRectangle(cornerRadius: 7))
+                } else {
+                    Image(systemName: slot.kind.icon)
+                        .font(.system(size: 18, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(Color.red, in: Circle())
                 }
-                if state.mySigns.count < state.requiredSigns {
-                    Button { buttonAudio.play(); showingMySigns = true } label: {
-                        Image(systemName: "plus").font(.title3)
-                            .frame(width: 44, height: 44)
-                            .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [4])))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Add signs")
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(station == nil ? "Add the red button" : "Red button")
+                        .font(.system(size: 14, weight: .heavy, design: .rounded))
+                    Text(station.map { s in s.signText.map { "Reads “\($0)”" } ?? "Photo saved" } ?? "Needed to start")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(station == nil ? Color(red: 1, green: 0.55, blue: 0.55) : .white.opacity(0.65))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if station != nil {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .black)).foregroundStyle(.black)
+                        .frame(width: 22, height: 22)
+                        .background(.white, in: Circle())
                 }
             }
-            .padding(1)
+            .padding(.leading, 6).padding(.trailing, 8)
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .background(Color.black, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(station == nil ? Color.red : .white,
+                                  style: StrokeStyle(lineWidth: 3, dash: station == nil ? [7, 5] : []))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(station == nil ? "Add the red button sign, needed to start" : "Red button sign, set")
+    }
+
+    /// An optional room: white when its sign is set, dashed until then.
+    private func roomTile(_ slot: SpecialSignSlot) -> some View {
+        let set = slot.station(in: state.stations) != nil
+        return Button { buttonAudio.play(); specialSignsStart = slot; showingSpecialSigns = true } label: {
+            VStack(spacing: 3) {
+                Image(systemName: slot.kind.icon).font(.system(size: 16, weight: .bold))
+                Text(slot.title.uppercased())
+                    .font(.system(size: 9, weight: .heavy, design: .rounded))
+                    .lineLimit(1).minimumScaleFactor(0.7)
+            }
+            .foregroundStyle(set ? Color.black : .white.opacity(0.7))
+            .frame(maxWidth: .infinity, minHeight: 58)
+            .background(set ? Color.white : .black, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(set ? Color.white : .white.opacity(0.45), style: StrokeStyle(lineWidth: 2, dash: set ? [] : [5, 4]))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(slot.title), \(set ? "set" : "optional, not set")")
+    }
+
+    private func signPhoto(_ station: Station) -> some View {
+        Color(white: 0.22).overlay {
+            if let photoId = station.photoId, let base = store.serverURL {
+                AsyncImage(url: base.appendingPathComponent("photos/\(photoId).jpg")) { $0.resizable().scaledToFill() }
+                    placeholder: { Image(systemName: "photo").foregroundStyle(.white.opacity(0.5)) }
+            } else {
+                Image(systemName: "photo").foregroundStyle(.white.opacity(0.5))
+            }
         }
     }
 
@@ -1150,6 +1175,29 @@ private struct GameLobbyView: View {
                 Text("PLAYERS").font(.system(size: 9, weight: .bold, design: .rounded))
             }
             .foregroundStyle(.white.opacity(0.8))
+
+            if state.isHost {
+                // Temporary, for testing alone.
+                Button {
+                    buttonAudio.play()
+                    Task { await store.perform("add_bot") }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "plus").font(.system(size: 12, weight: .black))
+                        Text("BOT").font(.system(size: 13, weight: .heavy, design: .rounded))
+                        Text("TEMP")
+                            .font(.system(size: 8, weight: .black, design: .rounded))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(.white, in: RoundedRectangle(cornerRadius: 4))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10).frame(height: 44)
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.white.opacity(0.7), style: StrokeStyle(lineWidth: 2, dash: [5, 4])))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add bot")
+            }
         }
         .lineLimit(1)
     }
@@ -1237,6 +1285,13 @@ private struct LobbyAlert: Identifiable {
     let message: String
 
     var id: String { title }
+}
+
+private extension Text {
+    /// Small spaced capitals used for section labels in the lobby panel.
+    func lobbyCaps() -> some View {
+        font(.system(size: 10, weight: .black, design: .rounded)).tracking(1.5).foregroundStyle(.white.opacity(0.55))
+    }
 }
 
 private struct LobbyOutlineButtonStyle: ButtonStyle {

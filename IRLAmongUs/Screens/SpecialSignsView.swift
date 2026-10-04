@@ -40,8 +40,11 @@ struct SpecialSignsView: View {
     let submit: ([String: Any]) async -> Bool
     let delete: (Station) async -> Void
     let close: () -> Void
+    /// Open straight on this sign's capture (e.g. tapped its tile in the lobby).
+    var startSlot: SpecialSignSlot? = nil
 
     @State private var capturing: SpecialSignSlot?
+    @State private var started = false
 
     var body: some View {
         SignPanelContainer { compact in
@@ -58,7 +61,7 @@ struct SpecialSignsView: View {
                             if let old = slot.station(in: stations) { await delete(old) }
                             return await submit(payload)
                         },
-                        onSaved: { capturing = nil },
+                        onSaved: { if startSlot != nil { close() } else { capturing = nil } },
                         kind: slot.kind,
                         fixedName: slot.title
                     )
@@ -67,8 +70,14 @@ struct SpecialSignsView: View {
                 }
             }
             .signPanel(closeLabel: capturing == nil ? "Close special signs" : "Back to special signs") {
-                if capturing != nil { capturing = nil } else { close() }
+                // Opened on one sign: the X goes straight back to the lobby.
+                if capturing != nil, startSlot == nil { capturing = nil } else { close() }
             }
+        }
+        .onAppear {
+            guard !started else { return }
+            started = true
+            capturing = startSlot
         }
     }
 
@@ -167,12 +176,14 @@ struct SpecialSignsView: View {
 
 extension SpecialSignsView {
     /// This lobby's special signs (anyone can set them).
-    static func lobby(store: GameStore, stations: [Station], close: @escaping () -> Void) -> SpecialSignsView {
+    static func lobby(store: GameStore, stations: [Station], startSlot: SpecialSignSlot? = nil,
+                      close: @escaping () -> Void) -> SpecialSignsView {
         SpecialSignsView(
             stations: stations,
             submit: { await store.perform("add_station", $0) },
             delete: { await store.perform("delete_station", ["stationId": $0.id]) },
-            close: close
+            close: close,
+            startSlot: startSlot
         )
     }
 }
