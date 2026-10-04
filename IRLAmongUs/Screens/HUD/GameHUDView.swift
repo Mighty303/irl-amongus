@@ -13,11 +13,14 @@ struct GameHUDView: View {
         case task(taskId: String)
         /// A special sign tapped on the map: its photo and what scanning it does.
         case sign(stationId: String)
+        /// Fixing a sabotage at a sign: the reactor hand scanner or an O2 keypad.
+        case sabotage(stationId: String)
     }
 
     @State private var panel: Panel = .actions
     @State private var scanning = false
     @State private var showingCams = false
+    @State private var showingAdmin = false
     @State private var spectating = false
     /// The sign a tapped task needs; nil when scanning from the big button (any sign).
     @State private var scanTarget: Station?
@@ -66,6 +69,13 @@ struct GameHUDView: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingCams)
+        .overlay {
+            if showingAdmin {
+                AdminMapView(state: state) { showingAdmin = false }
+                    .transition(.scale(scale: 0.95).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingAdmin)
         .overlay {
             if spectating {
                 SpectateView(state: state) { spectating = false }
@@ -124,6 +134,8 @@ struct GameHUDView: View {
             } else {
                 actions
             }
+        case let .sabotage(id):
+            HUDSabotageSquare(state: state, stationId: id) { panel = .actions }
         case let .sign(id):
             if let station = state.station(id) {
                 HUDSignDetail(state: state, station: station,
@@ -149,7 +161,17 @@ struct GameHUDView: View {
         guard let station = state.station(checkpoint.stationId) else { return }
         if let sabotage = state.sabotage, state.me.alive,
            sabotage.stations.contains(where: { $0.stationId == station.id }) {
+            if sabotage.kind == "reactor" || sabotage.kind == "oxygen" {
+                // The hand scanner or the keypad, like Among Us.
+                panel = .sabotage(stationId: station.id)
+                return
+            }
             Task { await store.perform("fix_sabotage", ["stationId": station.id]) }
+        }
+        if station.kind == .admin, state.me.alive {
+            // Looked at the Admin table: who's in which room.
+            showingAdmin = true
+            return
         }
         if station.kind == .security, state.me.alive {
             // Sat down at Security: open the cameras.
@@ -289,6 +311,7 @@ struct HUDMapSquare: View {
         let campus = store.campusView(points: state.locatedStationPoints + store.livePositions.map { CGPoint(x: $0.lng, y: $0.lat) },
                                       stations: state.stations, playArea: state.playArea)
         let pins = taskPins(campus)
+        let sabotage = sabotagePins(campus)
         let (center, isPlayer) = mapCenter(campus)
         ZStack {
             // Zoomed in to a little over a room across, locked on you.
@@ -296,8 +319,9 @@ struct HUDMapSquare: View {
                 rooms: campus.rooms,
                 // This player's task signs and the special signs (red button, security…); other players'
                 // signs aren't yours to find, so they stay off.
-                stations: pins.map(\.station) + state.otherSignPins(excluding: Set(pins.map(\.station.id)), campus: campus,
-                                                                      includeSigns: false, includeMeeting: true),
+                stations: pins.map(\.station) + sabotage
+                    + state.otherSignPins(excluding: Set(pins.map(\.station.id) + sabotage.map { String($0.id.dropFirst(4)) }),
+                                          campus: campus, includeSigns: false, includeMeeting: true),
                 completedStationIDs: Set(pins.filter(\.completed).map(\.station.id)),
                 meetingPoint: nil,
                 players: store.liveDots(state: state, campus: campus),
@@ -308,7 +332,7 @@ struct HUDMapSquare: View {
                 isGhost: !state.me.alive,
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }
-                    else { selectSign(station.id) }
+                    else { selectSign(station.id.hasPrefix("sab-") ? String(station.id.dropFirst(4)) : station.id) }
                 }
             )
             .overlay(alignment: .topTrailing) {
@@ -376,6 +400,20 @@ struct HUDMapSquare: View {
         if !state.me.alive { return nil }
         if lightsOut { return 3 }
         return state.me.role == .impostor ? 14 : 10
+    }
+
+    /// During a reactor or O2 sabotage, its signs with the reactor/O2 icon, wherever they are, even signs picked
+    /// for it from the game's ordinary signs. (Ids are prefixed so they don't clash with a task pin there.)
+    private func sabotagePins(_ campus: CampusView) -> [POCStation] {
+        guard let sabotage = state.sabotage, sabotage.kind == "reactor" || sabotage.kind == "oxygen" else { return [] }
+        return sabotage.stations.compactMap { fix in
+            guard let station = state.station(fix.stationId), let lat = station.lat, let lng = station.lng else { return nil }
+            let off = campus.isOffFloor(buildingId: station.buildingId, floorId: station.floorId)
+            return POCStation(id: "sab-\(station.id)", displayName: station.signText ?? station.name, taskType: "",
+                              roomID: sabotage.kind == "reactor" ? "REACTOR\(fix.active ? " ✓" : "")" : "O2\(fix.active ? " ✓" : "")",
+                              roomLabel: station.name, position: CGPoint(x: lng, y: lat),
+                              style: sabotage.kind == "reactor" ? .reactor : .oxygen, faded: off, floorNote: off ? station.floorId : nil)
+        }
     }
 
     private func taskPins(_ campus: CampusView) -> [Pin] {
@@ -628,7 +666,7 @@ struct HUDActionsPanel: View {
             let available = cooldown == 0 && state.sabotage == nil
             Menu {
                 Button("Reactor meltdown") { Task { await store.perform("sabotage", ["kind": "reactor"]) } }
-                Button("Lights") { Task { await store.perform("sabotage", ["kind": "lights"]) } }
+                Button("Oxygen depleted") { Task { await store.perform("sabotage", ["kind": "oxygen"]) } }
             } label: {
                 ZStack {
                     Image("SabotageActionIcon").resizable().scaledToFit()
@@ -742,6 +780,7 @@ struct HUDSignDetail: View {
         case .security: return "Scan it to watch the cameras."
         case .admin: return "Scan it to see who's in which room."
         case .reactor: return "Meltdown: two people scan both reactor signs."
+        case .oxygen: return "Oxygen depleted: scan it and type the code at its keypad."
         case .electrical: return "Lights out: scan it to fix the lights."
         case .task: return "A sign."
         }
@@ -877,7 +916,7 @@ struct HUDSabotageBanner: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(sabotage.kind == "reactor" ? "☢️ REACTOR MELTDOWN" : "💡 LIGHTS OUT")
+            Text(sabotage.kind == "reactor" ? "☢️ REACTOR MELTDOWN" : sabotage.kind == "oxygen" ? "🫁 OXYGEN DEPLETED" : "💡 LIGHTS OUT")
                 .font(.system(size: 13, weight: .black, design: .rounded))
             if sabotage.deadline != nil {
                 Countdown(deadline: sabotage.deadline, font: .system(size: 13, weight: .black, design: .monospaced))
@@ -896,8 +935,90 @@ struct HUDSabotageBanner: View {
         let names = sabotage.stations.map { fix in
             "\(state.station(fix.stationId)?.name ?? "?")\(fix.active ? " ✓" : "")"
         }
-        return sabotage.kind == "reactor"
-            ? "Scan both reactor signs: \(names.joined(separator: " · "))"
-            : "Scan \(names.first ?? "the electrical sign")"
+        switch sabotage.kind {
+        case "reactor": return "Two people hold both scanners: \(names.joined(separator: " · "))"
+        case "oxygen": return "Type the code at both keypads: \(names.joined(separator: " · "))"
+        default: return "Scan \(names.first ?? "the electrical sign")"
+        }
+    }
+}
+
+/// Fixing a sabotage at a sign, in the right square: the reactor hand scanner (held, checking in with the
+/// server every half second) or an O2 keypad (the code on the note). Closes itself once it's fixed.
+struct HUDSabotageSquare: View {
+    @Environment(GameStore.self) private var store
+    let state: GameState
+    let stationId: String
+    let close: () -> Void
+
+    @State private var heartbeat: Task<Void, Never>?
+    @State private var wrongAttempts = 0
+    @State private var fixed = false
+
+    var body: some View {
+        let sabotage = state.sabotage
+        let mine = sabotage?.stations.first { $0.stationId == stationId }
+        ZStack {
+            RoundedRectangle(cornerRadius: 20).fill(Color.black)
+            if let sabotage, mine != nil, !fixed {
+                if sabotage.kind == "reactor" {
+                    ReactorHandGame(otherHeld: sabotage.stations.contains { $0.stationId != stationId && $0.active },
+                                    onHold: hold)
+                        .padding(8)
+                } else {
+                    OxygenKeypadGame(code: sabotage.code ?? "", done: mine?.active == true,
+                                     wrongAttempts: wrongAttempts, submit: submit)
+                        .padding(8)
+                }
+            } else if fixed || sabotage == nil {
+                TaskText(state.sabotage == nil ? "Sabotage fixed!" : "Keypad fixed!", size: 26)
+            } else {
+                Text("This sign isn't part of the sabotage.").font(.headline).foregroundStyle(.white)
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .overlay(RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.35), lineWidth: 2))
+        .overlay(alignment: .topLeading) { HUDCloseButton { TaskSound.panelClose.play(); close() } }
+        .onAppear { TaskSound.panelOpen.play() }
+        .onDisappear { heartbeat?.cancel() }
+        .onChange(of: state.sabotage == nil) { _, over in if over { finish() } }
+        .onChange(of: mine?.active) { _, active in
+            // O2: this keypad took the code (the other may still need doing).
+            if sabotage?.kind == "oxygen", active == true { finish() }
+        }
+    }
+
+    /// While a hand is on the scanner: tell the server every half second (it needs both at once).
+    private func hold(_ on: Bool) {
+        heartbeat?.cancel()
+        guard on else { return }
+        heartbeat = Task {
+            while !Task.isCancelled {
+                try? await store.send("fix_sabotage", ["stationId": stationId])
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+        }
+    }
+
+    private func submit(_ code: String) {
+        Task {
+            do {
+                try await store.send("fix_sabotage", ["stationId": stationId, "code": code])
+            } catch {
+                wrongAttempts += 1
+            }
+        }
+    }
+
+    private func finish() {
+        guard !fixed else { return }
+        fixed = true
+        heartbeat?.cancel()
+        TaskSound.complete.play()
+        Haptics.success()
+        Task {
+            try? await Task.sleep(for: .milliseconds(1400))
+            close()
+        }
     }
 }

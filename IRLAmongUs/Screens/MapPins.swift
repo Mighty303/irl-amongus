@@ -38,6 +38,7 @@ extension StationKind {
         case .meeting: return "MEETING"
         case .emergency: return "BUTTON"
         case .reactor: return "REACTOR"
+        case .oxygen: return "O2"
         case .electrical: return "LIGHTS"
         case .security: return "SECURITY"
         case .admin: return "ADMIN"

@@ -1001,3 +1001,11 @@ struct CenterPinTests {
         #expect(abs(tip - 149) <= 2, "the tip is at row \(tip), not the centre")
     }
 }
+
+struct StationKindDecodingTests {
+    /// A sign kind from a newer server reads as a plain sign instead of failing the whole game state.
+    @Test func unknownKindsReadAsPlainSigns() throws {
+        let kinds = try JSONDecoder().decode([StationKind].self, from: Data(#"["oxygen","admin","teleporter"]"#.utf8))
+        #expect(kinds == [.oxygen, .admin, .task])
+    }
+}

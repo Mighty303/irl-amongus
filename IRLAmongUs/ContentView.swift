@@ -2488,7 +2488,7 @@ struct POCStation: Identifiable {
 }
 
 enum POCPinStyle: Equatable {
-    case task, sign, meeting, emergency, reactor, lights, security, admin
+    case task, sign, meeting, emergency, reactor, oxygen, lights, security, admin
 
     init(_ kind: StationKind) {
         switch kind {
@@ -2496,6 +2496,7 @@ enum POCPinStyle: Equatable {
         case .meeting: self = .meeting
         case .emergency: self = .emergency
         case .reactor: self = .reactor
+        case .oxygen: self = .oxygen
         case .electrical: self = .lights
         case .security: self = .security
         case .admin: self = .admin
@@ -2509,6 +2510,7 @@ enum POCPinStyle: Equatable {
         case .meeting: "person.3.fill"
         case .emergency: "light.beacon.max.fill"
         case .reactor: "atom"
+        case .oxygen: "aqi.medium"
         case .lights: "bolt.fill"
         case .security: "video.fill"
         case .admin: "map.fill"
@@ -2522,6 +2524,7 @@ enum POCPinStyle: Equatable {
         case .meeting: .blue
         case .emergency: .red
         case .reactor: Color(red: 0.2, green: 0.75, blue: 0.95)
+        case .oxygen: Color(red: 0.3, green: 0.85, blue: 0.65)
         case .lights: Color(red: 0.95, green: 0.75, blue: 0.1)
         case .security: Color(red: 0.55, green: 0.45, blue: 0.95)
         case .admin: Color(red: 0.25, green: 0.7, blue: 0.45)
