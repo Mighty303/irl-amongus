@@ -39,9 +39,9 @@ struct SignScanPanel: View {
         return layout {
             SignPanel.well
                 .overlay {
-                    CameraView(onQRCode: handleQR, onFrame: { [signs = store.signs, threshold = store.signThreshold] buffer in
+                    CameraView(onQRCode: handleQR, onFrame: { [signs = store.signs, threshold = store.signThreshold, prefer = target?.id] buffer in
                         // Camera queue: only touch thread-safe objects here, then hop to main.
-                        let result = signs.analyze(buffer, threshold: threshold)
+                        let result = signs.analyze(buffer, threshold: threshold, prefer: prefer)
                         DispatchQueue.main.async { handle(result) }
                     })
                 }

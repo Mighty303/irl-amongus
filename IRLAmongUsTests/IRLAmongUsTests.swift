@@ -923,3 +923,26 @@ struct StepDetectorTests {
         #expect(count({ 0.04 * sin(2 * .pi * 6 * $0) }, seconds: 5) == 0)
     }
 }
+
+struct SignTextMatchTests {
+    private let signs: [String: [String]] = [
+        "exit": ["exit"], "exitLab": ["exit", "lab"], "room": ["room", "9000"], "room2": ["room", "9000"],
+    ]
+
+    @Test func theMostSpecificSignWinsNotARandomOne() {
+        // "EXIT" is inside "EXIT LAB": seeing both words is the lab sign, every time.
+        for _ in 0..<20 {
+            #expect(SignRecognizer.textMatch(signWords: signs, seen: ["exit", "lab"], distances: [:], prefer: nil) == "exitLab")
+        }
+        #expect(SignRecognizer.textMatch(signWords: signs, seen: ["exit"], distances: [:], prefer: nil) == "exit")
+        #expect(SignRecognizer.textMatch(signWords: signs, seen: ["hello"], distances: [:], prefer: nil) == nil)
+    }
+
+    @Test func identicalTextIsSettledByTheTaskSignThenThePhotoElseNotAtAll() {
+        let seen: Set<String> = ["room", "9000"]
+        #expect(SignRecognizer.textMatch(signWords: signs, seen: seen, distances: [:], prefer: "room2") == "room2")
+        #expect(SignRecognizer.textMatch(signWords: signs, seen: seen, distances: ["room": 0.9, "room2": 0.4], prefer: nil) == "room2")
+        #expect(SignRecognizer.textMatch(signWords: signs, seen: seen, distances: [:], prefer: nil) == nil)
+        #expect(SignRecognizer.textMatch(signWords: signs, seen: seen, distances: ["room": 0.5], prefer: nil) == nil)
+    }
+}

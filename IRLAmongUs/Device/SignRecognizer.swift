@@ -85,7 +85,8 @@ final class SignRecognizer: @unchecked Sendable {
         }
     }
 
-    func analyze(_ buffer: CVPixelBuffer, threshold: Float, useText: Bool = true) -> FrameResult {
+    /// `prefer`: the sign being looked for (a task's sign), which wins a tie with another sign's text.
+    func analyze(_ buffer: CVPixelBuffer, threshold: Float, useText: Bool = true, prefer: String? = nil) -> FrameResult {
         let (refs, texts) = lock.withLock { (prints, signWords) }
         var distances: [String: Float] = [:]
         let width = CVPixelBufferGetWidth(buffer), height = CVPixelBufferGetHeight(buffer)
@@ -111,13 +112,28 @@ final class SignRecognizer: @unchecked Sendable {
         // Text match: every word of the sign's text appears somewhere in view, in any order (signs read
         // over two lines often come back in a different order).
         let seen = Set(Self.words(lines.joined(separator: " ")))
-        if let textHit = texts.first(where: { !$0.value.isEmpty && $0.value.allSatisfy(seen.contains) }) {
-            return FrameResult(best: Match(stationId: textHit.key, distance: nil, byText: true), distances: distances, recognizedText: lines)
+        if let textHit = Self.textMatch(signWords: texts, seen: seen, distances: distances, prefer: prefer) {
+            return FrameResult(best: Match(stationId: textHit, distance: nil, byText: true), distances: distances, recognizedText: lines)
         }
         if let (id, d) = distances.min(by: { $0.value < $1.value }), d <= threshold {
             return FrameResult(best: Match(stationId: id, distance: d, byText: false), distances: distances, recognizedText: lines)
         }
         return FrameResult(best: nil, distances: distances, recognizedText: lines)
+    }
+
+    /// Which sign's text is in view. Several can be (a short "EXIT" is inside lots of signs): the one with the
+    /// most words wins; between equally specific ones, the sign being looked for, else the closest photo.
+    /// Still a tie (same text, no photos to tell apart): none, rather than checking in at the wrong sign.
+    static func textMatch(signWords: [String: [String]], seen: Set<String>, distances: [String: Float],
+                          prefer: String?) -> String? {
+        let hits = signWords.filter { !$0.value.isEmpty && $0.value.allSatisfy(seen.contains) }
+        guard let most = hits.values.map({ Set($0).count }).max() else { return nil }
+        let specific = hits.filter { Set($0.value).count == most }.map(\.key)
+        if specific.count == 1 { return specific[0] }
+        if let prefer, specific.contains(prefer) { return prefer }
+        let ranked = specific.compactMap { id in distances[id].map { (id, $0) } }.sorted { $0.1 < $1.1 }
+        guard let first = ranked.first, ranked.count == specific.count, ranked.count < 2 || ranked[1].1 > first.1 else { return nil }
+        return first.0
     }
 
     /// Lowercased words of a sign's text: letters and digits, punctuation dropped.
