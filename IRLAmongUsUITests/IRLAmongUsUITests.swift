@@ -14,7 +14,6 @@ final class IRLAmongUsUITests: XCTestCase {
         app.buttons["Local"].tap()
         XCTAssertTrue(app.staticTexts["local.username"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["local.createGame"].isEnabled)
-        app.buttons["local.joinTab"].tap()
         XCTAssertTrue(app.textFields["local.roomCode"].exists)
         XCTAssertFalse(app.buttons["local.joinGame"].isEnabled)
         XCTAssertFalse(app.staticTexts["IRLUS"].exists)
@@ -89,14 +88,12 @@ final class IRLAmongUsUITests: XCTestCase {
         app.buttons["Local"].tap()
 
         XCTAssertTrue(app.staticTexts["LOCAL"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["local.createTab"].exists)
         XCTAssertTrue(app.buttons["local.createGame"].exists)
         XCTAssertFalse(app.buttons["Hide n Seek"].exists)
         XCTAssertTrue(app.buttons["Back"].exists)
         XCTAssertTrue(app.staticTexts["local.username"].exists)
         XCTAssertTrue(app.buttons["local.editName"].exists)
         XCTAssertFalse(app.textFields["local.serverURL"].exists, "The hosted server is fixed; no address field")
-        app.buttons["local.joinTab"].tap()
         XCTAssertTrue(app.buttons["local.joinGame"].exists)
         XCTAssertFalse(app.staticTexts["PHYSICAL MAP"].exists)
 
@@ -116,7 +113,7 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(username.waitForExistence(timeout: 5))
         XCTAssertEqual(username.label, "Martin")
         let screen = app.windows.firstMatch.frame
-        for id in ["local.editName", "local.createTab", "local.joinTab", "local.createGame"] {
+        for id in ["local.editName", "local.createGame", "local.joinGame"] {
             let button = app.buttons[id]
             XCTAssertTrue(button.isHittable, "\(id) must be visible without scrolling")
             XCTAssertTrue(screen.contains(button.frame), "\(id) must fit inside the screen")
@@ -128,10 +125,9 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5))
         field.tap()
         field.typeText("\u{8}\u{8}\u{8}\u{8}\u{8}\u{8}Alex")
-        app.navigationBars.buttons["Done"].tap()
+        app.buttons["local.saveName"].tap()
         XCTAssertTrue(username.waitForExistence(timeout: 5))
         XCTAssertEqual(username.label, "Alex")
-        app.buttons["local.joinTab"].tap()
         for element in [app.textFields["local.roomCode"], app.buttons["local.joinGame"], app.buttons["Scan lobby QR"]] {
             XCTAssertTrue(screen.contains(element.frame))
             XCTAssertGreaterThanOrEqual(element.frame.height, 44)
@@ -140,7 +136,6 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Scan lobby QR"].isHittable)
         XCTAssertFalse(app.buttons["local.joinGame"].isEnabled)
         captureVoting(app, name: "LOCAL compact join")
-        app.buttons["local.createTab"].tap()
         XCTAssertTrue(app.buttons["local.createGame"].isHittable)
     }
 
