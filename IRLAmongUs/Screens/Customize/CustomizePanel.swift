@@ -3,10 +3,11 @@ import SwiftUI
 
 /// The Among Us style customize window that pops up over the lobby: pick a suit color nobody else
 /// is wearing, and put your own head on your crewmate (selfie or photo, fitted in an oval, with the
-/// background cut out on the phone).
+/// background cut out on the phone). Without a game (`state` nil, from the Local screen) the picks are
+/// saved as your preferences and applied when you create or join a game.
 struct CustomizePanel: View {
     @Environment(GameStore.self) private var store
-    let state: GameState
+    let state: GameState?
     let close: () -> Void
 
     private enum Tab { case color, face }
@@ -28,8 +29,10 @@ struct CustomizePanel: View {
     private static let muted = Color(white: 0.3)
     private static let well = Color(red: 0.91, green: 0.925, blue: 0.945)
 
-    private var me: PlayerView? { state.player(state.me.id) }
-    private var myColor: PlayerColor { me?.color ?? .red }
+    private var me: PlayerView? { state.flatMap { $0.player($0.me.id) } }
+    private var myColor: PlayerColor { me?.color ?? store.preferredColor ?? .red }
+    private var myFaceId: String? { state == nil ? store.preferredFaceId : me?.faceId }
+    private var myName: String { state?.me.name ?? store.playerName }
 
     var body: some View {
         GeometryReader { geo in
@@ -148,9 +151,9 @@ struct CustomizePanel: View {
             if let fitting = displayedPhoto {
                 CrewmateView(color: myColor, height: height) { FaceCrop(image: fitting, zoom: zoom, offset: offset) }
             } else {
-                CrewmateView(color: myColor, faceURL: store.faceURL(me?.faceId), height: height)
+                CrewmateView(color: myColor, faceURL: store.faceURL(myFaceId), height: height)
             }
-            Text(state.me.name)
+            Text(myName)
                 .font(.system(size: 14, weight: .black, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14)
@@ -166,22 +169,25 @@ struct CustomizePanel: View {
     // MARK: - Color
 
     private var colorGrid: some View {
-        let owners = Dictionary(state.players.compactMap { p in p.color.map { ($0, p) } }, uniquingKeysWith: { a, _ in a })
+        let owners = Dictionary((state?.players ?? []).compactMap { p in p.color.map { ($0, p) } }, uniquingKeysWith: { a, _ in a })
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text(myColor.name).font(.system(size: 20, weight: .black, design: .rounded))
                 Spacer()
-                Text("One crewmate per color").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(Self.muted)
+                Text(state == nil ? "Used when you join, if it's free" : "One crewmate per color")
+                    .font(.system(size: 12, weight: .bold, design: .rounded)).foregroundStyle(Self.muted)
             }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 6) {
                 ForEach(PlayerColor.allCases, id: \.self) { color in
                     let owner = owners[color]
-                    let mine = owner?.id == state.me.id
+                    let mine = state == nil ? color == myColor : owner?.id == state?.me.id
                     let taken = owner != nil && !mine
                     VStack(spacing: 2) {
                         Button {
                             guard !mine else { return }
-                            Task { await store.perform("set_color", ["color": color.rawValue]) }
+                            // Remembered for next time too.
+                            store.preferredColor = color
+                            if state != nil { Task { await store.perform("set_color", ["color": color.rawValue]) } }
                         } label: {
                             swatch(color, taken: taken, selected: mine)
                         }
@@ -236,7 +242,7 @@ struct CustomizePanel: View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Put your head on your crewmate").font(.system(size: 20, weight: .black, design: .rounded))
-                Text("Everyone in the lobby sees it.")
+                Text(state == nil ? "Used in every game you join." : "Everyone in the lobby sees it.")
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(Self.muted)
             }
@@ -269,9 +275,10 @@ struct CustomizePanel: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(Self.well, in: RoundedRectangle(cornerRadius: 10))
-            if me?.faceId != nil {
+            if myFaceId != nil {
                 Button("Remove my face") {
-                    Task { await store.perform("set_face", ["faceId": NSNull()]) }
+                    store.preferredFaceId = nil
+                    if state != nil { Task { await store.perform("set_face", ["faceId": NSNull()]) } }
                 }
                 .font(.system(size: 14, weight: .heavy, design: .rounded))
                 .foregroundStyle(Color(red: 0.7, green: 0.08, blue: 0.08))
@@ -360,7 +367,9 @@ struct CustomizePanel: View {
             defer { saving = false }
             do {
                 let faceId = try await store.uploadFace(png)
-                if await store.perform("set_face", ["faceId": faceId]) {
+                store.preferredFaceId = faceId
+                let applied = state == nil ? true : await store.perform("set_face", ["faceId": faceId])
+                if applied {
                     stopFitting()
                     tab = .face
                 } else {
