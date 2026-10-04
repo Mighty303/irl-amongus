@@ -35,6 +35,13 @@ struct GameRootView: View {
                 AlertOverlay(alert: alert) { store.alert = nil }
             }
         }
+        .onChange(of: store.state?.phase, initial: true) { _, phase in
+            if phase == .LOBBY || phase == .ROLE_REVEAL || phase == nil {
+                OrientationDelegate.requestLandscape()
+            } else {
+                OrientationDelegate.requestPortrait()
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             if store.session != nil && (!store.isSynced || (lobbyContent != nil && store.state?.phase != .LOBBY)) {
                 Button("Leave Game", role: .destructive) { store.leave() }

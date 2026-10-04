@@ -200,6 +200,13 @@ struct ContentView: View {
         .onChange(of: store.session, initial: true) { _, session in
             if session != nil { isShowingLocalLobby = true }
         }
+        .onChange(of: store.state?.phase, initial: true) { _, phase in
+            if let phase, phase != .LOBBY {
+                themeAudio.pause()
+            } else if Self.audioEnabled {
+                themeAudio.play()
+            }
+        }
         .onChange(of: store.pendingJoinCode, initial: true) { _, code in
             if code != nil { isShowingLocalLobby = true }
         }
@@ -316,7 +323,7 @@ private struct LocalLobbyView: View {
             }
         }
         .onChange(of: store.state?.phase, initial: true) { _, phase in
-            if let phase, phase != .LOBBY {
+            if let phase, phase != .LOBBY && phase != .ROLE_REVEAL {
                 OrientationDelegate.requestPortrait()
             } else {
                 OrientationDelegate.requestLandscape()
