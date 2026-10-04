@@ -104,3 +104,35 @@ Shake the phone to open Developer Mode, then choose **Open Role Reveal POC**. Ch
 Asset sources are recorded in [sprite attribution](SPRITE_ASSET_ATTRIBUTION.md).
 
 Previews: [Shhh](docs/role-shhh.png), [Crewmate](docs/role-crewmate.png), [Impostor](docs/role-impostor.png).
+
+## LOCAL server lobby
+
+Open **LOCAL**, enter your display name and the POC server address, then choose
+**Classic** to create a room. Other phones use the same address and enter the
+four-character room code, or scan the host's **Share lobby QR**. Join links from
+the system camera also open LOCAL with the room code filled in.
+
+The landscape waiting room shows the server's room code and live player roster.
+The host can **Add bot**, open **SETTINGS** to configure rules and venue signs,
+and press **START** once the configured minimum player count is reached. Start
+and all settings changes are validated by the server. Gameplay uses the existing
+portrait server POC screens; returning to the lobby restores landscape.
+
+Saved sessions resume in LOCAL when the app launches. During reconnects, actions
+pause until a fresh snapshot arrives, and **Leave Game** remains available.
+A running POC server is required. Nearby discovery and Hide n Seek are not yet
+implemented.
+
+To replay the LOCAL lobby UI smoke test, run `python3 scripts/test-local-lobby-server.py`
+in one terminal, then run:
+
+```sh
+TEST_RUNNER_LOCAL_LOBBY_TEST_SERVER=http://127.0.0.1:39872 xcodebuild \
+  -project IRLAmongUs.xcodeproj -scheme IRLAmongUs \
+  -destination 'platform=iOS Simulator,name=iPhone 16e' \
+  -parallel-testing-enabled NO \
+  -only-testing:IRLAmongUsUITests/IRLAmongUsUITests/testLocalServerLobbyStartsAuthoritativeGame test
+```
+
+This fixture verifies client requests and screen transitions. It does not verify
+the backend's game rules or physical-device BLE/camera behavior.

@@ -2,6 +2,7 @@ import SwiftUI
 
 /// The networked game. Routes to a screen based purely on the server's phase + this player's state.
 struct GameRootView: View {
+    var lobbyContent: ((GameState) -> AnyView)? = nil
     @Environment(GameStore.self) private var store
 
     var body: some View {
@@ -17,7 +18,6 @@ struct GameRootView: View {
                     VStack(spacing: 16) {
                         ProgressView()
                         Text("Connecting to \(store.serverURLString)…")
-                        Button("Leave", role: .destructive) { store.leave() }
                     }
                 }
             }
@@ -27,11 +27,20 @@ struct GameRootView: View {
                     .font(.footnote.bold())
                     .padding(8)
                     .frame(maxWidth: .infinity)
+                    .foregroundStyle(.black)
                     .background(.yellow)
             }
 
             if let alert = store.alert {
                 AlertOverlay(alert: alert) { store.alert = nil }
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if store.session != nil && (!store.isSynced || (lobbyContent != nil && store.state?.phase != .LOBBY)) {
+                Button("Leave Game", role: .destructive) { store.leave() }
+                    .padding(8)
+                    .frame(maxWidth: .infinity)
+                    .background(.bar)
             }
         }
         .alert("Error", isPresented: Binding(get: { store.errorMessage != nil }, set: { if !$0 { store.errorMessage = nil } })) {
@@ -44,7 +53,8 @@ struct GameRootView: View {
     @ViewBuilder
     private func screen(for state: GameState) -> some View {
         switch state.phase {
-        case .LOBBY: LobbyView(state: state)
+        case .LOBBY:
+            if let lobbyContent { lobbyContent(state) } else { AnyView(LobbyView(state: state)) }
         case .ROLE_REVEAL: RoleRevealView(state: state)
         case .PLAYING: state.me.isBody ? AnyView(BodyView(state: state)) : AnyView(PlayingView(state: state))
         case .MEETING, .VOTING, .RESULT: MeetingView(state: state)

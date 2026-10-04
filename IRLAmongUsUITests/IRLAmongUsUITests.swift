@@ -6,37 +6,68 @@ final class IRLAmongUsUITests: XCTestCase {
     }
 
     @MainActor
-    func testLandscapeLobbyFitsOnScreen() throws {
+    func testLocalLobbyRequiresNameAndValidServer() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()
-        app.launchArguments.append("-disableAudio")
+        app.launchArguments = ["-disableAudio", "-playerName", "", "-serverURL", "ftp://invalid", "-session", ""]
         app.launch()
-        XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
+        app.buttons["Local"].tap()
+        let name = app.textFields["local.playerName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        app.swipeUp()
+        XCTAssertFalse(app.buttons["Classic"].isEnabled)
+        XCTAssertTrue(app.textFields["local.roomCode"].exists)
+        XCTAssertFalse(app.buttons["Join game"].isEnabled)
+        XCTAssertFalse(app.staticTexts["IRLUS"].exists)
+        captureVoting(app, name: "LOCAL server setup")
+    }
+
+    @MainActor
+    func testLocalServerLobbyStartsAuthoritativeGame() throws {
+        guard let server = ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_SERVER"] else {
+            throw XCTSkip("Run scripts/test-local-lobby-server.py and set TEST_RUNNER_LOCAL_LOBBY_TEST_SERVER")
+        }
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-playerName", "Ben", "-serverURL", server, "-session", ""]
+        app.launch()
         app.buttons["Local"].tap()
         XCTAssertTrue(app.buttons["Classic"].waitForExistence(timeout: 5))
+        app.swipeUp()
         app.buttons["Classic"].tap()
-
         let room = app.descendants(matching: .any)["lobby.waitingRoom"].firstMatch
-        XCTAssertTrue(room.waitForExistence(timeout: 5))
+        XCTAssertTrue(room.waitForExistence(timeout: 10))
         let screen = app.windows.firstMatch.frame
-        XCTAssertGreaterThan(screen.width, screen.height)
-        XCTAssertTrue(screen.contains(room.frame), "The waiting room must fit inside the screen")
-        XCTAssertGreaterThan(room.frame.height, screen.height * 0.5)
-        for title in ["CUSTOMIZE", "START", "Leave Game"] {
-            let button = app.buttons[title]
-            XCTAssertTrue(button.isHittable, "\(title) must be visible and tappable")
-            XCTAssertTrue(screen.contains(button.frame))
-        }
-        captureVoting(app, name: "Game lobby landscape")
+        XCTAssertTrue(screen.contains(room.frame))
+        XCTAssertTrue(app.staticTexts["ABCD"].exists)
+        XCTAssertFalse(app.buttons["START"].isEnabled)
+        app.buttons["Add bot"].tap()
+        let count = app.staticTexts["lobby.playerCount"]
+        let hasTwoPlayers = NSPredicate { _, _ in count.label == "2" }
+        expectation(for: hasTwoPlayers, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(app.buttons["START"].isEnabled)
+        captureVoting(app, name: "LOCAL live server lobby")
+        app.buttons["START"].tap()
+        XCTAssertTrue(app.buttons["Reveal my role"].waitForExistence(timeout: 5))
+        let portrait = NSPredicate { _, _ in app.windows.firstMatch.frame.height > app.windows.firstMatch.frame.width }
+        expectation(for: portrait, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
         app.buttons["Leave Game"].tap()
-        XCTAssertTrue(app.staticTexts["HOST"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Classic"].waitForExistence(timeout: 5))
+        let landscape = NSPredicate { _, _ in app.windows.firstMatch.frame.width > app.windows.firstMatch.frame.height }
+        expectation(for: landscape, evaluatedWith: nil)
+        waitForExpectations(timeout: 5)
+        app.swipeUp()
+        app.buttons["Back"].tap()
+        XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
     }
 
     @MainActor
     func testLaunchesToMainMenu() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()
-        app.launchArguments.append("-disableAudio")
+        app.launchArguments.append(contentsOf: ["-disableAudio", "-session", ""])
         app.launch()
 
         XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
@@ -51,6 +82,10 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Classic"].exists)
         XCTAssertTrue(app.buttons["Hide n Seek"].exists)
         XCTAssertTrue(app.buttons["Back"].exists)
+        XCTAssertTrue(app.textFields["local.playerName"].exists)
+        XCTAssertTrue(app.textFields["local.serverURL"].exists)
+        app.swipeUp()
+        XCTAssertTrue(app.buttons["Join game"].exists)
         XCTAssertFalse(app.staticTexts["PHYSICAL MAP"].exists)
 
         app.buttons["Back"].tap()
@@ -62,7 +97,7 @@ final class IRLAmongUsUITests: XCTestCase {
     func testOpensPhysicalMapAndStationDetails() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()
-        app.launchArguments.append("-disableAudio")
+        app.launchArguments.append(contentsOf: ["-disableAudio", "-session", ""])
         app.launchArguments.append("-showDeveloperMenu")
         app.launch()
 
@@ -100,7 +135,7 @@ final class IRLAmongUsUITests: XCTestCase {
     func testDeveloperMenuLaunchesPhysicalMapPOC() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()
-        app.launchArguments.append("-disableAudio")
+        app.launchArguments.append(contentsOf: ["-disableAudio", "-session", ""])
         app.launchArguments.append("-showDeveloperMenu")
         app.launch()
 
@@ -136,7 +171,7 @@ extension IRLAmongUsUITests {
     private func openVoting(duration: Int = 60) -> XCUIApplication {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()
-        app.launchArguments = ["-disableAudio", "-showDeveloperMenu", "-votingTestDuration", String(duration)]
+        app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu", "-votingTestDuration", String(duration)]
         app.launch()
         XCTAssertTrue(app.buttons["developer.openVoting"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["developer.openPhysicalMap"].exists)
