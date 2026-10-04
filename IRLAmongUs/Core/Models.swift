@@ -24,7 +24,9 @@ enum PlayerColor: String, Decodable, CaseIterable {
 
 enum StationKind: String, Codable, CaseIterable, Identifiable {
     /// `task` stations are plain signs; the server assigns a random mini-game to each at game start.
-    case task, meeting, emergency, reactor, electrical
+    /// The rest are special signs: the red button (required), sabotage fixes, and the optional
+    /// Security (cameras) and Admin (room occupancy) rooms.
+    case task, meeting, emergency, reactor, electrical, security, admin
     var id: String { rawValue }
 
     var label: String {
@@ -34,6 +36,20 @@ enum StationKind: String, Codable, CaseIterable, Identifiable {
         case .emergency: return "Emergency button"
         case .reactor: return "Reactor"
         case .electrical: return "Electrical (lights)"
+        case .security: return "Security (cameras)"
+        case .admin: return "Admin (room map)"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .task: return "mappin"
+        case .meeting: return "person.3.fill"
+        case .emergency: return "light.beacon.max.fill"
+        case .reactor: return "atom"
+        case .electrical: return "bolt.fill"
+        case .security: return "video.fill"
+        case .admin: return "map.fill"
         }
     }
 }
@@ -89,19 +105,25 @@ struct GameState: Decodable, Equatable {
     let winReason: String?
     /// Saved game whose signs this lobby is using (optional so older servers still decode).
     let gameset: GamesetRef?
+    /// Lobby: signs each non-bot player must add, their share when a saved game supplies some.
+    /// Optional for older servers, which use `signsPerPlayer` for everyone.
+    let signQuotas: [String: Int]?
 
     var isHost: Bool { me.id == hostId }
 
-    /// Signs each non-bot player must add before the host can start (0 = no requirement).
-    var requiredSigns: Int { settings.signsPerPlayer ?? 0 }
+    /// Signs a player must add before the host can start (0 = nothing to do).
+    func requiredSigns(for playerId: String) -> Int { signQuotas?[playerId] ?? settings.signsPerPlayer ?? 0 }
+    /// This player's share.
+    var requiredSigns: Int { requiredSigns(for: me.id) }
+    /// The red button sign is required to start.
+    var hasRedButton: Bool { stations.contains { $0.kind == .emergency } }
     func signs(addedBy playerId: String) -> [Station] {
         stations.filter { $0.kind == .task && $0.addedBy == playerId }
     }
     var mySigns: [Station] { signs(addedBy: me.id) }
     /// Mirrors the server's start check.
     var playersMissingSigns: [PlayerView] {
-        guard requiredSigns > 0 else { return [] }
-        return players.filter { $0.isBot != true && signs(addedBy: $0.id).count < requiredSigns }
+        players.filter { $0.isBot != true && signs(addedBy: $0.id).count < requiredSigns(for: $0.id) }
     }
     func station(_ id: String?) -> Station? { stations.first { $0.id == id } }
     func player(_ id: String?) -> PlayerView? { players.first { $0.id == id } }

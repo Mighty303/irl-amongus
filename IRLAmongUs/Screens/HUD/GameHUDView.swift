@@ -252,8 +252,9 @@ struct HUDMapSquare: View {
         ZStack {
             POCFloorPlan(
                 rooms: SUBLevel2Map.rooms,
-                stations: pins.map(\.station),
-                meetingPoint: meetingPoint,
+                // This player's task signs, plus every other sign so the whole venue is on the map.
+                stations: pins.map(\.station) + state.otherSignPins(excluding: Set(pins.map(\.station.id))),
+                meetingPoint: state.meetingPointPin,
                 completedStationIDs: Set(pins.filter(\.completed).map(\.station.id)),
                 selectedStation: nil,
                 ownLastCheckpoint: checkpoint,
@@ -294,12 +295,6 @@ struct HUDMapSquare: View {
                 completed: task.completed
             )
         }
-    }
-
-    private var meetingPoint: CGPoint? {
-        guard let meeting = state.stations.first(where: { $0.kind == .meeting }),
-              let lat = meeting.lat, let lng = meeting.lng else { return nil }
-        return CGPoint(x: lng, y: lat)
     }
 
     private var checkpoint: POCCheckpoint {

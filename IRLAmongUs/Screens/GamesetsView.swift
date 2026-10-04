@@ -110,6 +110,7 @@ struct GamesetDetailView: View {
 
     @State private var gameset: GameStore.Gameset?
     @State private var adding = false
+    @State private var addingSpecial = false
     @State private var importItems: [PhotosPickerItem] = []
     @State private var importProgress: (done: Int, total: Int)?
     @State private var askingPassword = false
@@ -173,6 +174,25 @@ struct GamesetDetailView: View {
             } footer: {
                 Text("Imported photos use the location saved in each photo (taken with Location on), so pins land where the sign is. Photos without one are added without a map pin. The app reads each sign's text for you.")
             }
+
+            Section {
+                ForEach(SpecialSignSlot.all) { slot in
+                    let set = slot.station(in: stations) != nil
+                    LabeledContent {
+                        Text(set ? "Set" : slot.required ? "Needed to start" : "Optional")
+                            .foregroundStyle(set ? .green : slot.required ? .red : .secondary)
+                    } label: {
+                        Label(slot.title, systemImage: slot.kind.icon)
+                    }
+                }
+                if store.canEditGamesets {
+                    Button { addingSpecial = true } label: { Label("Set up special signs", systemImage: "light.beacon.max") }
+                }
+            } header: {
+                Text("Special signs")
+            } footer: {
+                Text("Include the red button so the game can start with no setup. A lobby keeps its own special signs for any the saved game doesn't have.")
+            }
         }
         .navigationTitle(gameset?.name ?? initialName)
         .fullScreenCover(isPresented: $adding, onDismiss: { Task { await refresh() } }) {
@@ -187,6 +207,22 @@ struct GamesetDetailView: View {
                 }
                 .signPanel(closeLabel: "Done adding signs") { adding = false }
             }
+            .presentationBackground(.clear)
+        }
+        .fullScreenCover(isPresented: $addingSpecial, onDismiss: { Task { await refresh() } }) {
+            SpecialSignsView(
+                stations: stations,
+                submit: { payload in
+                    let ok = await store.editGamesets("gamesets/\(gamesetId)/stations", payload) != nil
+                    await refresh()
+                    return ok
+                },
+                delete: { station in
+                    await store.editGamesets("gamesets/\(gamesetId)/stations/\(station.id)/delete")
+                    await refresh()
+                },
+                close: { addingSpecial = false }
+            )
             .presentationBackground(.clear)
         }
         .onChange(of: importItems) { _, items in

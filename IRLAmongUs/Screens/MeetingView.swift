@@ -6,7 +6,10 @@ struct MeetingView: View {
     let state: GameState
     @State private var scanning = false
 
-    private var meetingStation: Station? { state.stations.first { $0.kind == .meeting } }
+    /// Where everyone gathers: the meeting point, or the red button when there's no separate one (as on the server).
+    private var meetingStation: Station? {
+        state.stations.first { $0.kind == .meeting } ?? state.stations.first { $0.kind == .emergency }
+    }
 
     var body: some View {
         NavigationStack {

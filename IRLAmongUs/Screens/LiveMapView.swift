@@ -45,8 +45,8 @@ struct LiveMapView: View {
             layout {
                 POCFloorPlan(
                     rooms: SUBLevel2Map.rooms,
-                    stations: signPins(state),
-                    meetingPoint: meetingPoint(state),
+                    stations: state.otherSignPins(excluding: []),
+                    meetingPoint: state.meetingPointPin,
                     completedStationIDs: [],
                     selectedStation: nil,
                     ownLastCheckpoint: checkpoint(state),
@@ -204,20 +204,6 @@ struct LiveMapView: View {
     private func ago(_ date: Date?) -> String {
         guard let date else { return "" }
         return seconds(Date().timeIntervalSince(date))
-    }
-
-    private func signPins(_ state: GameState) -> [POCStation] {
-        state.stations.compactMap { s in
-            guard s.kind == .task, let lat = s.lat, let lng = s.lng else { return nil }
-            let label = s.signText ?? s.name
-            return POCStation(id: s.id, displayName: label, taskType: "Sign", roomID: String(label.prefix(10)),
-                              roomLabel: label, position: CGPoint(x: lng, y: lat))
-        }
-    }
-
-    private func meetingPoint(_ state: GameState) -> CGPoint? {
-        guard let m = state.stations.first(where: { $0.kind == .meeting }), let lat = m.lat, let lng = m.lng else { return nil }
-        return CGPoint(x: lng, y: lat)
     }
 
     private func checkpoint(_ state: GameState) -> POCCheckpoint {
