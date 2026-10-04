@@ -238,7 +238,7 @@ struct ContentView: View {
             if Self.audioEnabled { themeAudio.play() }
         }) { destination in
             switch destination {
-            case .physicalMap: PhysicalMapPOCView()
+            case .physicalMap: PhysicalMapView()
             case .voting: VotingPOCView()
             case .roles: RoleRevealPOCView()
             case .poc(let destination): POCDestinationView(destination: destination)
@@ -1133,19 +1133,19 @@ private struct DeveloperMenuView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Proofs of concept") {
+                Section("Screens") {
                     Button(action: onOpenPhysicalMap) {
-                        Label("Open Physical Map POC", systemImage: "map.fill")
+                        Label("Open Map", systemImage: "map.fill")
                     }
                     .accessibilityIdentifier("developer.openPhysicalMap")
 
                     Button(action: onOpenVoting) {
-                        Label("Open Voting POC", systemImage: "checkmark.bubble.fill")
+                        Label("Open Voting", systemImage: "checkmark.bubble.fill")
                     }
                     .accessibilityIdentifier("developer.openVoting")
 
                     Button(action: onOpenRoles) {
-                        Label("Open Role Reveal POC", systemImage: "person.fill.questionmark")
+                        Label("Open Role Reveal", systemImage: "person.fill.questionmark")
                     }
                     .accessibilityIdentifier("developer.openRoles")
 
@@ -1215,8 +1215,12 @@ private final class ShakeDetectorViewController: UIViewController {
 }
 #endif
 
-struct PhysicalMapPOCView: View {
+struct PhysicalMapView: View {
     var showsCloseButton = true
+    var previewRole: Role? = nil
+    var gameState: GameState? = nil
+
+    private var isImpostor: Bool { (gameState?.me.role ?? previewRole) == .impostor }
     private static let rooms = SUBLevel2Map.rooms
 
     private static let stations = [
@@ -1293,10 +1297,16 @@ struct PhysicalMapPOCView: View {
                         }
                     }
                     .padding(16)
-                    .padding(.bottom, 24)
+                    .padding(.bottom, isImpostor ? 120 : 24)
                 }
             }
-            .navigationTitle("Map POC")
+            .overlay(alignment: .bottomTrailing) {
+                if isImpostor {
+                    MapKillButton(state: gameState)
+                        .padding(16)
+                }
+            }
+            .navigationTitle("Map")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if showsCloseButton {
@@ -1671,7 +1681,7 @@ private struct POCStationDetailView: View {
                     }
                     .disabled(isCompleted)
                 } footer: {
-                    Text("POC only: completion is simulated locally. Production state remains server-authoritative.")
+                    Text("Completion is saved on this device.")
                 }
             }
             .navigationTitle(station.displayName)

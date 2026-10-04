@@ -5,6 +5,13 @@ import UIKit
 @testable import IRLAmongUs
 
 struct IRLAmongUsTests {
+    @Test func killAudioIsBundledAndDecodable() throws {
+        let url = try #require(Bundle.main.url(forResource: "among-us-kill", withExtension: "mp3"))
+        let player = try AVAudioPlayer(contentsOf: url)
+        #expect(player.duration > 0)
+        #expect(player.prepareToPlay())
+    }
+
     @MainActor
     @Test func roleRevealSoundIsBundledAndDecodable() throws {
         let asset = try #require(NSDataAsset(name: "RoleRevealSound"))

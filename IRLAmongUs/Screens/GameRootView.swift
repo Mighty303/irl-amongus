@@ -63,7 +63,7 @@ struct GameRootView: View {
         case .LOBBY:
             if let lobbyContent { lobbyContent(state) } else { AnyView(LobbyView(state: state)) }
         case .ROLE_REVEAL: RoleRevealView(state: state)
-        case .PLAYING: state.me.isBody ? AnyView(BodyView(state: state)) : AnyView(PhysicalMapPOCView(showsCloseButton: false))
+        case .PLAYING: state.me.isBody ? AnyView(BodyView(state: state)) : AnyView(PhysicalMapView(showsCloseButton: false, gameState: state))
         case .MEETING, .VOTING, .RESULT: MeetingView(state: state)
         case .GAME_OVER: GameOverView(state: state)
         }

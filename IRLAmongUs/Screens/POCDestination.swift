@@ -8,7 +8,7 @@ enum POCDestination: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .onlineGame: return "Online game (server POC)"
+        case .onlineGame: return "Online game"
         case .signsLab: return "Sign recognition test"
         case .bluetoothLab: return "Bluetooth proximity test"
         case .tools: return "GPS, QR, haptics & mini-games"

@@ -19,7 +19,7 @@ xcodebuild -project IRLAmongUs.xcodeproj -scheme IRLAmongUs -showdestinations
 
 ## Voting proof of concept
 
-In a Debug build, shake the phone (Simulator: Device → Shake) and choose **Open Voting POC**.
+In a Debug build, shake the phone (Simulator: Device → Shake) and choose **Open Voting**.
 The Map POC opens in portrait for walking with the phone, with the map above checkpoint and task details. The main menu, developer menu, and voting demo use landscape; closing the map restores landscape. It contains ten mock players, including you as Ben and one dead player.
 Select a living player or Skip Vote, then confirm with the green checkmark or cancel with the red cross.
 Your confirmed vote is final. Bots vote over time, and the 60-second deadline continues while the app is in the background.
@@ -99,7 +99,7 @@ the game's mini-map still uses MapKit (the SFU SUB floor plan from the Physical 
 
 ## Role reveal POC
 
-Shake the phone to open Developer Mode, then choose **Open Role Reveal POC**. Choose **Crewmate** or **Impostor** to play the bundled Shhh intro followed by the role screen. The role remains visible for three seconds, then opens the portrait Map POC automatically. The reveal has no exit or replay controls. This preview uses landscape and runs offline. It does not assign roles or contact the game server.
+Shake the phone to open Developer Mode, then choose **Open Role Reveal**. Choose **Crewmate** or **Impostor** to play the bundled Shhh intro followed by the role screen. The role remains visible for three seconds, then opens the portrait Map automatically. The reveal has no exit or replay controls. This preview uses landscape and runs offline. It does not assign roles or contact the game server.
 
 Asset sources are recorded in [sprite attribution](SPRITE_ASSET_ATTRIBUTION.md).
 
@@ -136,3 +136,5 @@ TEST_RUNNER_LOCAL_LOBBY_TEST_SERVER=http://127.0.0.1:39872 xcodebuild \
 
 This fixture verifies client requests and screen transitions. It does not verify
 the backend's game rules or physical-device BLE/camera behavior.
+
+The Map shows the original Kill action sprite only for impostors. In a live game, it uses available targets and cooldowns from the server and plays the bundled killer sound after a successful kill. The standalone impostor preview plays the same sound and starts a 30-second local cooldown.

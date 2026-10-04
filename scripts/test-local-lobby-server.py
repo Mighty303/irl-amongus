@@ -45,6 +45,8 @@ settings = dict(
 players = []
 phase = 'LOBBY'
 events = []
+kill_cooldown_until = None
+role = os.environ.get('LOCAL_LOBBY_TEST_ROLE', 'crewmate')
 
 def snapshot():
     return dict(
@@ -64,7 +66,7 @@ def snapshot():
         me=dict(
             id='ben',
             name='Ben',
-            role='crewmate' if phase != 'LOBBY' else None,
+            role=role if phase != 'LOBBY' else None,
             alive=True,
             isBody=False,
             ackedRole=False,
@@ -75,8 +77,8 @@ def snapshot():
             emergencyLeft=1,
             hasVoted=False,
             voteTarget=None,
-            killCooldownUntil=None,
-            killTargets=[],
+            killCooldownUntil=kill_cooldown_until,
+            killTargets=[p['id'] for p in players if p['id'] != 'ben' and p['alive']] if role == 'impostor' and phase == 'PLAYING' else [],
             nearbyBodies=[],
             sabotageAvailableAt=None,
         ),
@@ -117,15 +119,16 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_POST(self):
-        global phase, players
+        global phase, players, kill_cooldown_until
         data = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
         events.append(dict(path=self.path, data=data))
         phase = 'LOBBY'
+        kill_cooldown_until = None
         players = [player('ben', data['name'], True)]
         self.json(dict(code='ABCD', playerId='ben', token='test-token'))
 
     def do_GET(self):
-        global phase, players
+        global phase, players, kill_cooldown_until
         if self.path.startswith('/ws'):
             key = base64.b64encode(hashlib.sha1((self.headers['Sec-WebSocket-Key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').encode()).digest()).decode()
             self.send_response(101)
@@ -170,6 +173,12 @@ class Handler(BaseHTTPRequestHandler):
                         phase = 'ROLE_REVEAL'
                     if message['action'] == 'ack_role':
                         phase = 'PLAYING'
+                    if message['action'] == 'kill':
+                        target = message['payload']['targetId']
+                        for p in players:
+                            if p['id'] == target:
+                                p['alive'] = False
+                        kill_cooldown_until = time.time() * 1000 + settings['killCooldownSec'] * 1000
                     send(dict(type='ack', id=message['id'], ok=True))
                     send(dict(type='state', state=snapshot()))
             except (EOFError, ConnectionError, OSError):

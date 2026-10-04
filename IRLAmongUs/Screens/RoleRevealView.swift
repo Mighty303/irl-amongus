@@ -11,7 +11,7 @@ struct RoleRevealView: View {
     var body: some View {
         Group {
             if showingMap {
-                PhysicalMapPOCView(showsCloseButton: false)
+                PhysicalMapView(showsCloseButton: false, gameState: state)
             } else {
                 ZStack {
                     Color.black.ignoresSafeArea()

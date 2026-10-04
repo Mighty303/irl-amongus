@@ -14,7 +14,7 @@ struct RoleRevealPOCView: View {
     var body: some View {
         Group {
             if showingMap {
-                PhysicalMapPOCView()
+                PhysicalMapView(previewRole: role)
             } else {
                 GeometryReader { geometry in
                     ZStack {

@@ -292,9 +292,56 @@ extension IRLAmongUsUITests {
             }
             expectation(for: portrait, evaluatedWith: nil)
             waitForExpectations(timeout: 5)
+            let kill = app.buttons["map.kill"]
+            XCTAssertEqual(kill.exists, role == "impostor")
+            XCTAssertTrue(app.navigationBars["Map"].exists)
+            if role == "impostor" {
+                XCTAssertTrue(kill.isEnabled)
+                kill.tap()
+                XCTAssertFalse(kill.isEnabled)
+                XCTAssertTrue((kill.value as? String)?.hasPrefix("Cooldown") == true)
+            }
             app.buttons["Close physical map"].tap()
             XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
             app.terminate()
         }
+    }
+}
+
+
+extension IRLAmongUsUITests {
+    @MainActor
+    func testImpostorMapKillUsesServerAction() async throws {
+        guard let server = ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_SERVER"] else {
+            throw XCTSkip("Requires the local fixture with LOCAL_LOBBY_TEST_ROLE=impostor")
+        }
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-playerName", "Ben", "-serverURL", server, "-session", ""]
+        app.launch()
+        app.buttons["Local"].tap()
+        XCTAssertTrue(app.buttons["Classic"].waitForExistence(timeout: 5))
+        app.swipeUp()
+        app.buttons["Classic"].tap()
+        XCTAssertTrue(app.buttons["Add bot"].waitForExistence(timeout: 10))
+        app.buttons["Add bot"].tap()
+        let ready = NSPredicate { _, _ in app.buttons["START"].isEnabled }
+        let readyExpectation = expectation(for: ready, evaluatedWith: nil)
+        await fulfillment(of: [readyExpectation], timeout: 5)
+        app.buttons["START"].tap()
+        XCTAssertTrue(app.staticTexts["PHYSICAL MAP"].waitForExistence(timeout: 10))
+        let kill = app.buttons["map.kill"]
+        XCTAssertTrue(kill.waitForExistence(timeout: 5))
+        let enabled = NSPredicate { _, _ in kill.isEnabled }
+        let enabledExpectation = expectation(for: enabled, evaluatedWith: nil)
+        await fulfillment(of: [enabledExpectation], timeout: 5)
+        kill.tap()
+        let cooling = NSPredicate { _, _ in !kill.isEnabled }
+        let coolingExpectation = expectation(for: cooling, evaluatedWith: nil)
+        await fulfillment(of: [coolingExpectation], timeout: 5)
+        let (data, _) = try await URLSession.shared.data(from: URL(string: server + "/events")!)
+        let events = try JSONSerialization.jsonObject(with: data) as! [[String: Any]]
+        let kills = events.filter { $0["action"] as? String == "kill" }
+        XCTAssertEqual(kills.count, 1)
+        XCTAssertEqual((kills.first?["payload"] as? [String: Any])?["targetId"] as? String, "bot")
     }
 }
