@@ -19,7 +19,6 @@ struct GameHUDView: View {
     @State private var scanTarget: Station?
     @State private var confirmingEmergency = false
     @State private var showingDiagnostics = false
-    @State private var showingLiveMap = false
     @State private var showingMyQR = false
     @State private var scanningPlayer = false
 
@@ -61,7 +60,6 @@ struct GameHUDView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
-        .fullScreenCover(isPresented: $showingLiveMap) { LiveMapView() }
         .sheet(isPresented: $showingDiagnostics) {
             NavigationStack { DebugView().toolbar { Button("Done") { showingDiagnostics = false } } }
         }
@@ -111,7 +109,6 @@ struct GameHUDView: View {
                         selectTask: { panel = .detail(taskId: $0) },
                         scan: { scanTarget = nil; scanning = true },
                         showDiagnostics: { showingDiagnostics = true },
-                        showLiveMap: { showingLiveMap = true },
                         showMyQR: { showingMyQR = true },
                         scanPlayer: { scanningPlayer = true })
     }
@@ -341,7 +338,6 @@ struct HUDActionsPanel: View {
     let selectTask: (String) -> Void
     let scan: () -> Void
     let showDiagnostics: () -> Void
-    let showLiveMap: () -> Void
     let showMyQR: () -> Void
     let scanPlayer: () -> Void
 
@@ -385,7 +381,6 @@ struct HUDActionsPanel: View {
                     Button("Show my player QR", action: showMyQR)
                     Button("Scan a player QR", action: scanPlayer)
                 }
-                Button("Live map (testing)", action: showLiveMap)
                 Button("Diagnostics", action: showDiagnostics)
                 Button("Leave game", role: .destructive) { store.leave() }
             } label: {
