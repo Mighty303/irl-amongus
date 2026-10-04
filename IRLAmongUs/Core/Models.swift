@@ -18,6 +18,8 @@ enum PlayerColor: String, Decodable, CaseIterable {
     var lobbyAssetName: String {
         "LobbyPlayer\(rawValue.capitalized)"
     }
+
+    var name: String { rawValue.capitalized }
 }
 
 enum StationKind: String, Codable, CaseIterable, Identifiable {
@@ -145,6 +147,8 @@ struct PlayerView: Decodable, Identifiable, Equatable {
     let name: String
     /// Server-assigned and persisted. Optional while older deployed servers roll forward.
     let color: PlayerColor?
+    /// The player's cut-out head, served at /faces/:faceId.png. Optional for older servers.
+    let faceId: String?
     let isHost: Bool
     /// Server-run test bot. Optional so phones still decode snapshots from servers without bots.
     let isBot: Bool?

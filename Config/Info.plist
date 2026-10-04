@@ -4,7 +4,7 @@
 <dict>
 	<!-- Merged with the build-setting generated Info.plist (GENERATE_INFOPLIST_FILE = YES). -->
 	<key>NSCameraUsageDescription</key>
-	<string>The camera scans lobby QR codes and recognizes station signs so you can complete tasks.</string>
+	<string>The camera scans lobby QR codes, recognizes station signs so you can complete tasks, and takes the selfie you can put on your crewmate.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Bluetooth detects which players are physically near you, which is how kills and body reports work.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>

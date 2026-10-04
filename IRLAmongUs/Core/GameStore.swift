@@ -163,6 +163,19 @@ final class GameStore {
         return id
     }
 
+    /// Uploads a player's cut-out head (transparent PNG) and returns its id for `set_face`.
+    func uploadFace(_ png: Data) async throws -> String {
+        guard let base = serverURL else { throw ClientError.server("Invalid server URL") }
+        let response = try await postJSON(base.appendingPathComponent("faces"), body: ["pngBase64": png.base64EncodedString()])
+        guard let id = response["faceId"] as? String else { throw ClientError.server("Upload failed") }
+        return id
+    }
+
+    func faceURL(_ faceId: String?) -> URL? {
+        guard let faceId, let base = serverURL else { return nil }
+        return base.appendingPathComponent("faces/\(faceId).png")
+    }
+
     private func postJSON(_ url: URL, body: [String: Any]) async throws -> [String: Any] {
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
