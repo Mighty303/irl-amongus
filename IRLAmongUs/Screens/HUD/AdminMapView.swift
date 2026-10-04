@@ -100,14 +100,29 @@ struct AdminCounts {
     }
 }
 
-/// The floor plan, with one crewmate icon per person at the middle of each room.
+/// The floor plan, with one crewmate icon per person at the middle of each room. Zoomed to the rooms people are
+/// in, with a comfortable margin round them (so two busy rooms side by side fill the view, not the whole floor);
+/// the whole floor when nobody's in a room.
 struct AdminFloorPlan: View {
     let rooms: [POCRoom]
     let counts: [String: Int]
 
+    /// Around the busy rooms: a third of their size again on every side, and at least 5 m (about a room's
+    /// worth), so the rooms next to them show for context.
+    static func framing(rooms: [POCRoom], counts: [String: Int]) -> POCMapBounds {
+        let busy = rooms.filter { (counts[$0.id] ?? 0) > 0 }
+        guard !busy.isEmpty else { return POCMapBounds.covering(rooms) }
+        let b = POCMapBounds.covering(busy)
+        let metersPerDegreeY = 111_320.0
+        let metersPerDegreeX = metersPerDegreeY * cos(Double(b.minY + b.maxY) / 2 * .pi / 180)
+        let padX = max((b.maxX - b.minX) / 3, CGFloat(5 / metersPerDegreeX))
+        let padY = max((b.maxY - b.minY) / 3, CGFloat(5 / metersPerDegreeY))
+        return POCMapBounds(minX: b.minX - padX, maxX: b.maxX + padX, minY: b.minY - padY, maxY: b.maxY + padY)
+    }
+
     var body: some View {
         GeometryReader { geo in
-            let projection = POCMapProjection(bounds: POCMapBounds.covering(rooms), size: geo.size)
+            let projection = POCMapProjection(bounds: Self.framing(rooms: rooms, counts: counts), size: geo.size)
             ZStack {
                 Canvas { context, _ in
                     for room in rooms {
@@ -126,6 +141,8 @@ struct AdminFloorPlan: View {
         }
         .background(Color(red: 0.06, green: 0.09, blue: 0.11), in: RoundedRectangle(cornerRadius: 12))
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        // Glide to the new framing as people move between rooms.
+        .animation(.easeInOut(duration: 0.6), value: counts)
     }
 }
 

@@ -34,6 +34,15 @@ struct ToolsLabView: View {
                     NavigationLink("Divert Power") { MiniGameHost { DivertPowerGame(onDone: $0) } }
                     NavigationLink("Accept Diverted Power") { MiniGameHost { AcceptPowerGame(onDone: $0) } }
                 }
+                Section {
+                    NavigationLink("Reactor meltdown (hand scanner)") { MiniGameHost { ReactorPreviewGame(onDone: $0) } }
+                    NavigationLink("Oxygen keypad") { MiniGameHost { OxygenPreviewGame(onDone: $0) } }
+                    NavigationLink("Admin map") { AdminMapPreview() }
+                } header: {
+                    Text("Sabotage & admin")
+                } footer: {
+                    Text("Offline: the reactor's second scanner is a button, the keypad checks its own code, and the admin map shows made-up crowds on a real floor plan.")
+                }
             }
             .navigationTitle("Tools")
         }
@@ -115,6 +124,73 @@ private struct BodyPreview: View {
 }
 
 /// Runs a mini-game in the task panel, like a real task, and starts it over after each completion.
+/// The reactor scanner on its own: "Second user" stands in for the person holding the other scanner. Holding
+/// your hand on it while they're holding fixes it after a second, as the server would.
+private struct ReactorPreviewGame: View {
+    let onDone: () -> Void
+    @State private var holding = false
+    @State private var secondUser = false
+
+    var body: some View {
+        ReactorHandGame(otherHeld: secondUser, onHold: { holding = $0 })
+            .overlay(alignment: .bottomTrailing) {
+                Button(secondUser ? "Second user: holding" : "Second user: not holding") { secondUser.toggle() }
+                    .buttonStyle(.borderedProminent).tint(secondUser ? .green : .gray)
+                    .padding(8)
+                    .accessibilityIdentifier("reactor.preview.secondUser")
+            }
+            .task(id: holding && secondUser) {
+                guard holding && secondUser else { return }
+                try? await Task.sleep(for: .seconds(1))
+                if !Task.isCancelled { onDone() }
+            }
+    }
+}
+
+/// The O2 keypad on its own, checking its own random code.
+private struct OxygenPreviewGame: View {
+    let onDone: () -> Void
+    @State private var code = String(format: "%05d", Int.random(in: 0..<100_000))
+    @State private var wrong = 0
+
+    var body: some View {
+        OxygenKeypadGame(code: code, done: false, wrongAttempts: wrong) { typed in
+            if typed == code { onDone() } else { wrong += 1 }
+        }
+    }
+}
+
+/// The admin map with made-up crowds, on the ASB 9000 Level plan (or the SUB until the campus downloads).
+private struct AdminMapPreview: View {
+    @Environment(GameStore.self) private var store
+    @State private var counts: [String: Int] = [:]
+
+    private var floor: CampusFloor? {
+        let building = store.campus.building("ASB") ?? store.campus.building("SUB")
+        return building.map { $0.floor("09") ?? $0.mainFloor }
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            if let floor {
+                AdminFloorPlan(rooms: floor.rooms, counts: counts)
+                Button("Shuffle people") { shuffle(floor) }.buttonStyle(.borderedProminent)
+            } else {
+                Text("No floor plans yet.")
+            }
+        }
+        .padding()
+        .background(Color.black.ignoresSafeArea())
+        .navigationTitle("Admin map")
+        .onAppear { if let floor, counts.isEmpty { shuffle(floor) } }
+    }
+
+    private func shuffle(_ floor: CampusFloor) {
+        let rooms = floor.rooms.filter { $0.priority > 5 }.shuffled().prefix(6)
+        counts = Dictionary(uniqueKeysWithValues: rooms.map { ($0.id, Int.random(in: 1...5)) })
+    }
+}
+
 private struct MiniGameHost<Game: View>: View {
     @Environment(\.dismiss) private var dismiss
     let make: (@escaping () -> Void) -> Game
