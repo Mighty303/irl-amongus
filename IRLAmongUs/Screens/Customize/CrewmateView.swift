@@ -40,13 +40,14 @@ extension CrewmateView where Head == CrewmateFace {
 struct CrewmateFace: View {
     let url: URL?
 
+    private let cache = PlayerFaceCache.shared
+
     var body: some View {
-        if let url {
-            AsyncImage(url: url) { image in
-                image.resizable().interpolation(.high)
-            } placeholder: {
-                Color.clear
-            }
+        Group {
+            if let url, let image = cache.images[url] {
+                Image(uiImage: image).resizable().interpolation(.high)
+            } else { Color.clear }
         }
+        .task(id: url) { await cache.load(url) }
     }
 }

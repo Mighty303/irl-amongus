@@ -5,13 +5,42 @@ struct KillPresentation: Identifiable, Equatable {
     let victimID: String
     var attackerColor: PlayerColor?
     let victimColor: PlayerColor
+    var attackerID: String?
+    var attackerFaceId: String?
+    let victimFaceId: String?
+    let faceBaseURL: URL?
 
-    init(victimID: String, attackerColor: PlayerColor?, victimColor: PlayerColor) {
+    init(victimID: String, attackerColor: PlayerColor?, victimColor: PlayerColor,
+         attackerID: String? = nil, attackerFaceId: String? = nil, victimFaceId: String? = nil, faceBaseURL: URL? = nil) {
         id = UUID()
         self.victimID = victimID
         self.attackerColor = attackerColor
         self.victimColor = victimColor
+        self.attackerID = attackerID
+        self.attackerFaceId = attackerFaceId
+        self.victimFaceId = victimFaceId
+        self.faceBaseURL = faceBaseURL
     }
+
+    static func from(victimID: String, killerID: String?, players: [PlayerView], serverURL: URL? = nil) -> Self {
+        Self(victimID: victimID, attackerColor: killerID.flatMap { PlayerColor.rosterColor(for: $0, in: players) },
+             victimColor: PlayerColor.rosterColor(for: victimID, in: players) ?? .green,
+             attackerID: killerID, attackerFaceId: players.first { $0.id == killerID }?.faceId,
+             victimFaceId: players.first { $0.id == victimID }?.faceId, faceBaseURL: serverURL)
+    }
+
+    func faceURL(_ id: String?) -> URL? {
+        guard let id, let faceBaseURL else { return nil }
+        return faceBaseURL.appendingPathComponent("faces/\(id).png")
+    }
+
+    mutating func resolveAttacker(_ id: String, players: [PlayerView]) {
+        guard let player = players.first(where: { $0.id == id }) else { return }
+        attackerID = id
+        attackerColor = PlayerColor.rosterColor(for: id, in: players)
+        attackerFaceId = player.faceId
+    }
+
 }
 
 /// Events, snapshots and acknowledgements can describe the same kill in any order.

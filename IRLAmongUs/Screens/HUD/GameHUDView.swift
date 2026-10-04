@@ -330,7 +330,8 @@ struct HUDMapSquare: View {
                 center: center,
                 centerIsPlayer: isPlayer,
                 visionM: isPlayer ? visionM : nil,
-                myColor: state.player(state.me.id)?.color,
+                myColor: PlayerColor.rosterColor(for: state.me.id, in: state.players),
+                myFaceURL: store.faceURL(state.player(state.me.id)?.faceId),
                 isGhost: !state.me.alive,
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }

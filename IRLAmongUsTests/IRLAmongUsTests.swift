@@ -1044,3 +1044,99 @@ struct StationKindDecodingTests {
         #expect(kinds == [.oxygen, .admin, .task])
     }
 }
+struct PlayerFaceIdentityTests {
+    private func player(_ id: String, face: String?, role: Role = .crewmate) -> PlayerView {
+        PlayerView(id: id, name: id, color: .cyan, faceId: face, isHost: false, isBot: nil,
+                   connected: true, alive: true, ejected: false, role: role, hasVoted: false)
+    }
+
+    @Test func reorderedAndFilteredLineupsKeepFacesWithPlayerIDsEvenWithIdenticalSuits() {
+        let roster = [player("a", face: "face-a"), player("killer", face: "face-killer", role: .impostor),
+                      player("me", face: nil)]
+        let crew = RoleRevealPlayer.lineup(from: roster, localID: "me", role: .crewmate)
+        #expect(crew.map(\.id) == ["me", "a", "killer"])
+        #expect(crew.map(\.faceId) == [nil, "face-a", "face-killer"])
+        let impostors = RoleRevealPlayer.lineup(from: roster, localID: "killer", role: .impostor)
+        #expect(impostors.map(\.faceId) == ["face-killer"])
+        let winners = GameOverArtwork.winners(from: roster, localID: "me", role: .crewmate)
+        #expect(winners.map(\.id) == ["me", "a"])
+        #expect(winners.map(\.faceId) == [nil, "face-a"])
+        let preview = RoleRevealPlayer.preview(for: .crewmate, localFaceId: "my-face")
+        #expect(preview.first?.faceId == "my-face")
+        #expect(preview.dropFirst().allSatisfy { $0.faceId == nil })
+    }
+
+    @Test func lateAttackerEventNeverBorrowsTheVictimsOrAnotherPlayersFace() {
+        let roster = [player("a", face: "face-a"), player("killer", face: "face-killer", role: .impostor),
+                      player("blank", face: nil, role: .impostor)]
+        let server = URL(string: "https://example.invalid")!
+        var kill = KillPresentation.from(victimID: "a", killerID: nil, players: roster, serverURL: server)
+        #expect(kill.attackerFaceId == nil)
+        #expect(kill.victimFaceId == "face-a")
+        kill.resolveAttacker("killer", players: roster)
+        #expect(kill.attackerID == "killer")
+        #expect(kill.attackerFaceId == "face-killer")
+        #expect(kill.faceURL(kill.attackerFaceId)?.path == "/faces/face-killer.png")
+        #expect(kill.victimFaceId == "face-a")
+        kill.resolveAttacker("blank", players: roster)
+        #expect(kill.attackerFaceId == nil)
+        #expect(kill.faceURL(kill.attackerFaceId) == nil)
+        #expect(kill.victimFaceId == "face-a")
+    }
+
+    @MainActor @Test func facePosesCoverTheExactAnimationAndHideTurnedAwayVictim() throws {
+        let poses = try #require(NeckKillFacePlacements.load())
+        let timing = try NeckKillFrames.load(attacker: .red, victim: .green)
+        #expect(poses.frames.count == timing.images.count)
+        #expect(poses.frames.allSatisfy { $0.attacker != nil })
+        #expect(poses.frames.prefix(20).allSatisfy { $0.victim != nil })
+        #expect(poses.frames.dropFirst(20).allSatisfy { $0.victim == nil })
+        for frame in poses.frames {
+            for position in [frame.attacker, frame.victim].compactMap({ $0 }) {
+                #expect(position.x > 0 && position.x < poses.width)
+                #expect(position.y > 0 && position.y < poses.height)
+                #expect(position.width > 0)
+            }
+        }
+    }
+}
+
+@MainActor
+struct PlayerFaceCacheTests {
+    @Test func cachesByFullServerURLAndNeverSubstitutesFailedPhotos() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [FaceHTTPStub.self]
+        let cache = PlayerFaceCache(httpSession: URLSession(configuration: config))
+        let red = URL(string: "https://red.invalid/faces/same-id.png")!
+        let blue = URL(string: "https://blue.invalid/faces/same-id.png")!
+        await cache.load(red)
+        await cache.load(blue)
+        let first = try #require(cache.images[red])
+        let second = try #require(cache.images[blue])
+        #expect(first.pngData() != second.pngData())
+        await cache.load(red)
+        #expect(cache.images[red] === first)
+        let removed = URL(string: "https://missing.invalid/faces/removed.png")!
+        await cache.load(removed)
+        #expect(cache.images[removed] == nil)
+        await cache.load(nil)
+        #expect(cache.images.count == 2)
+    }
+}
+
+private final class FaceHTTPStub: URLProtocol, @unchecked Sendable {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        let url = request.url!
+        let red = "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP8z4AdMOEQH6QSAM1BAQ/oQeJvAAAAAElFTkSuQmCC"
+        let blue = "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAFElEQVR4nGNkYPjPgA0wYRUdtBIAy0MBD1YkjLoAAAAASUVORK5CYII="
+        let status = url.host == "missing.invalid" ? 404 : 200
+        let bytes = Data(base64Encoded: url.host == "red.invalid" ? red : blue)!
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: url, statusCode: status, httpVersion: nil,
+                            headerFields: ["Content-Type": "image/png"])!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: bytes)
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
+}

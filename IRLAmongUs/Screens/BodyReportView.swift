@@ -83,6 +83,8 @@ struct BodyReportView: View {
                 Image(uiImage: BodyReportArtwork.recolored("EmergencyMeetingCrewmate", color: presentation.color))
                     .resizable().interpolation(.high)
                     .frame(width: 122 * s, height: 99 * s)
+                    .overlay { CharacterFaceOverlay(url: presentation.faceURL, sourceSize: CGSize(width: 122, height: 99),
+                        placement: CharacterFacePlacement(x: 94, y: 36, width: 43)) }
                     .offset(x: 12 * s, y: 0)
                 Image("EmergencyMeetingTable").resizable().interpolation(.high)
                     .frame(width: 226 * s, height: 83 * s)

@@ -114,8 +114,7 @@ struct ContentView: View {
                     Color.black
                     TwinklingStarfield(stars: stars, scale: 1)
                         .allowsHitTesting(false)
-                    Image("RedCrewmate")
-                        .resizable().scaledToFit()
+                    MenuCrewmateArtwork()
                         .frame(width: 150, height: 110)
                         .rotationEffect(.degrees(-12))
                         .position(x: -100 + travelProgress * (size.width + 200), y: size.height * 0.48)
@@ -289,9 +288,7 @@ private struct LoopingCrewmate: View {
             let progress = elapsed.truncatingRemainder(dividingBy: duration) / duration
             let bob = sin(progress * .pi * 4) * 12
 
-            Image("RedCrewmate")
-                .resizable()
-                .scaledToFit()
+            MenuCrewmateArtwork()
                 .frame(width: 245 * scale, height: 175 * scale)
                 .rotationEffect(.degrees(-7 + sin(progress * .pi * 4) * 2))
                 .position(
@@ -573,7 +570,9 @@ private struct LocalLobbyView: View {
         card {
             VStack(alignment: .leading, spacing: 10) {
                 cardHeader("CREATE GAME", subtitle: "Host a lobby, then share its code") {
-                    Image("GameModeCrewmate").resizable().frame(width: 52, height: 52).accessibilityHidden(true)
+                    Image("GameModeCrewmate").resizable().frame(width: 52, height: 52)
+                        .overlay { CharacterFaceOverlay(url: store.faceURL(store.preferredFaceId), sourceSize: CGSize(width: 137, height: 137),
+                            placement: CharacterFacePlacement(x: 63, y: 42, width: 28)) }.accessibilityHidden(true)
                 }
                 HStack {
                     VStack(alignment: .leading, spacing: 1) {
@@ -717,9 +716,7 @@ private struct FloatingMenuCrewmate: View {
     var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            Image("RedCrewmate")
-                .resizable()
-                .scaledToFit()
+            MenuCrewmateArtwork()
                 .rotationEffect(.degrees(-8 + sin(t * 0.8) * 3))
                 .offset(y: sin(t * 1.1) * 5)
                 .accessibilityHidden(true)
@@ -1667,6 +1664,7 @@ private final class ShakeDetectorViewController: UIViewController {
 #endif
 
 struct PhysicalMapView: View {
+    @Environment(GameStore.self) private var store
     var showsCloseButton = true
     var previewRole: Role? = nil
     var gameState: GameState? = nil
@@ -1723,7 +1721,9 @@ struct PhysicalMapView: View {
                             completedStationIDs: completedStationIDs,
                             selectedStation: selectedStation,
                             ownLastCheckpoint: ownLastCheckpoint,
-                            onSelectStation: { selectedStation = $0 }
+                            onSelectStation: { selectedStation = $0 },
+                            ownColor: gameState.flatMap { PlayerColor.rosterColor(for: $0.me.id, in: $0.players) } ?? store.preferredColor,
+                            ownFaceURL: gameState != nil ? store.faceURL(gameState?.player(gameState?.me.id ?? "")?.faceId) : store.faceURL(store.preferredFaceId)
                         )
                         .frame(height: 430)
 
@@ -1862,6 +1862,8 @@ struct POCFloorPlan: View {
     /// Live positions (testing): estimated positions with their uncertainty circles. When this
     /// includes `isMe`, the YOU marker follows it instead of the last check-in.
     var players: [POCPlayerDot] = []
+    var ownColor: PlayerColor? = nil
+    var ownFaceURL: URL? = nil
 
     private static let playerZoomScale: CGFloat = 2.2
 
@@ -2026,10 +2028,12 @@ struct POCFloorPlan: View {
                 .allowsHitTesting(false)
             if !player.isMe {
                 VStack(spacing: 1) {
-                    Circle()
-                        .fill(player.color)
-                        .frame(width: 16, height: 16)
-                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                    if let suit = player.playerColor {
+                        CrewmateView(color: suit, faceURL: player.faceURL, height: 30)
+                    } else {
+                        Circle().fill(player.color).frame(width: 16, height: 16)
+                            .overlay(Circle().stroke(.white, lineWidth: 2))
+                    }
                     Text(player.name)
                         .font(.system(size: 8, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
@@ -2070,10 +2074,8 @@ struct POCFloorPlan: View {
                 .accessibilityLabel("You, estimated within about \(Int(me.accuracyM.rounded())) meters")
         } else if let checkpointStation = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) {
             VStack(spacing: 0) {
-                Image("PlayerMarker")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 58, height: 58)
+                CrewmateView(color: ownColor ?? players.first(where: \.isMe)?.playerColor ?? .red,
+                             faceURL: ownFaceURL ?? players.first(where: \.isMe)?.faceURL, height: 58)
                     .shadow(color: .cyan.opacity(0.75), radius: 8)
 
                 Text("YOU")
@@ -2131,10 +2133,8 @@ struct POCFloorPlan: View {
     /// The YOU crewmate, for the live position.
     private var ownMarker: some View {
         VStack(spacing: 0) {
-            Image("PlayerMarker")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 58, height: 58)
+            CrewmateView(color: ownColor ?? players.first(where: \.isMe)?.playerColor ?? .red,
+                         faceURL: ownFaceURL ?? players.first(where: \.isMe)?.faceURL, height: 58)
                 .shadow(color: .cyan.opacity(0.75), radius: 8)
             Text("YOU")
                 .font(.system(size: 9, weight: .black, design: .rounded))
@@ -2367,6 +2367,7 @@ struct POCPlayerDot: Identifiable {
     let faded: Bool
     /// Their suit colour, for the crewmate icon on the in-game map.
     var playerColor: PlayerColor? = nil
+    var faceURL: URL? = nil
 }
 
 enum SUBLevel2Map {

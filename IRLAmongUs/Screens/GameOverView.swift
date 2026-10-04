@@ -71,7 +71,7 @@ struct GameOverArtwork: View {
         let winners = players.enumerated().compactMap { index, player -> RoleRevealPlayer? in
             guard player.role == role else { return nil }
             return RoleRevealPlayer(id: player.id, name: player.name,
-                color: player.color ?? PlayerColor.allCases[index % PlayerColor.allCases.count])
+                color: player.color ?? PlayerColor.allCases[index % PlayerColor.allCases.count], faceId: player.faceId)
         }
         return winners.filter { $0.id == localID } + winners.filter { $0.id != localID }
     }
@@ -142,12 +142,13 @@ private struct GameOverActionButton: View {
 }
 
 struct GameOverPreview: View {
+    @Environment(GameStore.self) private var store
     @State private var role = Role.crewmate
     @State private var didWin = true
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            GameOverArtwork(role: role, didWin: didWin, players: RoleRevealPlayer.preview(for: role))
+            GameOverArtwork(role: role, didWin: didWin, players: RoleRevealPlayer.preview(for: role, localFaceId: store.preferredFaceId))
             HStack(alignment: .bottom) {
                 GameOverActionButton(asset: "QuitActionIcon", label: "Quit",
                                      identifier: "gameOver.leave") {}
