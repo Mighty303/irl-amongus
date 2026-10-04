@@ -67,7 +67,7 @@ struct MapKillButton: View {
               targets.contains(where: { $0.id == target.id }) else { return }
         submitting = true
         Task {
-            if await store.perform("kill", ["targetId": target.id]) { audio.play() }
+            await store.perform("kill", ["targetId": target.id])
             submitting = false
         }
     }

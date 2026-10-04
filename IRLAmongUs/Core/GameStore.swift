@@ -39,6 +39,8 @@ final class GameStore {
     let location = LocationService()
     let signs = SignRecognizer()
 
+    @ObservationIgnored private let killAudio = KillAudioPlayer()
+    @ObservationIgnored private var deathSound = DeathSoundState()
     @ObservationIgnored private let preferences: UserDefaults
     @ObservationIgnored private let httpSession: URLSession
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
@@ -213,6 +215,8 @@ final class GameStore {
     func leave() {
         disconnect()
         alert = nil
+        killAudio.stop()
+        deathSound = DeathSoundState()
         session = nil
         state = nil
         ble.stop()
@@ -334,6 +338,9 @@ final class GameStore {
         let old = state
         clockOffset = newState.serverTime - Date().timeIntervalSince1970 * 1000
         state = newState
+        if deathSound.update(wasAlive: old?.me.alive, isAlive: newState.me.alive, isBody: newState.me.isBody) {
+            killAudio.play(.victim)
+        }
         connection = .connected
         isSynced = true
         reconnectAttempt = 0
@@ -363,6 +370,9 @@ final class GameStore {
         case "ROLE_ASSIGNED":
             Haptics.heavy()
         case "PLAYER_KILLED":
+            if deathSound.killed(victimID: data["victimId"] as? String, localID: session?.playerId) {
+                killAudio.play(.victim)
+            }
             if data["victimId"] as? String == session?.playerId { Haptics.alarm(times: 2) } else { Haptics.success() }
         case "BODY_REPORTED":
             let body = data["bodyName"] as? String
@@ -410,6 +420,7 @@ final class GameStore {
                 self.pending.removeValue(forKey: id)?.resume(throwing: ClientError.server("Server didn't respond"))
             }
         }
+        if action == "kill" { killAudio.play(.killer) }
     }
 
     /// `send` that surfaces errors to the user. Returns whether the server accepted the action.

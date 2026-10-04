@@ -137,4 +137,4 @@ TEST_RUNNER_LOCAL_LOBBY_TEST_SERVER=http://127.0.0.1:39872 xcodebuild \
 This fixture verifies client requests and screen transitions. It does not verify
 the backend's game rules or physical-device BLE/camera behavior.
 
-The Map shows the original Kill action sprite only for impostors. In a live game, it uses available targets and cooldowns from the server and plays the bundled killer sound after a successful kill. The standalone impostor preview plays the same sound and starts a 30-second local cooldown.
+The Map shows the original Kill action sprite only for impostors. In a live game, it uses available targets and cooldowns from the server and plays `among-us-kill.mp3` on the killer’s device after a successful kill. The victim’s device plays `among-us-killed.mp3` when it receives the kill event or death state, once per death. QR kills use the same audio behavior. The standalone impostor preview plays the same sound and starts a 30-second local cooldown.

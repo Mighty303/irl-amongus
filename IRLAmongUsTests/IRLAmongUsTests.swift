@@ -6,10 +6,12 @@ import UIKit
 
 struct IRLAmongUsTests {
     @Test func killAudioIsBundledAndDecodable() throws {
-        let url = try #require(Bundle.main.url(forResource: "among-us-kill", withExtension: "mp3"))
-        let player = try AVAudioPlayer(contentsOf: url)
-        #expect(player.duration > 0)
-        #expect(player.prepareToPlay())
+        for sound in KillSound.allCases {
+            let url = try #require(Bundle.main.url(forResource: sound.rawValue, withExtension: "mp3"))
+            let player = try AVAudioPlayer(contentsOf: url)
+            #expect(player.duration > 0)
+            #expect(player.prepareToPlay())
+        }
     }
 
     @MainActor
@@ -343,5 +345,45 @@ struct MiniGameRandomnessTests {
         #expect(!deals.contains([0, 1, 2, 3]))
         #expect(deals.allSatisfy { $0.sorted() == [0, 1, 2, 3] })
         #expect(Set(deals).count == 23, "every non-solved order shows up")
+    }
+}
+
+
+struct DeathSoundTests {
+    @Test func eventAndSnapshotPlayOnlyOneVictimCue() {
+        var eventFirst = DeathSoundState()
+        let result1 = eventFirst.killed(victimID: "victim", localID: "victim")
+        #expect(result1)
+        let result2 = eventFirst.update(wasAlive: true, isAlive: false, isBody: true)
+        #expect(!result2)
+        let result3 = eventFirst.killed(victimID: "victim", localID: "victim")
+        #expect(!result3)
+        var snapshotFirst = DeathSoundState()
+        let result4 = snapshotFirst.update(wasAlive: true, isAlive: false, isBody: true)
+        #expect(result4)
+        let result5 = snapshotFirst.killed(victimID: "victim", localID: "victim")
+        #expect(!result5)
+    }
+
+    @Test func otherPlayersEjectionsAndRestoredBodiesStaySilent() {
+        var sound = DeathSoundState()
+        let result6 = sound.killed(victimID: "other", localID: "me")
+        #expect(!result6)
+        let result7 = sound.killed(victimID: nil, localID: nil)
+        #expect(!result7)
+        let result8 = sound.update(wasAlive: true, isAlive: false, isBody: false)
+        #expect(!result8)
+        let result9 = sound.update(wasAlive: nil, isAlive: false, isBody: true)
+        #expect(!result9)
+    }
+
+    @Test func nextLifeCanPlayAgain() {
+        var sound = DeathSoundState()
+        let result10 = sound.update(wasAlive: true, isAlive: false, isBody: true)
+        #expect(result10)
+        let result11 = sound.update(wasAlive: false, isAlive: true, isBody: false)
+        #expect(!result11)
+        let result12 = sound.update(wasAlive: true, isAlive: false, isBody: true)
+        #expect(result12)
     }
 }
