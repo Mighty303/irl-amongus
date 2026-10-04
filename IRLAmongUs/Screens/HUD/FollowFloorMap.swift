@@ -83,13 +83,6 @@ struct FollowFloorMap: View {
                         .frame(width: big.width, height: big.height)
                         .allowsHitTesting(false)
                     }
-                    if let me = players.first(where: \.isMe), centerIsPlayer {
-                        // Your uncertainty circle; the YOU marker itself sits fixed in the middle.
-                        Circle().fill(Color.cyan.opacity(0.14)).overlay(Circle().stroke(.cyan.opacity(0.6), lineWidth: 1))
-                            .frame(width: max(ppm * me.accuracyM * 2, 6), height: max(ppm * me.accuracyM * 2, 6))
-                            .position(pc)
-                            .allowsHitTesting(false)
-                    }
                     if let meetingPoint {
                         Image(systemName: "megaphone.fill")
                             .font(.system(size: 12, weight: .bold)).foregroundStyle(.white)
@@ -191,11 +184,9 @@ struct FollowFloorMap: View {
         }
     }
 
+    /// Just the player's dot and name; the uncertainty circles are only on the live map (testing).
     private func dot(_ player: POCPlayerDot, at p: CGPoint, ppm: CGFloat) -> some View {
         ZStack {
-            Circle().fill(player.color.opacity(player.faded ? 0.07 : 0.16))
-                .overlay(Circle().stroke(player.color.opacity(player.faded ? 0.3 : 0.75), lineWidth: 1))
-                .frame(width: max(ppm * player.accuracyM * 2, 6), height: max(ppm * player.accuracyM * 2, 6))
             VStack(spacing: 1) {
                 Circle().fill(player.color).frame(width: 16, height: 16).overlay(Circle().stroke(.white, lineWidth: 2))
                 Text(player.name)
@@ -207,7 +198,7 @@ struct FollowFloorMap: View {
         }
         .position(p)
         .allowsHitTesting(false)
-        .accessibilityLabel("\(player.name), within about \(Int(player.accuracyM.rounded())) meters")
+        .accessibilityLabel(player.name)
     }
 
     /// Arrows on the edge toward task signs that are off screen, with how far away they are.
