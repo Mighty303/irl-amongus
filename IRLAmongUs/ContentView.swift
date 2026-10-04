@@ -646,8 +646,33 @@ private struct LocalLobbyView: View {
         }
     }
 
-    /// Four code boxes like the lobby's CODE card. A clear text field on top takes the typing.
+    /// Four code boxes like the lobby's CODE card, with a clear button once something's typed.
     private var roomCodeBoxes: some View {
+        HStack(spacing: 6) {
+            codeBoxes
+            if !code.isEmpty {
+                Button {
+                    buttonAudio.play()
+                    code = ""
+                    codeFocused = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .frame(width: 44, height: 48)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear room code")
+                .accessibilityIdentifier("local.clearRoomCode")
+                .disabled(store.isEnteringLobby)
+                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: code.isEmpty)
+    }
+
+    /// The boxes themselves. A clear text field on top takes the typing.
+    private var codeBoxes: some View {
         let letters = Array(code)
         return HStack(spacing: 8) {
             ForEach(0..<4, id: \.self) { i in
