@@ -97,7 +97,8 @@ struct FloorPlanPinMap: View {
     private func floor(_ b: CampusBuilding) -> CampusFloor {
         if let chosen = b.floor(floorChoice[b.id]) { return chosen }
         // Start on the floor you're on when you're in this building, else the game's play area floor.
-        if store.positions.estimate?.buildingId == b.id, let mine = b.floor(store.positions.estimate?.floorId) { return mine }
+        if let estimate = store.positions.estimate, estimate.buildingId == b.id, estimate.floorMeasured,
+           let mine = b.floor(estimate.floorId) { return mine }
         if let area = store.state?.playArea, area.buildingId == b.id, let floor = b.floor(area.floorId) { return floor }
         return store.campus.displayedFloor(b)
     }
