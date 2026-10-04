@@ -677,10 +677,10 @@ final class GameStore {
             Haptics.heavy()
         case "SABOTAGE_STARTED":
             let kind = data["kind"] as? String
-            alert = Alert(title: kind == "reactor" ? "☢️ REACTOR MELTDOWN" : kind == "oxygen" ? "🫁 OXYGEN DEPLETED" : "💡 LIGHTS SABOTAGED",
-                          subtitle: kind == "reactor" ? "Two people must hold both reactor scanners at the same time!"
-                              : kind == "oxygen" ? "Type the code at both O2 keypads before it runs out!" : "Fix the lights at Electrical.",
-                          color: .orange)
+            // Reactor and O2: no title screen; the map shows red crisis text and only their signs, with flashing arrows.
+            if kind == "lights" {
+                alert = Alert(title: "💡 LIGHTS SABOTAGED", subtitle: "Fix the lights at Electrical.", color: .orange)
+            }
             // Among Us sounds the alarm until the reactor or oxygen is fixed; lights go out silently.
             if kind == "reactor" || kind == "oxygen" { GameSoundEffect.sabotageAlarm.play(loop: true) }
             Haptics.alarm(times: 2)

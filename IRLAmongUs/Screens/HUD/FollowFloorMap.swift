@@ -26,6 +26,8 @@ struct FollowFloorMap: View {
     var myFaceURL: URL? = nil
     /// Dead: your marker is see-through, like an Among Us ghost, and you can zoom.
     var isGhost = false
+    /// A reactor or O2 sabotage: the arrows point at its signs and flash red, like Among Us.
+    var crisis = false
     let onSelectStation: (POCStation) -> Void
 
     /// Meters across the shorter side: a little over a room's width. Fixed for the living, so nobody can
@@ -203,8 +205,9 @@ struct FollowFloorMap: View {
     /// Arrows on the edge toward task signs that are off screen, with how far away they are.
     private func taskArrows(projection: LocalProjection, pc: CGPoint, size: CGSize, ppm: CGFloat) -> some View {
         let middle = CGPoint(x: size.width / 2, y: size.height / 2)
-        let inset: CGFloat = 22
-        let due = stations.filter { $0.style == .task && !completedStationIDs.contains($0.id) }
+        let inset: CGFloat = 26
+        let due = crisis ? stations.filter { $0.style == .reactor || $0.style == .oxygen }
+            : stations.filter { $0.style == .task && !completedStationIDs.contains($0.id) }
         return ForEach(due) { station in
             let p = projection.point(station.position)
             let v = CGPoint(x: middle.x + (p.x - pc.x), y: middle.y + (p.y - pc.y))
@@ -215,11 +218,9 @@ struct FollowFloorMap: View {
                 let meters = hypot(dx, dy) / ppm
                 Button { onSelectStation(station) } label: {
                     VStack(spacing: 0) {
-                        Image(systemName: "location.north.fill")
-                            .font(.system(size: 14, weight: .black)).foregroundStyle(AmongUsTaskMarker.yellow)
-                            .rotationEffect(.radians(atan2(dx, -dy)))
+                        MapArrow(crisis: crisis).rotationEffect(.radians(atan2(dy, dx)))
                         Text("\(Int(meters.rounded())) m")
-                            .font(.system(size: 8, weight: .black, design: .rounded)).foregroundStyle(.white)
+                            .font(.system(size: 9, weight: .black, design: .rounded)).foregroundStyle(.white)
                             .padding(.horizontal, 4).background(.black.opacity(0.7), in: Capsule())
                     }
                 }
@@ -350,5 +351,23 @@ struct LocalProjection {
             path.closeSubpath()
         }
         return path
+    }
+}
+
+/// Among Us's arrow toward something off the map: yellow toward tasks; in a crisis it flashes between yellow
+/// and red, as the game's does. (The sprite is light and pointing right; it's tinted here.)
+struct MapArrow: View {
+    var crisis = false
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.4)) { timeline in
+            let red = crisis && Int(timeline.date.timeIntervalSinceReferenceDate / 0.4) % 2 == 0
+            Image("MapArrow")
+                .resizable().interpolation(.high).scaledToFit()
+                .frame(width: 52, height: 44)
+                .colorMultiply(red ? Color(red: 1, green: 0.2, blue: 0.2) : AmongUsTaskMarker.yellow)
+                .shadow(color: .black.opacity(0.6), radius: 2)
+        }
+        .accessibilityHidden(true)
     }
 }

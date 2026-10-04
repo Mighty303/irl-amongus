@@ -1,6 +1,8 @@
 // Import the sabotage panels from https://github.com/AlvajoyAsante/among-us-assets (Tasks folder): the reactor
 // meltdown hand scanner and its glow bar (unchanged), and the O2 keypad and its sticky note (cropped from the
-// KeypadGame atlas, transparent edges trimmed, neighbouring sprites cleared). No redrawing.
+// KeypadGame atlas, transparent edges trimmed, neighbouring sprites cleared). No redrawing. Also the map arrow
+// (Gui folder, unchanged; tinted in the app, yellow for tasks and flashing red in a crisis) and the Varela Round
+// font Among Us's text uses (Google Fonts, SIL Open Font License), as a data asset the app registers itself.
 // Usage from the repository root: swift scripts/import-sabotage-assets.swift
 import CoreGraphics
 import Foundation
@@ -11,7 +13,7 @@ let base = "https://raw.githubusercontent.com/AlvajoyAsante/among-us-assets/main
 let folder = URL(fileURLWithPath: "IRLAmongUs/Assets.xcassets/Tasks")
 
 func download(_ file: String) -> CGImage {
-    let url = FileManager.default.temporaryDirectory.appendingPathComponent(file)
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent((file as NSString).lastPathComponent)
     let curl = Process()
     curl.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
     curl.arguments = ["-sfL", "-o", url.path, base + file]
@@ -72,3 +74,20 @@ let keypad = download("KeypadGame-sharedassets0.assets-148.png")
 save(sprite(keypad, region: CGRect(x: 0, y: 0, width: 376, height: 503), seed: (20, 250)), as: "SabotageKeypad")
 save(sprite(keypad, region: CGRect(x: 0, y: 507, width: 250, height: 190), seed: (120, 600),
             exclude: CGRect(x: 196, y: 500, width: 60, height: 96)), as: "SabotageKeypadNote")
+
+save(download("../Gui/Arrow-sharedassets0.assets-197.png"), as: "MapArrow")
+
+let fontFolder = URL(fileURLWithPath: "IRLAmongUs/Assets.xcassets/FontVarelaRound.dataset")
+try! FileManager.default.createDirectory(at: fontFolder, withIntermediateDirectories: true)
+let curl = Process()
+curl.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
+curl.arguments = ["-sfL", "-o", fontFolder.appendingPathComponent("VarelaRound-Regular.ttf").path,
+                  "https://github.com/google/fonts/raw/main/ofl/varelaround/VarelaRound-Regular.ttf"]
+try! curl.run()
+curl.waitUntilExit()
+precondition(curl.terminationStatus == 0, "Couldn't download Varela Round")
+try! JSONSerialization.data(withJSONObject: ["data": [["filename": "VarelaRound-Regular.ttf", "idiom": "universal"]],
+                                            "info": ["author": "xcode", "version": 1]] as [String: Any],
+                            options: [.prettyPrinted, .sortedKeys])
+    .write(to: fontFolder.appendingPathComponent("Contents.json"))
+print("FontVarelaRound")

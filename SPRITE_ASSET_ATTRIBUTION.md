@@ -101,3 +101,9 @@ uploaded by imJJ. Among Us and its original audio belong to Innersloth.
 and `SabotageKeypadNote` (O2 keypad and its sticky note, cropped from the KeypadGame atlas) come from the Tasks
 folder of https://github.com/AlvajoyAsante/among-us-assets. Regenerate with
 `swift scripts/import-sabotage-assets.swift`. Among Us and its original artwork belong to Innersloth.
+
+## Map arrow and font
+
+`MapArrow` is the arrow from the Gui folder of https://github.com/AlvajoyAsante/among-us-assets, unchanged and
+tinted in the app. `FontVarelaRound` is Varela Round (https://fonts.google.com/specimen/Varela+Round, SIL Open
+Font License), the rounded font Among Us's text uses. Both come from `swift scripts/import-sabotage-assets.swift`.
