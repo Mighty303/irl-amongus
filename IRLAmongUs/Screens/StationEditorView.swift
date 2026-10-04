@@ -1,3 +1,5 @@
+import CoreLocation
+import PhotosUI
 import SwiftUI
 import Vision
 
@@ -12,6 +14,8 @@ struct StationEditorView: View {
     var title = "New sign"
     /// Label used when the sign has no readable text, e.g. "Sign 2".
     var fallbackName = "Sign"
+    /// Where the sign goes. Default: this lobby (`add_station`); saved games pass their own.
+    var submit: (([String: Any]) async -> Bool)? = nil
 
     @State private var name = ""
     @State private var kind: StationKind = .task
@@ -21,6 +25,10 @@ struct StationEditorView: View {
     @State private var photo: UIImage?
     @State private var latestFrame = FrameBox()
     @State private var saving = false
+    @State private var pickerItem: PhotosPickerItem?
+    /// Photos from the library carry their own location (EXIF), never the phone's current one.
+    @State private var fromLibrary = false
+    @State private var photoCoordinate: CLLocationCoordinate2D?
 
     var body: some View {
         NavigationStack {
@@ -39,13 +47,16 @@ struct StationEditorView: View {
                             }
                         }
                         .font(.subheadline)
-                        Button("Retake") { self.photo = nil; readText = nil }
+                        Button("Retake") { self.photo = nil; readText = nil; fromLibrary = false; photoCoordinate = nil }
                     } else {
                         CameraView(onFrame: { buffer in latestFrame.buffer = buffer }, frameInterval: 0.2)
                             .frame(height: 300)
                             .listRowInsets(EdgeInsets())
                         Button("Take photo") { capture() }
                             .font(.headline)
+                        PhotosPicker(selection: $pickerItem, matching: .images) {
+                            Label("Choose from Photos", systemImage: "photo.on.rectangle")
+                        }
                     }
                 } header: {
                     Text("Sign photo")
@@ -65,7 +76,14 @@ struct StationEditorView: View {
                 }
 
                 Section {
-                    if let loc = store.location.location {
+                    if fromLibrary {
+                        if let photoCoordinate {
+                            Label(String(format: "Location from the photo · %.5f, %.5f", photoCoordinate.latitude, photoCoordinate.longitude),
+                                  systemImage: "location.fill")
+                        } else {
+                            Label("This photo has no saved location, so the sign won't get a map pin.", systemImage: "location.slash")
+                        }
+                    } else if let loc = store.location.location {
                         Label(String(format: "Location tagged · ±%.0f m", loc.horizontalAccuracy), systemImage: "location.fill")
                     } else {
                         Label(store.location.statusMessage ?? "Waiting for GPS… (saved without a map pin if none)", systemImage: "location.slash")
@@ -87,7 +105,25 @@ struct StationEditorView: View {
                 }
             }
             .onAppear { store.location.start() }
+            .onChange(of: pickerItem) { _, item in
+                guard let item else { return }
+                Task { await usePicked(item) }
+            }
         }
+    }
+
+    private func usePicked(_ item: PhotosPickerItem) async {
+        defer { pickerItem = nil }
+        guard let imported = await SignPhotoImport.load(item) else {
+            store.errorMessage = "Couldn't load that photo"
+            return
+        }
+        photo = imported.image
+        fromLibrary = true
+        photoCoordinate = imported.coordinate
+        reading = true
+        readText = await Self.readSignText(imported.image)
+        reading = false
     }
 
     private func capture() {
@@ -116,9 +152,9 @@ struct StationEditorView: View {
             defer { saving = false }
             var payload: [String: Any] = ["name": label, "kind": (signOnly ? .task : kind).rawValue, "radiusM": radius]
             if let readText { payload["signText"] = readText }
-            if let loc = store.location.location {
-                payload["lat"] = loc.coordinate.latitude
-                payload["lng"] = loc.coordinate.longitude
+            if let coordinate = fromLibrary ? photoCoordinate : store.location.location?.coordinate {
+                payload["lat"] = coordinate.latitude
+                payload["lng"] = coordinate.longitude
             }
             if let photo {
                 do {
@@ -128,7 +164,8 @@ struct StationEditorView: View {
                     return
                 }
             }
-            if await store.perform("add_station", payload) { dismiss() }
+            let saved = if let submit { await submit(payload) } else { await store.perform("add_station", payload) }
+            if saved { dismiss() }
         }
     }
 

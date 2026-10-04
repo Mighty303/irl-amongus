@@ -87,6 +87,8 @@ struct GameState: Decodable, Equatable {
     let sabotage: SabotageView?
     let winner: String?
     let winReason: String?
+    /// Saved game whose signs this lobby is using (optional so older servers still decode).
+    let gameset: GamesetRef?
 
     var isHost: Bool { me.id == hostId }
 
@@ -104,6 +106,11 @@ struct GameState: Decodable, Equatable {
     func station(_ id: String?) -> Station? { stations.first { $0.id == id } }
     func player(_ id: String?) -> PlayerView? { players.first { $0.id == id } }
     var alivePlayers: [PlayerView] { players.filter(\.alive) }
+}
+
+struct GamesetRef: Decodable, Equatable {
+    let id: String
+    let name: String
 }
 
 struct Settings: Codable, Equatable {
