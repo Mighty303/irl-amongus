@@ -85,7 +85,7 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Hide n Seek"].exists)
         XCTAssertTrue(app.buttons["Back"].exists)
         XCTAssertTrue(app.textFields["local.playerName"].exists)
-        XCTAssertTrue(app.textFields["local.serverURL"].exists)
+        XCTAssertFalse(app.textFields["local.serverURL"].exists, "The hosted server is fixed; no address field")
         app.swipeUp()
         XCTAssertTrue(app.buttons["Join game"].exists)
         XCTAssertFalse(app.staticTexts["PHYSICAL MAP"].exists)

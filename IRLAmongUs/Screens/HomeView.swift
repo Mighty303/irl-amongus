@@ -6,7 +6,6 @@ struct HomeView: View {
     @State private var scanning = false
     @State private var scannedLobbyPayload: String?
     @State private var showingJoinName = false
-    @State private var serverStatus: String?
     @State private var busy = false
 
     var body: some View {
@@ -28,21 +27,6 @@ struct HomeView: View {
                 Section("Host") {
                     Button("Create game") { run { await store.createGame() } }
                         .disabled(!store.canEnterLobby || busy)
-                }
-                Section {
-                    TextField(GameStore.defaultServerURL, text: $store.serverURLString)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Button("Test connection") {
-                        serverStatus = "Testing…"
-                        Task { serverStatus = await store.checkServer() }
-                    }
-                    if let serverStatus { Text(serverStatus).font(.caption.monospaced()) }
-                } header: {
-                    Text("Server")
-                } footer: {
-                    Text("Defaults to the hosted server. Scanning a lobby QR sets this automatically. For a local server, use the URL it prints (or a tunnel).")
                 }
             }
             .navigationTitle("IRL Among Us")

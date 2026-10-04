@@ -64,7 +64,8 @@ final class GameStore {
         if session != nil { connect() }
     }
 
-    /// Hosted game server (Render). Override the Server field to use a local server.
+    /// Hosted game server (Render). There's no address field in the app; for a local server, launch with
+    /// `-serverURL http://…` (Xcode scheme argument) or scan a lobby QR that carries another server.
     static let defaultServerURL = "https://irl-amongus-server.onrender.com"
 
     var serverURL: URL? { Self.validatedServerURL(serverURLString) }
