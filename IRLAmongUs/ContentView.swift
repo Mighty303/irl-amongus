@@ -365,14 +365,14 @@ private struct LocalLobbyView: View {
                     .allowsHitTesting(false)
 
                 ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: 24) {
                     playerBar
 
                     hostHeader
 
                     connectionFields
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 16) {
                         Text("Create")
                             .font(.system(size: 20, weight: .regular, design: .rounded))
                             .foregroundStyle(.white.opacity(0.82))
@@ -384,7 +384,7 @@ private struct LocalLobbyView: View {
                         }
                     }
 
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 16) {
                         Text("Join a Game")
                             .font(.system(size: 19, design: .rounded))
                         TextField(
@@ -406,7 +406,7 @@ private struct LocalLobbyView: View {
                                     .allowsHitTesting(false)
                             }
                             .accessibilityIdentifier("local.roomCode")
-                        HStack(spacing: 12) {
+                        HStack(spacing: 24) {
                             lobbyButton("Join game") { Task { await store.joinGame(code: code) } }
                                 .disabled(!store.canEnterLobby || !GameStore.isValidRoomCode(code))
                             lobbyButton("Scan lobby QR") { scanning = true }
