@@ -11,6 +11,10 @@ struct IRLAmongUsApp: App {
         WindowGroup {
             ContentView()
                 .environment(store)
+                .background {
+                    KillAnimationPresenter(presentation: store.killPresentation) { store.dismissKill($0) }
+                        .frame(width: 0, height: 0)
+                }
                 .onOpenURL { url in Task { await store.handle(url: url) } }
                 .onChange(of: scenePhase) { _, phase in store.scenePhaseChanged(phase) }
                 .onChange(of: store.session) { _, session in

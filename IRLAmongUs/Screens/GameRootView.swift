@@ -34,11 +34,6 @@ struct GameRootView: View {
             if let alert = store.alert {
                 AlertOverlay(alert: alert) { store.alert = nil }
             }
-            if let presentation = store.killPresentation {
-                KillAnimationView(presentation: presentation) { store.dismissKill(presentation.id) }
-                    .id(presentation.id)
-                    .zIndex(10)
-            }
         }
         .onChange(of: store.state?.phase, initial: true) { _, phase in
             guard store.killPresentation == nil else { return }

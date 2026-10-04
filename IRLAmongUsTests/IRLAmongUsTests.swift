@@ -5,6 +5,50 @@ import UIKit
 @testable import IRLAmongUs
 
 struct NeckKillTests {
+    @MainActor
+    @Test func killWindowCoversPresentedScannerAndKeepsTheUnderlyingScreen() throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let originalKeyWindow = scene.windows.first(where: \.isKeyWindow)
+        let gameWindow = UIWindow(windowScene: scene)
+        let game = UIViewController()
+        gameWindow.rootViewController = game
+        gameWindow.makeKeyAndVisible()
+        let scanner = UIViewController()
+        scanner.modalPresentationStyle = .fullScreen
+        game.present(scanner, animated: false)
+        let presenter = KillAnimationPresenter.Coordinator()
+        defer {
+            presenter.close()
+            gameWindow.isHidden = true
+            originalKeyWindow?.makeKey()
+        }
+
+        var kill = KillPresentation(victimID: "victim", attackerColor: .purple, victimColor: .cyan)
+        presenter.presentation = kill
+        presenter.update(anchor: UIView())
+        #expect(presenter.overlayWindow == nil, "wait for a scene instead of losing an early event")
+        presenter.update(anchor: game.view)
+        let overlay = try #require(presenter.overlayWindow)
+        #expect(!overlay.isHidden)
+        #expect(overlay.windowLevel > gameWindow.windowLevel)
+        #expect(overlay.windowLevel > .alert)
+        #expect(!overlay.isKeyWindow)
+        #expect(gameWindow.isKeyWindow)
+        #expect(game.presentedViewController === scanner)
+
+        let controller = overlay.rootViewController
+        kill.attackerColor = .yellow
+        presenter.presentation = kill
+        presenter.update(anchor: game.view)
+        #expect(presenter.overlayWindow === overlay)
+        #expect(overlay.rootViewController === controller, "late colour information keeps the playback controller")
+
+        presenter.presentation = nil
+        presenter.update(anchor: game.view)
+        #expect(presenter.overlayWindow == nil)
+        #expect(game.presentedViewController === scanner)
+    }
+
     @Test func keepsSourceTimingAndRecolorsOnlyMaskedSuitPixels() throws {
         let frames = try NeckKillFrames.load(attacker: .purple, victim: .cyan)
         #expect(frames.images.count == 47)
