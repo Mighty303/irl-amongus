@@ -505,10 +505,7 @@ final class GameStore {
                           buildingId: station.buildingId, floorId: station.floorId)
         }
 
-        if old?.stations != newState.stations, let base = serverURL {
-            let stations = newState.stations
-            Task.detached { [signs] in await signs.prepare(stations: stations, serverURL: base) }
-        }
+        if old?.stations != newState.stations { prepareSigns() }
         // Discreet buzz when a kill target first comes into range.
         if newState.me.role == .impostor, old?.me.killTargets.isEmpty ?? true, !newState.me.killTargets.isEmpty {
             Haptics.killInRange()
@@ -643,6 +640,12 @@ final class GameStore {
         isUpdatingDemoSigns = true
         defer { isUpdatingDemoSigns = false }
         await perform("update_settings", ["signsPerPlayer": count])
+    }
+
+    /// Loads the signs' reference photos for recognition (already processed photos are reused).
+    func prepareSigns() {
+        guard let base = serverURL, let stations = state?.stations else { return }
+        Task.detached { [signs] in await signs.prepare(stations: stations, serverURL: base) }
     }
 
     func checkIn(stationId: String, method: String) async -> Bool {
