@@ -86,9 +86,14 @@ struct LiveMapView: View {
                     get: { store.livePositionsOn },
                     set: { store.updateSetting("livePositions", $0) }))
                     .font(.subheadline.weight(.semibold))
+                Picker("Position", selection: Binding(get: { store.positionMode }, set: { store.positionMode = $0 })) {
+                    ForEach(PositionMode.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Text(store.positionMode.detail).font(.caption).foregroundStyle(.secondary)
                 you
                 if store.livePositionsOn { others(state) }
-                Text("Scan signs as you go: each scan pins you exactly. Keep the phone held up while walking so steps follow the compass. Dots fade when a phone goes quiet.")
+                Text("Each sign scan pins you exactly. Hold the phone in front of you while walking (flat or upright, either works) so movement follows it; in a pocket, steps only widen the circle. To compare modes, walk the same route between two signs in each and note how far off the dot is before you scan. Dots fade when a phone goes quiet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -110,7 +115,7 @@ struct LiveMapView: View {
                 }
                 sourcesRow(e.sources)
             } else {
-                Text("No estimate yet. Scan a sign, or wait for GPS.").font(.subheadline).foregroundStyle(.secondary)
+                Text("No estimate yet. Start the game at the red button, scan a sign, or wait for GPS.").font(.subheadline).foregroundStyle(.secondary)
             }
             if let message = store.location.statusMessage {
                 Text(message).font(.caption).foregroundStyle(.red)
@@ -121,10 +126,14 @@ struct LiveMapView: View {
                 row("Last sign", d.lastFixName.map { name in "\(name) · \(ago(d.lastFixAt))" } ?? "none yet")
                 row("Since then", "\(d.stepsSinceFix) steps · \(meters(d.metersSinceFix))"
                     + (d.stepsAvailable ? "" : " (no step counter)"))
-                row("Compass", d.compassUsable ? "following it" : d.phoneHeldUp ? "unsure, calibrating" : "phone not held up")
+                if let ar = d.arState {
+                    row("AR", "\(ar) · \(meters(d.arMetersSinceFix)) tracked")
+                }
+                row("Compass", d.compassUsable ? "following it" : d.phoneHeldUp ? "unsure, calibrating" : "phone not held in front of you")
                 row("GPS", d.gpsAccuracyM.map { acc in
-                    "±\(meters(acc))" + (d.gpsWeight.map { " · weight \(Int(($0 * 100).rounded()))%" } ?? "")
-                        + (d.gpsOutlier ? " · jumped, mostly ignored" : "")
+                    "±\(meters(acc))" + (d.gpsIgnoredIndoors ? " · ignored indoors (steps + signs)"
+                        : (d.gpsWeight.map { " · weight \(Int(($0 * 100).rounded()))%" } ?? "")
+                            + (d.gpsOutlier ? " · jumped, mostly ignored" : ""))
                 } ?? "no fix")
                 row("Floor", d.altitudeSinceFixM.map { String(format: "%+.1f m since last sign", $0) } ?? "no barometer")
                 if d.snappedToMap { row("Map", "kept inside the nearest room") }
@@ -192,6 +201,7 @@ struct LiveMapView: View {
         case "sign": return "SIGN SCAN"
         case "steps": return "STEPS"
         case "compass": return "COMPASS"
+        case "ar": return "AR CAMERA"
         case "gps": return "GPS"
         case "map": return "FLOOR PLAN"
         case "baro": return "FLOOR CHANGE"

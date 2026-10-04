@@ -223,6 +223,50 @@ struct LocalMapTrackingTests {
 
 private final class MapChangeFlag: @unchecked Sendable { var changed = false }
 
+struct PhoneFacingTests {
+    typealias V = (x: Double, y: Double, z: Double)
+
+    /// Gravity and Earth's field (north and down, as in Vancouver) in the phone's axes, for a phone held in
+    /// landscape facing `heading` degrees from north, tilted back `tilt` degrees from flat toward upright.
+    private func sensors(heading: Double, tilt: Double, screenUp: (x: Double, y: Double)) -> (g: V, m: V) {
+        let h = heading * .pi / 180, t = tilt * .pi / 180
+        let forward: V = (sin(h), cos(h), 0)
+        let worldUp: V = (0, 0, 1)
+        func add(_ a: V, _ b: V, _ ka: Double, _ kb: Double) -> V { (a.x * ka + b.x * kb, a.y * ka + b.y * kb, a.z * ka + b.z * kb) }
+        func cross(_ a: V, _ b: V) -> V { (a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x) }
+        func dot(_ a: V, _ b: V) -> Double { a.x * b.x + a.y * b.y + a.z * b.z }
+        // The screen's top leans from ahead (flat) to the sky (upright); the screen faces back at the player.
+        let top = add(forward, worldUp, cos(t), sin(t))
+        let z = add(forward, worldUp, -sin(t), cos(t))
+        let x = screenUp.x > 0 ? top : add(top, top, -1, 0)
+        let y = cross(z, x)
+        let gravity: V = (0, 0, -1), field: V = (0, 20, -45)
+        return ((dot(gravity, x), dot(gravity, y), dot(gravity, z)), (dot(field, x), dot(field, y), dot(field, z)))
+    }
+
+    @Test func facingIsWhereThePlayerLooksAtAnyTiltInEitherLandscape() throws {
+        for screenUp in [(x: 1.0, y: 0.0), (x: -1.0, y: 0.0)] {
+            for heading in [0.0, 45, 90, 200, 300] {
+                for tilt in [0.0, 30, 60, 80] {
+                    let (g, m) = sensors(heading: heading, tilt: tilt, screenUp: screenUp)
+                    #expect(PositionEstimator.isHeldUp(gravity: g, screenUp: screenUp))
+                    let facing = try #require(PositionEstimator.facing(gravity: g, magnetic: m, screenUp: screenUp))
+                    let error = abs((facing - heading + 540).truncatingRemainder(dividingBy: 360) - 180)
+                    #expect(error < 0.01, "heading \(heading) tilt \(tilt) screenUp \(screenUp.x) gave \(facing)")
+                }
+            }
+        }
+    }
+
+    @Test func pocketsFaceDownAndSidewaysPhonesAreNotHeldUp() {
+        let landscape = (x: 1.0, y: 0.0)
+        #expect(!PositionEstimator.isHeldUp(gravity: (0, -1, 0), screenUp: landscape), "upright in a pocket")
+        #expect(!PositionEstimator.isHeldUp(gravity: (0, 0, 1), screenUp: landscape), "face down")
+        #expect(!PositionEstimator.isHeldUp(gravity: (0, -0.866, -0.5), screenUp: landscape), "held portrait while the game is landscape")
+        #expect(!PositionEstimator.isHeldUp(gravity: (0.6, 0, -0.8), screenUp: landscape), "upside down")
+    }
+}
+
 struct BodyReportTests {
     @Test func reportIsNotReplayedByDuplicateEventsOrReconnectsAndResetsForNextRound() {
         var reports = BodyReportState()

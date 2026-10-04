@@ -1,13 +1,26 @@
 import PhotosUI
 import SwiftUI
 
-/// Settings from the main menu. For now: saved games for demos.
+/// Settings from the main menu: saved games for demos, and how this phone finds its position.
 struct AppSettingsView: View {
+    @Environment(GameStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        @Bindable var store = store
         NavigationStack {
             List {
+                Section {
+                    Picker("Position", selection: $store.positionMode) {
+                        ForEach(PositionMode.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("settings.positionMode")
+                } header: {
+                    Text("Your position on the map")
+                } footer: {
+                    Text(store.positionMode.detail + " Applies on this phone only; switch any time, even mid-game, to compare.")
+                }
                 Section {
                     NavigationLink {
                         GamesetsView()
@@ -115,6 +128,7 @@ struct GamesetDetailView: View {
     @State private var importProgress: (done: Int, total: Int)?
     @State private var askingPassword = false
     @State private var afterUnlock: (() -> Void)?
+    @State private var moving: Station?
 
     private var stations: [Station] { gameset?.stations ?? [] }
     private var signCount: Int { stations.filter { $0.kind == .task }.count }
@@ -123,23 +137,29 @@ struct GamesetDetailView: View {
         List {
             Section {
                 ForEach(stations) { station in
-                    HStack(spacing: 12) {
-                        Color(white: 0.2)
-                            .overlay {
-                                if let photoId = station.photoId, let base = store.serverURL {
-                                    AsyncImage(url: base.appendingPathComponent("photos/\(photoId).jpg")) { $0.resizable().scaledToFill() }
-                                        placeholder: { ProgressView() }
+                    Button { whenUnlocked { moving = station } } label: {
+                        HStack(spacing: 12) {
+                            Color(white: 0.2)
+                                .overlay {
+                                    if let photoId = station.photoId, let base = store.serverURL {
+                                        AsyncImage(url: base.appendingPathComponent("photos/\(photoId).jpg")) { $0.resizable().scaledToFill() }
+                                            placeholder: { ProgressView() }
+                                    }
                                 }
+                                .frame(width: 52, height: 52)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(station.signText.map { "Reads “\($0)”" } ?? station.name).font(.headline).lineLimit(1)
+                                Text([station.kind == .task ? nil : station.kind.label, pinLabel(station)]
+                                    .compactMap { $0 }.joined(separator: " · "))
+                                    .font(.caption).foregroundStyle(station.lat == nil ? Color.orange : Color.secondary)
                             }
-                            .frame(width: 52, height: 52)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(station.signText.map { "Reads “\($0)”" } ?? station.name).font(.headline).lineLimit(1)
-                            Text([station.kind == .task ? nil : station.kind.label,
-                                  station.lat != nil ? "Map pin" : "No GPS"].compactMap { $0 }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
+                            Spacer()
+                            Image(systemName: "mappin.and.ellipse").foregroundStyle(.secondary)
                         }
                     }
+                    .foregroundStyle(.primary)
+                    .accessibilityHint("Move this sign's map pin and floor")
                 }
                 .onDelete { offsets in
                     let ids = offsets.map { stations[$0].id }
@@ -155,6 +175,8 @@ struct GamesetDetailView: View {
                 }
             } header: {
                 Text("\(signCount) signs")
+            } footer: {
+                Text("Tap a sign to move its pin or change its floor. Players are placed on the map at a sign's pin when they scan it, so put each pin exactly on its sign. Lobbies already using this game pick up the change when the host selects it again.")
             }
 
             Section {
@@ -225,6 +247,12 @@ struct GamesetDetailView: View {
             )
             .presentationBackground(.clear)
         }
+        .sheet(item: $moving) { station in
+            SignPlacementEditor(gamesetId: gamesetId, station: station,
+                                others: stations.filter { $0.id != station.id }) {
+                Task { await refresh() }
+            }
+        }
         .onChange(of: importItems) { _, items in
             guard !items.isEmpty else { return }
             Task { await importPhotos(items) }
@@ -240,6 +268,13 @@ struct GamesetDetailView: View {
 
     private func refresh() async {
         if let latest = try? await store.gameset(gamesetId) { gameset = latest }
+    }
+
+    /// Where the sign's pin is: building and floor, or that it has none yet.
+    private func pinLabel(_ station: Station) -> String {
+        guard station.lat != nil else { return "No map pin" }
+        guard let b = station.buildingId, let building = store.campus.building(b) else { return "Map pin" }
+        return "\(building.id) · \(building.floor(station.floorId)?.name ?? "no floor")"
     }
 
     /// Each photo: upload it, read the sign's text, and add it with the photo's own GPS location.
