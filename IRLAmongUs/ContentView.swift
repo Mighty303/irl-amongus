@@ -412,6 +412,7 @@ private struct LocalLobbyView: View {
                             lobbyButton("Scan lobby QR") { scanning = true }
                                 .disabled(store.isEnteringLobby)
                         }
+                        .padding(.top, 12)
                         Text("Use the same server address as the host, then enter the room code or scan their QR. Nearby game discovery is coming soon.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
