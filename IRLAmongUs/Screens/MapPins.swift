@@ -65,7 +65,8 @@ extension GameStore {
         if near.isEmpty, let fallback = campus.building(mine?.buildingId) ?? campus.building("SUB") { near = [fallback] }
         var view = CampusView()
         for building in near {
-            let floor = campus.displayedFloor(building, hint: shownFloorHint(building, stations: stations, playArea: playArea))
+            let hint = shownFloorHint(building, stations: stations, playArea: playArea)
+            let floor = building.floor(hint) ?? building.mainFloor
             view.floors[building.id] = floor
             view.rooms += floor.rooms
         }
@@ -75,11 +76,11 @@ extension GameStore {
         return view
     }
 
-    /// The floor shown for a building on the game maps: the one you're on, else the play area's floor,
-    /// else the floor most of its signs are on (the player's own pick on the map overrides all of these).
+    /// The floor shown for a building on the game maps: the play area's floor (picked at setup), else the
+    /// one you're on, else the floor most of its signs are on.
     func shownFloorHint(_ building: CampusBuilding, stations: [Station], playArea: CampusPlace?) -> String? {
-        if positions.estimate?.buildingId == building.id, let floor = positions.estimate?.floorId { return floor }
         if playArea?.buildingId == building.id { return playArea?.floorId }
+        if positions.estimate?.buildingId == building.id, let floor = positions.estimate?.floorId { return floor }
         let signFloors = stations.filter { $0.buildingId == building.id }.compactMap(\.floorId)
         return Dictionary(grouping: signFloors, by: { $0 }).max { $0.value.count < $1.value.count }?.key
     }
