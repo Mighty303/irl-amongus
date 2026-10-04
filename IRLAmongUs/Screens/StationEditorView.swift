@@ -29,6 +29,10 @@ struct StationEditorView: View {
     /// Photos from the library carry their own location (EXIF), never the phone's current one.
     @State private var fromLibrary = false
     @State private var photoCoordinate: CLLocationCoordinate2D?
+    /// Where the map opened, and where its pin is now (what gets saved). GPS is rough, so the player
+    /// drags the map until the pin sits on the sign.
+    @State private var pinStart: CLLocationCoordinate2D?
+    @State private var pin: CLLocationCoordinate2D?
 
     var body: some View {
         NavigationStack {
@@ -47,7 +51,7 @@ struct StationEditorView: View {
                             }
                         }
                         .font(.subheadline)
-                        Button("Retake") { self.photo = nil; readText = nil; fromLibrary = false; photoCoordinate = nil }
+                        Button("Retake") { self.photo = nil; readText = nil; fromLibrary = false; photoCoordinate = nil; pinStart = nil; pin = nil }
                     } else {
                         CameraView(onFrame: { buffer in latestFrame.buffer = buffer }, frameInterval: 0.2)
                             .frame(height: 300)
@@ -76,7 +80,15 @@ struct StationEditorView: View {
                 }
 
                 Section {
-                    if fromLibrary {
+                    if photo != nil {
+                        SignPinMap(start: pinStart, pin: $pin)
+                            .frame(height: 260)
+                            .listRowInsets(EdgeInsets())
+                        Label(pin == nil ? "Zoom in and drag the map until the pin is on the sign"
+                                  : pinStart == nil ? "No location to start from: drag the map to the sign"
+                                  : "Drag the map until the pin is on the sign",
+                              systemImage: "mappin.and.ellipse")
+                    } else if fromLibrary {
                         if let photoCoordinate {
                             Label(String(format: "Location from the photo · %.5f, %.5f", photoCoordinate.latitude, photoCoordinate.longitude),
                                   systemImage: "location.fill")
@@ -92,7 +104,7 @@ struct StationEditorView: View {
                         Stepper("Geofence radius: \(Int(radius)) m", value: $radius, in: 5...100, step: 5)
                     }
                 } footer: {
-                    Text("GPS places the sign on the map. Indoors it's rough; the photo is what proves you're there.")
+                    Text("GPS gives a first guess; drag the map so the pin lands on the sign. The photo is what proves you're there.")
                 }
             }
             .navigationTitle(title)
@@ -121,6 +133,8 @@ struct StationEditorView: View {
         photo = imported.image
         fromLibrary = true
         photoCoordinate = imported.coordinate
+        pinStart = imported.coordinate
+        pin = imported.coordinate
         reading = true
         readText = await Self.readSignText(imported.image)
         reading = false
@@ -132,6 +146,8 @@ struct StationEditorView: View {
             return
         }
         photo = image
+        pinStart = store.location.location?.coordinate
+        pin = pinStart
         reading = true
         Task {
             readText = await Self.readSignText(image)
@@ -152,7 +168,7 @@ struct StationEditorView: View {
             defer { saving = false }
             var payload: [String: Any] = ["name": label, "kind": (signOnly ? .task : kind).rawValue, "radiusM": radius]
             if let readText { payload["signText"] = readText }
-            if let coordinate = fromLibrary ? photoCoordinate : store.location.location?.coordinate {
+            if let coordinate = photo != nil ? pin : store.location.location?.coordinate {
                 payload["lat"] = coordinate.latitude
                 payload["lng"] = coordinate.longitude
             }
