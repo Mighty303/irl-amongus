@@ -13,6 +13,8 @@ TEAM=${TEAM:-2893AZGG46}
 BUNDLE_ID=${BUNDLE_ID:-com.kaisamson.IRLAmongUs}
 BUILD=${BUILD:-$(date +%y%m%d%H%M)}
 OUT=build/testflight
+# App Store Connect requires all four on iPad (multitasking). The app still picks its orientation itself while running.
+IPAD_ORIENTATIONS="UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
 ARCHIVE=$OUT/IRLAmongUs.xcarchive
 
 rm -rf $OUT && mkdir -p $OUT
@@ -20,6 +22,7 @@ echo "Archiving $BUNDLE_ID build $BUILD (team $TEAM)…"
 xcodebuild archive -project IRLAmongUs.xcodeproj -scheme IRLAmongUs -configuration Release \
   -destination 'generic/platform=iOS' -archivePath $ARCHIVE -allowProvisioningUpdates \
   DEVELOPMENT_TEAM=$TEAM PRODUCT_BUNDLE_IDENTIFIER=$BUNDLE_ID CURRENT_PROJECT_VERSION=$BUILD \
+  INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad="$IPAD_ORIENTATIONS" \
   | grep -E "error:|warning: .*signing|ARCHIVE (SUCCEEDED|FAILED)" || true
 [[ -d $ARCHIVE ]] || { echo "Archive failed"; exit 1; }
 [[ ${1:-} == --archive ]] && { echo "Archived: $ARCHIVE"; exit 0; }
