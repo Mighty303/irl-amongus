@@ -602,6 +602,7 @@ private struct GameLobbyView: View {
     @Environment(GameStore.self) private var store
     @State private var showingSettings = false
     @State private var showingInvite = false
+    @State private var showingCustomize = false
     @StateObject private var spawningAudio = PlayerSpawningAudioPlayer()
     @State private var knownPlayerIDs: Set<String> = []
     @State private var visiblePlayerIDs: Set<String> = []
@@ -643,6 +644,13 @@ private struct GameLobbyView: View {
             }
             .frame(width: size.width, height: size.height)
             .clipped()
+            .overlay {
+                if showingCustomize {
+                    CustomizePanel(state: state) { showingCustomize = false }
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingCustomize)
         }
         .background(Color.black)
         .onChange(of: Set(state.players.map(\.id)), initial: true) { _, playerIDs in
@@ -700,6 +708,18 @@ private struct GameLobbyView: View {
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(.white.opacity(0.75), lineWidth: 3))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("lobby.waitingRoom")
+        .overlay(alignment: .bottomTrailing) {
+            // The Customize laptop, like the one in the game's lobby.
+            Button {
+                buttonAudio.play()
+                showingCustomize = true
+            } label: {
+                Image("CustomizeActionIcon").resizable().scaledToFit().frame(width: 72, height: 72)
+            }
+            .buttonStyle(.plain)
+            .padding(8)
+            .accessibilityLabel("Customize your crewmate")
+        }
     }
 
     private var lobbyControls: some View {
@@ -817,6 +837,7 @@ private struct GameLobbyView: View {
 }
 
 private struct LobbyPlayerStage: View {
+    @Environment(GameStore.self) private var store
     let players: [PlayerView]
     let visiblePlayerIDs: Set<String>
 
@@ -848,11 +869,7 @@ private struct LobbyPlayerStage: View {
 
                     VStack(spacing: 2) {
                         ZStack(alignment: .topTrailing) {
-                            Image(playerColor.lobbyAssetName)
-                                .resizable()
-                                .interpolation(.high)
-                                .scaledToFit()
-                                .frame(height: spriteHeight)
+                            CrewmateView(color: playerColor, faceURL: store.faceURL(player.faceId), height: spriteHeight)
 
                             if player.isHost {
                                 Image(systemName: "crown.fill")
