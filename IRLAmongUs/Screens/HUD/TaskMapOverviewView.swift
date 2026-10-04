@@ -107,8 +107,8 @@ struct TaskMapOverviewView: View {
                         }
                         if let ownPosition {
                             VStack(spacing: 0) {
-                                Image(state.player(state.me.id)?.color?.lobbyAssetName ?? "PlayerMarker")
-                                    .resizable().scaledToFit().frame(width: 30, height: 30)
+                                CrewmateView(color: PlayerColor.rosterColor(for: state.me.id, in: state.players) ?? .red,
+                                             faceURL: store.faceURL(state.player(state.me.id)?.faceId), height: 30)
                                 Text("YOU").font(.system(size: 9, weight: .black)).foregroundStyle(.cyan)
                             }
                             .position(projection.point(ownPosition)).allowsHitTesting(false)
