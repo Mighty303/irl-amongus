@@ -29,6 +29,7 @@ struct LobbyView: View {
     @State private var addingStation = false
     @State private var addingMySign = false
     @State private var qrStation: Station?
+    @State private var showingSpecialSigns = false
 
     private var current: GameState { store.state ?? state }
     private static let accent = Color(red: 0.22, green: 0.63, blue: 0.62)
@@ -82,6 +83,10 @@ struct LobbyView: View {
                 .toolbar(.visible, for: .navigationBar)
             }
             .sheet(isPresented: $addingStation) { StationEditorView() }
+            .fullScreenCover(isPresented: $showingSpecialSigns) {
+                SpecialSignsView.lobby(store: store, stations: store.state?.stations ?? []) { showingSpecialSigns = false }
+                    .presentationBackground(.clear)
+            }
             .sheet(isPresented: $addingMySign) {
                 StationEditorView(signOnly: true, title: "Sign \(current.mySigns.count + 1) of \(current.requiredSigns)",
                                   fallbackName: "Sign \(current.mySigns.count + 1)")
@@ -179,10 +184,12 @@ struct LobbyView: View {
                 settingCard("Demo mode") { DemoSignsControl(state: current) }
             }
             if current.settings.signsPerPlayer != nil {
-                numberCard("Signs per player", value: "\(current.requiredSigns)", key: "signsPerPlayer",
-                           canDecrease: current.requiredSigns > 0, canIncrease: current.requiredSigns < 10,
-                           decrease: { store.updateSetting("signsPerPlayer", current.requiredSigns - 1) },
-                           increase: { store.updateSetting("signsPerPlayer", current.requiredSigns + 1) })
+                let perPlayer = current.settings.signsPerPlayer ?? 0
+                numberCard("Signs per player", value: "\(perPlayer)", key: "signsPerPlayer",
+                           canDecrease: perPlayer > 0, canIncrease: perPlayer < 10,
+                           decrease: { store.updateSetting("signsPerPlayer", perPlayer - 1) },
+                           increase: { store.updateSetting("signsPerPlayer", perPlayer + 1) },
+                           detail: current.gameset == nil ? nil : "The saved game's signs count toward this; players split the rest")
             }
             integer("Tasks per player", \.tasksPerPlayer, "tasksPerPlayer", 1...8)
             if current.isHost { // nobody else can see who it is, so nobody else picks it
@@ -251,6 +258,23 @@ struct LobbyView: View {
                         action("Add my next sign", icon: "camera") { addingMySign = true }
                     }
                 }
+            }
+            settingCard("Special signs") {
+                ForEach(SpecialSignSlot.all) { slot in
+                    let station = slot.station(in: current.stations)
+                    HStack(spacing: 8) {
+                        Image(systemName: slot.kind.icon).foregroundStyle(POCPinStyle(slot.kind).color).frame(width: 22)
+                        Text(slot.title).font(.system(size: 14, weight: .semibold, design: .rounded))
+                        Spacer(minLength: 4)
+                        Text(station != nil ? "Set" : slot.required ? "Required" : "Optional")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundStyle(station != nil ? .green : slot.required ? .red : .white.opacity(0.5))
+                    }
+                    .frame(minHeight: 30)
+                }
+                action("Set up special signs", icon: "light.beacon.max") { showingSpecialSigns = true }.disabled(!store.isSynced)
+                Text("The red button is needed to start; meetings gather there too. Reactor (two signs) and Lights enable sabotages; Security and Admin are optional rooms.")
+                    .font(.caption).foregroundStyle(.white.opacity(0.6))
             }
             settingCard("Venue · \(current.mapId) · \(current.stations.count) signs") {
                 ForEach(current.stations) { station in
@@ -340,7 +364,7 @@ struct LobbyView: View {
                         .disabled(!store.isSynced || current.players.count < current.settings.minPlayers || !current.playersMissingSigns.isEmpty)
                 }
             } else {
-                Text(current.requiredSigns > 0 ? "Add \(current.requiredSigns) signs each before start" : "No signs required")
+                Text(current.requiredSigns > 0 ? "Add your \(current.requiredSigns) sign\(current.requiredSigns == 1 ? "" : "s") before start" : "No signs for you to add")
             }
         }
         .font(.system(size: 10, weight: .medium, design: .rounded))

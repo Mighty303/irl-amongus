@@ -97,6 +97,9 @@ struct SignCaptureStep: View {
     /// Adds the sign; true when it worked.
     let submit: ([String: Any]) async -> Bool
     var onSaved: () -> Void = {}
+    /// Special signs (red button, reactor, ...) keep their own name, e.g. "Red button"; task signs are named by their text.
+    var kind: StationKind = .task
+    var fixedName: String? = nil
 
     @State private var latestFrame = FrameBox()
     @State private var photo: UIImage?
@@ -122,7 +125,7 @@ struct SignCaptureStep: View {
                     if let photo, showingPhoto {
                         Image(uiImage: photo).resizable().scaledToFill()
                     } else if photo != nil {
-                        SignPinMap(start: pinStart, pin: $pin)
+                        SignPinPicker(start: pinStart, pin: $pin, others: store.state?.stations ?? [])
                     } else {
                         CameraView(onFrame: { buffer in latestFrame.buffer = buffer }, frameInterval: 0.2)
                     }
@@ -265,7 +268,7 @@ struct SignCaptureStep: View {
         message = nil
         Task {
             defer { saving = false }
-            var payload: [String: Any] = ["name": readText ?? fallbackName, "kind": "task", "radiusM": 15]
+            var payload: [String: Any] = ["name": fixedName ?? readText ?? fallbackName, "kind": kind.rawValue, "radiusM": 15]
             if let readText { payload["signText"] = readText }
             if let coordinate = pin {
                 payload["lat"] = coordinate.latitude

@@ -81,7 +81,7 @@ struct StationEditorView: View {
 
                 Section {
                     if photo != nil {
-                        SignPinMap(start: pinStart, pin: $pin)
+                        SignPinPicker(start: pinStart, pin: $pin, others: store.state?.stations ?? [])
                             .frame(height: 260)
                             .listRowInsets(EdgeInsets())
                         Label(pin == nil ? "Zoom in and drag the map until the pin is on the sign"

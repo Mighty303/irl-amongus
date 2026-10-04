@@ -770,6 +770,7 @@ private struct GameLobbyView: View {
     @State private var showingCustomize = false
     @State private var showingMySigns = false
     @State private var showingLiveMap = false
+    @State private var showingSpecialSigns = false
     @StateObject private var spawningAudio = PlayerSpawningAudioPlayer()
     @State private var knownPlayerIDs: Set<String> = []
     @State private var visiblePlayerIDs: Set<String> = []
@@ -833,6 +834,13 @@ private struct GameLobbyView: View {
                 .allowsHitTesting(showingMySigns)
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingMySigns)
+            .overlay {
+                if showingSpecialSigns {
+                    SpecialSignsView.lobby(store: store, stations: state.stations) { showingSpecialSigns = false }
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showingSpecialSigns)
         }
         .background(Color.black)
         .onChange(of: Set(state.players.map(\.id)), initial: true) { _, playerIDs in
@@ -878,11 +886,12 @@ private struct GameLobbyView: View {
 
     private var canStart: Bool {
         state.isHost && state.players.count >= state.settings.minPlayers
-            && state.playersMissingSigns.isEmpty && store.isSynced
+            && state.playersMissingSigns.isEmpty && state.hasRedButton && store.isSynced
     }
 
     private var startCaption: String {
         if !store.isSynced { return "Reconnecting…" }
+        if !state.hasRedButton { return "Add the red button sign" }
         if !state.playersMissingSigns.isEmpty {
             let count = state.playersMissingSigns.count
             return "Waiting for signs (\(count) player\(count == 1 ? "" : "s"))"
@@ -952,7 +961,8 @@ private struct GameLobbyView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("MY SIGNS")
                         .font(.system(size: 17, weight: .heavy, design: .rounded))
-                    Text(required > 0 ? "\(count) / \(required) added" : "No signs required")
+                    Text(required > 0 ? "\(count) / \(required) added\(state.gameset == nil ? "" : " · your share")"
+                         : state.gameset == nil ? "No signs required" : "The saved game covers the signs")
                         .font(.system(size: 13, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.75))
                 }
@@ -968,6 +978,8 @@ private struct GameLobbyView: View {
                     .buttonStyle(LobbyFilledButtonStyle())
                     .accessibilityLabel(done ? "Edit my signs" : "Add signs")
                 }
+
+                specialSignsRow
 
                 Divider().overlay(.white.opacity(0.15))
                 Label {
@@ -1000,6 +1012,33 @@ private struct GameLobbyView: View {
         .background(Color(red: 0.06, green: 0.09, blue: 0.11), in: RoundedRectangle(cornerRadius: 16))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("lobby.mySigns")
+    }
+
+    /// The red button (required to start) and the optional special signs.
+    private var specialSignsRow: some View {
+        let optional = SpecialSignSlot.all.filter { !$0.required && $0.station(in: state.stations) != nil }.count
+        return Button { buttonAudio.play(); showingSpecialSigns = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "light.beacon.max.fill")
+                    .foregroundStyle(state.hasRedButton ? Self.signsReady : .red)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(state.hasRedButton ? "Red button set" : "Add the red button")
+                        .font(.system(size: 13, weight: .heavy, design: .rounded))
+                    Text("\(optional) of \(SpecialSignSlot.all.count - 1) optional rooms")
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .background(Color(white: 0.12), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(state.hasRedButton ? Self.signsReady : .red, lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 4)
+        .accessibilityLabel(state.hasRedButton ? "Special signs, red button set" : "Special signs, red button needed")
     }
 
     private var signThumbnails: some View {
@@ -1124,7 +1163,8 @@ private struct LobbyPlayerStage: View {
             ForEach(Array(state.players.enumerated()), id: \.element.id) { index, player in
                 if visiblePlayerIDs.contains(player.id) {
                     let playerColor = player.color ?? PlayerColor.allCases[index % PlayerColor.allCases.count]
-                    let signs = min(state.signs(addedBy: player.id).count, state.requiredSigns)
+                    let required = state.requiredSigns(for: player.id)
+                    let signs = min(state.signs(addedBy: player.id).count, required)
                     VStack(spacing: 3) {
                         HStack(spacing: 3) {
                             if player.isHost {
@@ -1142,10 +1182,10 @@ private struct LobbyPlayerStage: View {
                         CrewmateView(color: playerColor, faceURL: store.faceURL(player.faceId), height: spriteHeight)
                             .opacity(player.connected ? 1 : 0.45)
 
-                        if state.requiredSigns > 0 && player.isBot != true {
-                            Text("\(signs)/\(state.requiredSigns) \(signs >= state.requiredSigns ? "✓" : "")")
+                        if required > 0 && player.isBot != true {
+                            Text("\(signs)/\(required) \(signs >= required ? "✓" : "")")
                                 .font(.system(size: 10, weight: .bold, design: .rounded))
-                                .foregroundStyle(signs >= state.requiredSigns ? .green : .yellow)
+                                .foregroundStyle(signs >= required ? .green : .yellow)
                                 .padding(.horizontal, 4)
                                 .background(.black.opacity(0.75), in: Capsule())
                         }
@@ -1159,7 +1199,7 @@ private struct LobbyPlayerStage: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityIdentifier("lobby.playerSprite.\(index)")
                     .accessibilityLabel("\(player.name) \(playerColor.rawValue) player icon\(player.isHost ? ", host" : "")")
-                    .accessibilityValue(player.connected ? (player.isBot == true ? "Bot" : "\(signs) of \(state.requiredSigns) signs") : "Disconnected")
+                    .accessibilityValue(player.connected ? (player.isBot == true ? "Bot" : "\(signs) of \(required) signs") : "Disconnected")
                 }
             }
         }
@@ -1706,7 +1746,10 @@ struct POCFloorPlan: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let projection = POCMapProjection(bounds: POCMapBounds.covering(rooms), size: geometry.size)
+            let projection = POCMapProjection(
+                bounds: POCMapBounds.covering(rooms, points: stations.map(\.position) + players.map(\.position)
+                    + [meetingPoint].compactMap { $0 }),
+                size: geometry.size)
             let visibleScale = min(max(zoomScale * gestureZoomScale, 1), 4)
             let visibleOffset = CGSize(
                 width: panOffset.width + gesturePanOffset.width,
@@ -1807,7 +1850,31 @@ struct POCFloorPlan: View {
                 .position(projection.point(room.center))
         }
 
-        ForEach(stations) { station in
+        ForEach(stations.filter { $0.style != .task }) { station in
+            // Every other sign: special signs by kind, other players' signs as small grey pins.
+            VStack(spacing: 2) {
+                Image(systemName: station.style.icon)
+                    .font(.system(size: station.style == .sign ? 9 : 11, weight: .black))
+                    .foregroundStyle(.white)
+                    .frame(width: station.style == .sign ? 18 : 26, height: station.style == .sign ? 18 : 26)
+                    .background(station.style.color, in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 1.5))
+                if station.style != .sign {
+                    Text(station.roomID)
+                        .font(.system(size: 7, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(.black.opacity(0.76), in: Capsule())
+                }
+            }
+            .scaleEffect(1 / zoomScale)
+            .position(projection.point(station.position))
+            .allowsHitTesting(false)
+            .accessibilityLabel("\(station.displayName) sign")
+        }
+
+        ForEach(stations.filter { $0.style == .task }) { station in
             let isCompleted = completedStationIDs.contains(station.id)
 
             Button {
@@ -2078,6 +2145,35 @@ struct POCMapBounds {
     let minY: CGFloat
     let maxY: CGFloat
 
+    /// The floor plan plus any pins and players near it. When everything is somewhere else entirely
+    /// (playing away from the SUB), frame those points instead so the map still shows them.
+    static func covering(_ rooms: [POCRoom], points: [CGPoint]) -> POCMapBounds {
+        let plan = covering(rooms)
+        let margin: CGFloat = 0.004 // ~400 m
+        let near = points.filter {
+            $0.x >= plan.minX - margin && $0.x <= plan.maxX + margin && $0.y >= plan.minY - margin && $0.y <= plan.maxY + margin
+        }
+        if !near.isEmpty || points.isEmpty { return near.reduce(plan) { $0.including($1) } }
+        var bounds = points.dropFirst().reduce(POCMapBounds(minX: points[0].x, maxX: points[0].x, minY: points[0].y, maxY: points[0].y)) {
+            $0.including($1)
+        }
+        // At least ~50 m across, so a single pin isn't zoomed in to nothing.
+        let minSpan: CGFloat = 0.00045
+        if bounds.maxX - bounds.minX < minSpan {
+            let mid = (bounds.minX + bounds.maxX) / 2
+            bounds = POCMapBounds(minX: mid - minSpan / 2, maxX: mid + minSpan / 2, minY: bounds.minY, maxY: bounds.maxY)
+        }
+        if bounds.maxY - bounds.minY < minSpan {
+            let mid = (bounds.minY + bounds.maxY) / 2
+            bounds = POCMapBounds(minX: bounds.minX, maxX: bounds.maxX, minY: mid - minSpan / 2, maxY: mid + minSpan / 2)
+        }
+        return bounds
+    }
+
+    func including(_ p: CGPoint) -> POCMapBounds {
+        POCMapBounds(minX: min(minX, p.x), maxX: max(maxX, p.x), minY: min(minY, p.y), maxY: max(maxY, p.y))
+    }
+
     static func covering(_ rooms: [POCRoom]) -> POCMapBounds {
         let coordinates = rooms.flatMap(\.rings).flatMap { $0 }
         guard let first = coordinates.first else {
@@ -2133,6 +2229,14 @@ struct POCMapProjection {
     /// Screen points for a distance on the ground, e.g. an uncertainty radius.
     func points(meters: Double) -> CGFloat {
         CGFloat(meters / 111_320) * scale
+    }
+
+    /// The reverse of `point`: x = longitude, y = latitude.
+    func coordinate(_ point: CGPoint) -> CGPoint {
+        CGPoint(
+            x: bounds.minX + (point.x - origin.x) / (longitudeCorrection * scale),
+            y: bounds.maxY - (point.y - origin.y) / scale
+        )
     }
 }
 
@@ -2258,6 +2362,50 @@ struct POCStation: Identifiable {
     let roomID: String
     let roomLabel: String
     let position: CGPoint
+    /// `.task` pins are this player's tasks (tappable); the rest show where every other sign is.
+    var style: POCPinStyle = .task
+}
+
+enum POCPinStyle: Equatable {
+    case task, sign, meeting, emergency, reactor, lights, security, admin
+
+    init(_ kind: StationKind) {
+        switch kind {
+        case .task: self = .sign
+        case .meeting: self = .meeting
+        case .emergency: self = .emergency
+        case .reactor: self = .reactor
+        case .electrical: self = .lights
+        case .security: self = .security
+        case .admin: self = .admin
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .task: "wrench.and.screwdriver.fill"
+        case .sign: "mappin"
+        case .meeting: "person.3.fill"
+        case .emergency: "light.beacon.max.fill"
+        case .reactor: "atom"
+        case .lights: "bolt.fill"
+        case .security: "video.fill"
+        case .admin: "map.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .task: .orange
+        case .sign: Color(white: 0.45)
+        case .meeting: .blue
+        case .emergency: .red
+        case .reactor: Color(red: 0.2, green: 0.75, blue: 0.95)
+        case .lights: Color(red: 0.95, green: 0.75, blue: 0.1)
+        case .security: Color(red: 0.55, green: 0.45, blue: 0.95)
+        case .admin: Color(red: 0.25, green: 0.7, blue: 0.45)
+        }
+    }
 }
 
 struct POCCheckpoint {

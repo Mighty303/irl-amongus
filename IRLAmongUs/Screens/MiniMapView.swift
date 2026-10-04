@@ -69,12 +69,6 @@ struct MiniMapView: View {
     }
 
     private func icon(_ s: Station) -> String {
-        switch s.kind {
-        case .meeting: return "person.3.fill"
-        case .emergency: return "light.beacon.max.fill"
-        case .reactor: return "atom"
-        case .electrical: return "bolt.fill"
-        case .task: return myTaskStations[s.id] != nil ? "exclamationmark" : "mappin"
-        }
+        s.kind == .task && myTaskStations[s.id] != nil ? "exclamationmark" : s.kind.icon
     }
 }
