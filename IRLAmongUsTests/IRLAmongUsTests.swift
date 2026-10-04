@@ -319,3 +319,12 @@ struct TaskTypeDecodingTests {
         #expect(!TaskType.allCases.contains(.unknown))
     }
 }
+
+struct MiniGameRandomnessTests {
+    @Test func wiringIsShuffledDifferentlyAndNeverStartsSolved() {
+        let deals = (0..<500).map { _ in WiringGame.shuffledColors() }
+        #expect(!deals.contains([0, 1, 2, 3]))
+        #expect(deals.allSatisfy { $0.sorted() == [0, 1, 2, 3] })
+        #expect(Set(deals).count == 23, "every non-solved order shows up")
+    }
+}

@@ -18,7 +18,7 @@ struct WiringGame: View {
     private static let rightEnd = CGPoint(x: 452, y: 0)
 
     /// Color of each left slot. The right slots are in color order.
-    @State private var left = Array(0..<4).shuffled()
+    @State private var left = WiringGame.shuffledColors()
     /// Left slot -> right slot it's plugged into.
     @State private var links: [Int: Int] = [:]
     @State private var drag: (slot: Int, point: CGPoint)?
@@ -53,6 +53,13 @@ struct WiringGame: View {
             }
             .coordinateSpace(name: "wires")
         }
+    }
+
+    /// A fresh random order every time the panel opens, never already lined up with the right side.
+    static func shuffledColors() -> [Int] {
+        var order: [Int]
+        repeat { order = Array(0..<4).shuffled() } while order == Array(0..<4)
+        return order
     }
 
     private func end(of slot: Int) -> CGPoint? {
