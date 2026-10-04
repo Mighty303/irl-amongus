@@ -336,6 +336,7 @@ struct HUDMapSquare: View {
                 myFaceURL: store.faceURL(state.player(state.me.id)?.faceId),
                 isGhost: !state.me.alive,
                 crisis: crisis,
+                myBody: state.me.isBody ? (store.deathSpot ?? center, PlayerColor.rosterColor(for: state.me.id, in: state.players) ?? .red) : nil,
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }
                     else { selectSign(station.id.hasPrefix("sab-") ? String(station.id.dropFirst(4)) : station.id) }
@@ -361,8 +362,9 @@ struct HUDMapSquare: View {
                 }
             }
             .overlay(alignment: .bottom) {
-                if !state.me.alive {
-                    Text(state.me.isBody ? "YOU WERE KILLED · stay put until your body is found" : "YOU ARE DEAD · finish your tasks")
+                // A body gets a blinking notice instead (BodyNotice); ghosts keep this reminder.
+                if !state.me.alive && !state.me.isBody {
+                    Text("YOU ARE DEAD · finish your tasks")
                         .font(.system(size: 11, weight: .black, design: .rounded)).foregroundStyle(.white)
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(.black.opacity(0.75), in: Capsule())
@@ -467,6 +469,8 @@ struct HUDMapSquare: View {
     /// What the map keeps in the middle: your live position, else your last check-in, else the red
     /// button or the play area's building.
     private func mapCenter(_ campus: CampusView) -> (CGPoint, Bool) {
+        // Killed and not found yet: the map stays on your body instead of following you.
+        if state.me.isBody, let spot = store.deathSpot { return (spot, false) }
         if let position = LocalMapTracking.coordinate(local: store.positions.estimate,
                 positions: store.livePositions, playerID: state.me.id, serverNow: store.serverNow()) {
             return (position, true)

@@ -28,6 +28,8 @@ struct FollowFloorMap: View {
     var isGhost = false
     /// A reactor or O2 sabotage: the arrows point at its signs and flash red, like Among Us.
     var crisis = false
+    /// You were killed and nobody's found you yet: your body where you fell, in your colour.
+    var myBody: (position: CGPoint, color: PlayerColor)? = nil
     let onSelectStation: (POCStation) -> Void
 
     /// Meters across the shorter side: a little over a room's width. Fixed for the living, so nobody can
@@ -102,6 +104,15 @@ struct FollowFloorMap: View {
                     }
                     ForEach(stations.filter { $0.style != .sign }) { station in
                         pin(station).position(projection.point(station.position))
+                    }
+                    if let myBody {
+                        Image(uiImage: BodyReportArtwork.corpse(color: myBody.color))
+                            .resizable().interpolation(.high).scaledToFit()
+                            .frame(width: 56, height: 36)
+                            .shadow(color: .black.opacity(0.7), radius: 3)
+                            .position(projection.point(myBody.position))
+                            .allowsHitTesting(false)
+                            .accessibilityLabel("Your body")
                     }
                 }
                 .frame(width: big.width, height: big.height)
