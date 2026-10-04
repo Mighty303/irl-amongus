@@ -137,7 +137,7 @@ final class PositionEstimator {
     /// The game's play area: assumed until a sign check-in says otherwise.
     @ObservationIgnored var playArea: CampusPlace?
     /// Which way to work out position (Settings).
-    @ObservationIgnored var mode: PositionMode = .steps
+    @ObservationIgnored var mode: PositionMode = .ar
     @ObservationIgnored private var arTrackingAt: Date?
     @ObservationIgnored private var lastARMoveAt: Date?
     /// True north minus magnetic north, degrees, from Core Location (the motion sensors only know magnetic north).

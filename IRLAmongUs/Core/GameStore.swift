@@ -112,7 +112,7 @@ final class GameStore {
         preferredFaceId = defaults.string(forKey: "preferredFaceId")
         signThreshold = defaults.object(forKey: "signThreshold") as? Float ?? 0.6
         demoModeEnabled = defaults.bool(forKey: "demoModeEnabled")
-        positionMode = defaults.string(forKey: "positionMode").flatMap(PositionMode.init(rawValue:)) ?? .steps
+        positionMode = defaults.string(forKey: "positionMode").flatMap(PositionMode.init(rawValue:)) ?? .ar
         if restoresSession, let data = defaults.data(forKey: "session") {
             session = try? JSONDecoder().decode(Session.self, from: data)
         }
