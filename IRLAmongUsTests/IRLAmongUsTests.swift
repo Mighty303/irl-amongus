@@ -900,3 +900,26 @@ struct CampusDefaultFloorTests {
         #expect(CampusBuilding(id: "AQ", name: "AQ", bounds: bounds, floors: floors).mainFloor.id == "10")
     }
 }
+
+struct StepDetectorTests {
+    private func count(_ signal: (Double) -> Double, seconds: Double) -> Int {
+        var detector = StepDetector()
+        var steps = 0
+        for i in 0..<Int(seconds * 50) {
+            let t = Double(i) / 50
+            if detector.add(signal(t), at: t) { steps += 1 }
+        }
+        return steps
+    }
+
+    @Test func walkingBouncesCountAsOneStepEach() {
+        // ~2 steps a second, the bounce of a phone held in front while walking (and a firmer one).
+        #expect(count({ 0.15 * sin(2 * .pi * 2 * $0) }, seconds: 5) == 10)
+        #expect(count({ 0.35 * sin(2 * .pi * 1.8 * $0) }, seconds: 5) == 9)
+    }
+
+    @Test func standingStillAndHandJitterAreNotSteps() {
+        #expect(count({ _ in 0 }, seconds: 5) == 0)
+        #expect(count({ 0.04 * sin(2 * .pi * 6 * $0) }, seconds: 5) == 0)
+    }
+}

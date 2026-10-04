@@ -3,10 +3,10 @@ import SwiftUI
 extension GameStore {
     /// Map dots while live positions are on: everyone from the server, with this phone's own estimate
     /// (fresher than the server's copy) for YOU. Empty when it's off.
-    func liveDots(state: GameState, campus: CampusView = CampusView()) -> [POCPlayerDot] {
-        guard livePositionsOn else { return [] }
+    func liveDots(state: GameState, campus: CampusView = CampusView(), includeMine: Bool = false) -> [POCPlayerDot] {
+        guard livePositionsOn || includeMine else { return [] }
         var dots: [POCPlayerDot] = livePositions.compactMap { pos in
-            guard pos.playerId != state.me.id, let player = state.player(pos.playerId) else { return nil }
+            guard livePositionsOn, pos.playerId != state.me.id, let player = state.player(pos.playerId) else { return nil }
             // Faded when quiet, or on another floor than the map shows.
             return POCPlayerDot(id: pos.playerId, name: player.name, color: (player.color ?? .white).swatch,
                                 position: CGPoint(x: pos.lng, y: pos.lat), accuracyM: pos.accuracyM, isMe: false,
@@ -38,6 +38,8 @@ struct LiveMapView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
+        .onAppear { store.liveMapOpen = true }
+        .onDisappear { store.liveMapOpen = false }
     }
 
     private func content(_ state: GameState) -> some View {
@@ -55,7 +57,7 @@ struct LiveMapView: View {
                     selectedStation: nil,
                     ownLastCheckpoint: checkpoint(state),
                     onSelectStation: { _ in },
-                    players: store.liveDots(state: state, campus: campus)
+                    players: store.liveDots(state: state, campus: campus, includeMine: true)
                 )
                 .frame(width: landscape ? min(geo.size.height, geo.size.width * 0.56) : nil,
                        height: landscape ? nil : min(geo.size.width, geo.size.height * 0.5))
@@ -91,6 +93,14 @@ struct LiveMapView: View {
                 }
                 .pickerStyle(.segmented)
                 Text(store.positionMode.detail).font(.caption).foregroundStyle(.secondary)
+                if state.hasRedButton {
+                    Button { store.startAtRedButton() } label: {
+                        Label("I'm at the red button", systemImage: "light.beacon.max.fill")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                }
                 you
                 if store.livePositionsOn { others(state) }
                 Text("Each sign scan pins you exactly. Hold the phone in front of you while walking (flat or upright, either works) so movement follows it; in a pocket, steps only widen the circle. To compare modes, walk the same route between two signs in each and note how far off the dot is before you scan. Dots fade when a phone goes quiet.")
@@ -115,7 +125,7 @@ struct LiveMapView: View {
                 }
                 sourcesRow(e.sources)
             } else {
-                Text("No estimate yet. Start the game at the red button, scan a sign, or wait for GPS.").font(.subheadline).foregroundStyle(.secondary)
+                Text("No estimate yet. Tap I'm at the red button, scan a sign, or wait for GPS.").font(.subheadline).foregroundStyle(.secondary)
             }
             if let message = store.location.statusMessage {
                 Text(message).font(.caption).foregroundStyle(.red)
@@ -125,7 +135,11 @@ struct LiveMapView: View {
                     : store.campus.loading ? "Downloading the SFU campus…" : "SUB only until the campus downloads")
                 row("Last sign", d.lastFixName.map { name in "\(name) · \(ago(d.lastFixAt))" } ?? "none yet")
                 row("Since then", "\(d.stepsSinceFix) steps · \(meters(d.metersSinceFix))"
-                    + (d.stepsAvailable ? "" : " (no step counter)"))
+                    + (store.positionMode == .gps ? (d.stepsAvailable ? "" : " (no step counter)")
+                        : String(format: " · %.2f m stride", d.strideM)))
+                if store.positionMode != .gps, let direction = d.lastStepDirection {
+                    row("Last step", direction)
+                }
                 if let ar = d.arState {
                     row("AR", "\(ar) · \(meters(d.arMetersSinceFix)) tracked")
                 }
