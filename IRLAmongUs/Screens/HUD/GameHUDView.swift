@@ -278,6 +278,8 @@ struct HUDMapSquare: View {
     /// Ghosts: open everyone's cameras.
     var spectate: () -> Void = {}
 
+    @State private var showingTaskMap = false
+
     private struct Pin {
         let station: POCStation
         let taskId: String
@@ -349,6 +351,19 @@ struct HUDMapSquare: View {
                         .padding(10)
                 }
             }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            Button { showingTaskMap = true } label: {
+                Image(systemName: "map.fill").font(.system(size: 19, weight: .bold))
+                    .foregroundStyle(.white).frame(width: 44, height: 44)
+                    .background(.black.opacity(0.8), in: Circle())
+                    .overlay(Circle().stroke(.white.opacity(0.8), lineWidth: 2))
+            }
+            .buttonStyle(.plain).padding(10)
+            .accessibilityLabel("Open task map").accessibilityIdentifier("hud.openTaskMap")
+        }
+        .fullScreenCover(isPresented: $showingTaskMap) {
+            TaskMapOverviewView(state: state, selectTask: selectTask)
         }
     }
 

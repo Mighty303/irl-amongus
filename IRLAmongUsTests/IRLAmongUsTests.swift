@@ -1001,3 +1001,38 @@ struct CenterPinTests {
         #expect(abs(tip - 149) <= 2, "the tip is at row \(tip), not the centre")
     }
 }
+
+struct TaskMapOverviewTests {
+    @Test func spreadOutTasksFitWithMarginInBothOrientations() {
+        let points = [CGPoint(x: -122.94, y: 49.28), CGPoint(x: -122.90, y: 49.27), CGPoint(x: -122.92, y: 49.29)]
+        for size in [CGSize(width: 800, height: 300), CGSize(width: 300, height: 800)] {
+            let viewport = TaskMapViewport(points: points, fallback: .zero, size: size)
+            for point in points {
+                let projected = viewport.projection.point(point)
+                #expect(projected.x >= 48 && projected.x <= size.width - 48)
+                #expect(projected.y >= 48 && projected.y <= size.height - 48)
+            }
+        }
+    }
+
+    @Test func singleStationIsCenteredAndInvalidCoordinatesAreIgnored() {
+        let point = CGPoint(x: -122.92, y: 49.28)
+        let viewport = TaskMapViewport(points: [point, point, CGPoint(x: CGFloat.nan, y: 49)],
+                                      fallback: .zero, size: CGSize(width: 600, height: 400))
+        let projected = viewport.projection.point(point)
+        #expect(abs(projected.x - 300) < 0.001)
+        #expect(abs(projected.y - 200) < 0.001)
+        #expect(viewport.projection.pointsPerMeter.isFinite)
+        let empty = TaskMapViewport(points: [], fallback: point, size: CGSize(width: 600, height: 400))
+        #expect(empty.projection.point(point) == CGPoint(x: 300, y: 200))
+    }
+
+    @Test func onlyRemainingStepsHaveTaskMarkers() {
+        let delivery = GameTask(id: "delivery", type: .delivery, steps: ["pickup", "dropoff"], step: 0, completed: false, startedAt: nil)
+        #expect(delivery.remainingStationIDs == ["pickup", "dropoff"])
+        let second = GameTask(id: "delivery", type: .delivery, steps: delivery.steps, step: 1, completed: false, startedAt: nil)
+        #expect(second.remainingStationIDs == ["dropoff"])
+        let finished = GameTask(id: "delivery", type: .delivery, steps: delivery.steps, step: 1, completed: true, startedAt: nil)
+        #expect(finished.remainingStationIDs.isEmpty)
+    }
+}

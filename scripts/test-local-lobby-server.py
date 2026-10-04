@@ -48,6 +48,12 @@ players = []
 phase = 'LOBBY'
 events = []
 kill_cooldown_until = None
+task_map_test = os.environ.get('LOCAL_LOBBY_TEST_TASK_MAP') == '1'
+map_stations = [dict(id=id, name=name, kind='task', lat=lat, lng=lng, radiusM=15, signText=None, photoId=None, addedBy='ben')
+    for id, name, lat, lng in [('near', 'Near task', 49.2785, -122.9183), ('far', 'Far task', 49.2805, -122.9093), ('done', 'Done task', 49.2795, -122.9133)]]
+map_stations.append(dict(id='button', name='Red button', kind='emergency', lat=49.2785, lng=-122.9183, radiusM=15, signText=None, photoId=None, addedBy='ben'))
+map_tasks = [dict(id='delivery', type='delivery', steps=['near', 'far'], step=0, completed=False, startedAt=None),
+             dict(id='finished', type='wiring', steps=['done'], step=0, completed=True, startedAt=None)]
 role = os.environ.get('LOCAL_LOBBY_TEST_ROLE', 'crewmate')
 
 def snapshot():
@@ -59,7 +65,7 @@ def snapshot():
         phaseDeadline=time.time() * 1000 + 30000,
         hostId=os.environ.get('LOCAL_LOBBY_TEST_HOST_ID', 'ben'),
         settings=settings,
-        stations=[],
+        stations=map_stations if task_map_test else [],
         players=players,
         taskProgress=dict(
             done=0,
@@ -74,7 +80,7 @@ def snapshot():
             ackedRole=False,
             bleToken='00000000-0000-0000-0000-000000000001',
             qrToken='test-qr',
-            tasks=[],
+            tasks=map_tasks if task_map_test and phase == "PLAYING" else [],
             lastCheckpoint=None,
             emergencyLeft=1,
             hasVoted=False,
