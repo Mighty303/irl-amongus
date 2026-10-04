@@ -41,7 +41,9 @@ final class GameStore {
 
     @ObservationIgnored private let killAudio = KillAudioPlayer()
     @ObservationIgnored private var deathSound = DeathSoundState()
-    @ObservationIgnored private var initializedCooldownForLobby: String?
+    @ObservationIgnored private var initializedCooldownForLobby: String? {
+        didSet { preferences.set(initializedCooldownForLobby, forKey: "initializedKillCooldownLobby") }
+    }
     @ObservationIgnored private let preferences: UserDefaults
     @ObservationIgnored private let httpSession: URLSession
     @ObservationIgnored private var socket: URLSessionWebSocketTask?
@@ -54,6 +56,7 @@ final class GameStore {
     init(defaults: UserDefaults = .standard, httpSession: URLSession = .shared, restoresSession: Bool = true) {
         self.preferences = defaults
         self.httpSession = httpSession
+        initializedCooldownForLobby = defaults.string(forKey: "initializedKillCooldownLobby")
         // Saved addresses from local testing (Cloudflare quick tunnels, the old LAN placeholder) are dead;
         // move them to the hosted server. Any other saved address (e.g. a laptop on purpose) is kept.
         let saved = defaults.string(forKey: "serverURL")
