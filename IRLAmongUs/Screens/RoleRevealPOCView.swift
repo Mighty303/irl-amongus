@@ -21,7 +21,8 @@ struct RoleRevealPOCView: View {
                         Color.black.ignoresSafeArea()
                         if let role {
                             if revealed {
-                                RoleRevealArtwork(role: role, impostorCount: 1)
+                                RoleRevealArtwork(role: role, impostorCount: role == .impostor ? 2 : 1,
+                                                  players: RoleRevealPlayer.preview(for: role))
                             } else {
                                 RoleRevealIntroView {
                                     revealed = true
@@ -94,9 +95,40 @@ struct RoleRevealPOCView: View {
     }
 }
 
+/// Resolve colors before reordering so older servers match the lobby's fallback palette.
+struct RoleRevealPlayer: Identifiable, Equatable {
+    let id: String
+    let name: String
+    let color: PlayerColor
+
+    static func lineup(from players: [PlayerView], localID: String, role: Role) -> [Self] {
+        let visible = players.enumerated().compactMap { index, player -> Self? in
+            guard role == .crewmate || player.id == localID || player.role == .impostor else { return nil }
+            return Self(id: player.id, name: player.name,
+                        color: player.color ?? PlayerColor.allCases[index % PlayerColor.allCases.count])
+        }
+        return visible.filter { $0.id == localID } + visible.filter { $0.id != localID }
+    }
+
+    static func preview(for role: Role) -> [Self] {
+        let colors: [PlayerColor] = role == .impostor
+            ? [.red, .purple]
+            : [.red, .blue, .green, .pink, .orange, .yellow, .black, .white, .purple, .brown]
+        var players = colors.enumerated().map { index, color in
+            Self(id: "preview-\(index)", name: index == 0 ? "You" : "Player \(index + 1)", color: color)
+        }
+        #if DEBUG
+        let count = UserDefaults.standard.integer(forKey: "roleRevealPlayerCount")
+        if count > 0 { players = Array(players.prefix(count)) }
+        #endif
+        return players
+    }
+}
+
 struct RoleRevealArtwork: View {
     let role: Role
     let impostorCount: Int
+    let players: [RoleRevealPlayer]
     private var color: Color { role == .impostor ? Color(red: 0.78, green: 0, blue: 0.1) : .cyan }
 
     var body: some View {
@@ -123,9 +155,60 @@ struct RoleRevealArtwork: View {
                         .foregroundStyle(.white)
                         .position(x: size.width / 2, y: size.height * 0.43)
                 }
+                RoleRevealLineup(players: players, showsNames: role == .impostor)
+                    .frame(width: size.width * 0.85, height: size.height * 0.4)
+                    .position(x: size.width / 2, y: size.height * 0.7)
             }
         }
         .accessibilityElement(children: .contain)
+    }
+}
+
+/// Staggered, overlapping rows keep the local player in front, like the game reveal.
+private struct RoleRevealLineup: View {
+    let players: [RoleRevealPlayer]
+    let showsNames: Bool
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            // Small lobbies need room for each whole sprite instead of overlapping rows.
+            let sideBySide = showsNames || players.count <= 2
+            let rows = max(1, Int(ceil(Double(players.count - 1) / 2)))
+            let height = min(size.height * (showsNames ? 0.8 : 0.92),
+                             size.width / (sideBySide ? CGFloat(max(2, players.count)) * 0.85 : 2))
+            let spacing = min(height * 0.43, (size.width - height * 0.8) / CGFloat(rows * 2))
+            ZStack {
+                ForEach(Array(players.enumerated()), id: \.element.id) { index, player in
+                    let row = (index + 1) / 2
+                    let direction: CGFloat = index == 0 ? 0 : (index.isMultiple(of: 2) ? 1 : -1)
+                    let scale = sideBySide ? 1 : max(0.52, 1 - CGFloat(row) * 0.09)
+                    let x = sideBySide
+                        ? size.width / 2 + (CGFloat(index) - CGFloat(players.count - 1) / 2) * height * 0.85
+                        : size.width / 2 + direction * CGFloat(row) * spacing
+                    VStack(spacing: 0) {
+                        Image(player.color.lobbyAssetName)
+                            .resizable()
+                            .interpolation(.high)
+                            .scaledToFit()
+                            .frame(height: height * scale)
+                        if showsNames {
+                            Text(player.name)
+                                .font(.system(size: max(11, size.height * 0.085), weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                                .shadow(color: .black, radius: 2)
+                        }
+                    }
+                    .frame(width: height * 0.8)
+                    .position(x: x, y: size.height / 2 - (sideBySide ? 0 : CGFloat(row) * height * 0.025))
+                    .zIndex(Double(players.count - index))
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(player.name), \(player.color.rawValue)")
+                    .accessibilityIdentifier("roles.player.\(player.id)")
+                }
+            }
+        }
     }
 }
 

@@ -363,10 +363,11 @@ extension IRLAmongUsUITests {
 extension IRLAmongUsUITests {
     @MainActor
     func testRoleRevealAutomaticallyOpensMapForBothRoles() {
-        for role in ["crewmate", "impostor"] {
+        for (role, playerCount) in [("crewmate", 10), ("crewmate", 2), ("impostor", 2)] {
             XCUIDevice.shared.orientation = .landscapeLeft
             let app = XCUIApplication()
             app.launchArguments += ["-disableAudio", "-showDeveloperMenu", "-session", ""]
+            app.launchArguments += ["-roleRevealPlayerCount", String(playerCount)]
             app.launch()
             let open = app.buttons["developer.openRoles"]
             XCTAssertTrue(open.waitForExistence(timeout: 5))
@@ -378,10 +379,20 @@ extension IRLAmongUsUITests {
             XCTAssertFalse(app.buttons["roles.close"].exists)
             let title = app.descendants(matching: .any)["roles.title"].firstMatch
             XCTAssertTrue(title.waitForExistence(timeout: 8))
+            let lineup = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "roles.player."))
+            XCTAssertEqual(lineup.count, playerCount)
+            XCTAssertEqual(app.otherElements["roles.player.preview-0"].label, "You, red")
+            if role == "crewmate" && playerCount == 2 {
+                let local = app.otherElements["roles.player.preview-0"].frame
+                let other = app.otherElements["roles.player.preview-1"].frame
+                XCTAssertGreaterThan(local.width, 0)
+                XCTAssertGreaterThan(other.width, 0)
+                XCTAssertFalse(local.intersects(other), "Both crewmates must remain fully visible in a two-player lobby")
+            }
             XCTAssertFalse(app.buttons["roles.replay"].exists)
             XCTAssertFalse(app.buttons["Leave Game"].exists)
             XCTAssertFalse(app.staticTexts["PHYSICAL MAP"].exists)
-            captureVoting(app, name: role == "crewmate" ? "Crewmate role reveal" : "Impostor role reveal")
+            captureVoting(app, name: "\(role) role reveal, \(playerCount) players")
             XCTAssertTrue(app.staticTexts["PHYSICAL MAP"].waitForExistence(timeout: 5))
             let portrait = NSPredicate { _, _ in
                 app.windows.firstMatch.frame.height > app.windows.firstMatch.frame.width
