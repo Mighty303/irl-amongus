@@ -301,6 +301,8 @@ private struct LocalLobbyView: View {
     @Environment(GameStore.self) private var store
     @State private var code = ""
     @State private var scanning = false
+    @State private var scannedLobbyPayload: String?
+    @State private var showingJoinName = false
     @State private var serverStatus: String?
 
     var body: some View {
@@ -322,7 +324,11 @@ private struct LocalLobbyView: View {
             }
         }
         .onChange(of: store.pendingJoinCode, initial: true) { _, pending in
-            if let pending { code = pending; store.pendingJoinCode = nil }
+            if let pending {
+                code = pending
+                store.pendingJoinCode = nil
+                showingJoinName = store.playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
         }
     }
 
@@ -427,13 +433,18 @@ private struct LocalLobbyView: View {
             .clipped()
         }
         .background(Color.black)
-        .sheet(isPresented: $scanning) {
+        .sheet(isPresented: $scanning, onDismiss: {
+            guard let payload = scannedLobbyPayload else { return }
+            scannedLobbyPayload = nil
+            Task { await store.handleLobbyQRCode(payload) }
+        }) {
             QRScanSheet(title: "Scan lobby QR") { payload in
-                guard case let .join(roomCode, server)? = QRPayload(payload) else { return }
-                if let server { store.serverURLString = server }
-                code = roomCode
+                scannedLobbyPayload = payload
                 scanning = false
             }
+        }
+        .sheet(isPresented: $showingJoinName) {
+            LobbyJoinNameSheet(code: code)
         }
         .alert("Unable to connect", isPresented: Binding(
             get: { store.errorMessage != nil },

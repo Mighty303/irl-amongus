@@ -176,19 +176,37 @@ final class GameStore {
         }
     }
 
-    /// Handles `irlau://join?...` links (lobby QR scanned with the system camera or in-app).
-    func handle(url: URL) {
-        guard case let .join(code, server)? = QRPayload(url.absoluteString) else { return }
+    /// Handles lobby invites from the in-app scanner or the system camera.
+    func handle(url: URL) async {
+        await handleLobbyQRCode(url.absoluteString)
+    }
+
+    func handleLobbyQRCode(_ payload: String) async {
+        guard case let .join(code, server)? = QRPayload(payload) else {
+            errorMessage = "Scan a lobby invite QR code. Station and player codes cannot join a game."
+            return
+        }
         guard session == nil, !isEnteringLobby else {
             errorMessage = "Leave your current game before joining another lobby."
             return
         }
         guard Self.isValidRoomCode(code) else { errorMessage = "Enter a four-character room code."; return }
-        if let server { serverURLString = server }
-        pendingJoinCode = Self.normalizedRoomCode(code)
+        if let server {
+            guard Self.validatedServerURL(server) != nil else {
+                errorMessage = "This lobby QR contains an invalid server address."
+                return
+            }
+            serverURLString = server
+        }
+        errorMessage = nil
+        let normalizedCode = Self.normalizedRoomCode(code)
+        pendingJoinCode = normalizedCode
+        // The picker asks for a name on a fresh install, then joins this same invite.
+        guard !playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        await joinGame(code: normalizedCode)
     }
 
-    /// Set when a join link arrives; the LOCAL picker and HomeView prefill the code field from it.
+    /// Opens the LOCAL picker and preserves the scanned invite while requesting a name.
     var pendingJoinCode: String?
 
     func leave() {
