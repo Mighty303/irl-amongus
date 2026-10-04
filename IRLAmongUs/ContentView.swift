@@ -314,7 +314,7 @@ private struct LocalLobbyView: View {
     @State private var scanning = false
     @State private var scannedLobbyPayload: String?
     @State private var showingJoinName = false
-    @State private var joining = false
+    @FocusState private var codeFocused: Bool
     @State private var showingNameEditor = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -340,7 +340,6 @@ private struct LocalLobbyView: View {
         .onChange(of: store.pendingJoinCode, initial: true) { _, pending in
             if let pending {
                 code = pending
-                joining = true
                 store.pendingJoinCode = nil
                 showingJoinName = store.playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             }
@@ -349,45 +348,49 @@ private struct LocalLobbyView: View {
 
     private var localGamePicker: some View {
         GeometryReader { geometry in
-            let referenceSize = CGSize(width: 828, height: 1792)
-            let scale = max(
-                geometry.size.width / referenceSize.width,
-                geometry.size.height / referenceSize.height
-            )
-            let artworkSize = CGSize(
-                width: referenceSize.width * scale,
-                height: referenceSize.height * scale
-            )
-            let origin = CGPoint(
-                x: (geometry.size.width - artworkSize.width) / 2,
-                y: (geometry.size.height - artworkSize.height) / 2
-            )
+            let size = geometry.size
+            // Same star mapping as the game lobby, so the two screens match.
+            let screenStars = stars.map {
+                Star(x: $0.x / 828 * size.width, y: $0.y / 1792 * size.height,
+                     radius: $0.radius * 0.4, phase: $0.phase, speed: $0.speed)
+            }
 
             ZStack(alignment: .topLeading) {
                 Color.black
 
-                TwinklingStarfield(stars: stars, scale: scale)
-                    .frame(width: artworkSize.width, height: artworkSize.height)
-                    .offset(x: origin.x, y: origin.y)
-                    .frame(width: geometry.size.width, height: geometry.size.height)
-                    .clipped()
+                TwinklingStarfield(stars: screenStars, scale: 1)
+                    .frame(width: size.width, height: size.height)
+                    .allowsHitTesting(false)
+
+                FloatingMenuCrewmate()
+                    .frame(width: 120, height: 80)
+                    .position(x: size.width * 0.66, y: 46)
                     .allowsHitTesting(false)
 
                 if dynamicTypeSize.isAccessibilitySize {
                     ScrollView {
                         pickerContent(compact: false)
-                            .frame(minHeight: geometry.size.height - 24)
+                            .frame(minHeight: size.height - 24)
                             .padding(12)
                     }
                 } else {
-                    pickerContent(compact: geometry.size.height < 340)
+                    pickerContent(compact: size.height < 340)
                         .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
+                        .padding(.top, 14)
+                        .padding(.bottom, 10)
+                }
+
+                if showingNameEditor {
+                    LocalPlayerNameEditor { showingNameEditor = false }
+                        .transition(.opacity)
                 }
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+            .frame(width: size.width, height: size.height)
             .clipped()
+            .animation(.easeOut(duration: 0.2), value: showingNameEditor)
         }
+        // The name popup sits above the keyboard, so the screen behind it stays put.
+        .ignoresSafeArea(.keyboard)
         .background(Color.black)
         .sheet(isPresented: $scanning, onDismiss: {
             guard let payload = scannedLobbyPayload else { return }
@@ -398,9 +401,6 @@ private struct LocalLobbyView: View {
                 scannedLobbyPayload = payload
                 scanning = false
             }
-        }
-        .sheet(isPresented: $showingNameEditor) {
-            LocalPlayerNameEditor()
         }
         .sheet(isPresented: $showingJoinName) {
             LobbyJoinNameSheet(code: code)
@@ -420,27 +420,41 @@ private struct LocalLobbyView: View {
         }
     }
 
-    private var panelColor: Color { Color(red: 0.07, green: 0.12, blue: 0.19) }
-    private var accentColor: Color { Color(red: 0.60, green: 0.90, blue: 0.80) }
+    // The lobby's look: dark cards with a light border, black buttons with a white border, the teal START.
+    private static let cardColor = Color(white: 0.12)
+    private static let fieldColor = Color(white: 0.07)
+    private static let startColor = Color(red: 0.52, green: 0.64, blue: 0.62)
+
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .padding(14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Self.cardColor, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(.white.opacity(0.35), lineWidth: 1.5))
+    }
 
     private func pickerContent(compact: Bool) -> some View {
-        VStack(spacing: 8) {
-            HStack {
+        VStack(spacing: compact ? 8 : 12) {
+            HStack(spacing: 14) {
                 Button {
                     buttonAudio.play()
                     onBack()
                 } label: {
-                    Label("Back", systemImage: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .frame(minWidth: 68, minHeight: 44)
-                        .contentShape(Rectangle())
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 20, weight: .bold))
+                        .frame(width: 48, height: 48)
                 }
+                .buttonStyle(LobbyCircleButtonStyle())
+                .accessibilityLabel("Back")
                 .accessibilityHint("Returns to the main menu")
-                Spacer()
-                Text("LOCAL")
-                    .font(.system(size: 25, weight: .medium, design: .rounded))
-                    .tracking(3)
-                    .accessibilityAddTraits(.isHeader)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("IRL AMONG US")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.7))
+                    Text("LOCAL")
+                        .font(.system(size: compact ? 26 : 31, weight: .light, design: .rounded))
+                        .accessibilityAddTraits(.isHeader)
+                }
                 Spacer()
                 Button {
                     buttonAudio.play()
@@ -449,193 +463,204 @@ private struct LocalLobbyView: View {
                         message: "Create a Classic game and share its room code or QR. To join, enter the host’s code or scan their lobby QR. Everyone uses the hosted game server. Nearby discovery is coming soon."
                     )
                 } label: {
-                    Image(systemName: "questionmark.circle")
-                        .font(.system(size: 26))
-                        .frame(width: 68, height: 44)
+                    Image("HelpMenuIcon").resizable().frame(width: 48, height: 48)
                 }
+                .buttonStyle(.plain)
                 .accessibilityLabel("Local play help")
             }
-            .buttonStyle(.plain)
             .disabled(store.isEnteringLobby)
 
-            GeometryReader { geometry in
-                HStack(spacing: 16) {
-                    playerPanel(compact: compact)
-                        .frame(width: min(220, max(160, geometry.size.width * 0.30)))
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 4) {
-                            modeTab("Create game", join: false)
-                            modeTab("Join game", join: true)
-                        }
-                        .padding(4)
-                        .background(panelColor, in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.3)))
-                        actionPanel(compact: compact)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }
+            HStack(spacing: 16) {
+                crewmateCard(compact: compact)
+                    .frame(width: compact ? 190 : 220)
+                createCard(compact: compact)
+                joinCard(compact: compact)
             }
-            .frame(minHeight: compact ? 212 : 242)
+            .frame(maxHeight: .infinity)
 
             HStack {
                 if store.isEnteringLobby {
-                    ProgressView("Connecting…")
+                    ProgressView("Connecting…").tint(.white)
                 } else {
-                    Label("Play together in person", systemImage: "person.2.fill")
+                    Text("Play together in person")
                 }
                 Spacer()
                 Text("v1.0 (build 1)")
             }
             .font(.system(size: 11, design: .rounded))
-            .foregroundStyle(.white.opacity(0.65))
-            .frame(minHeight: 16)
+            .foregroundStyle(.white.opacity(0.62))
+            .frame(minHeight: 14)
         }
         .foregroundStyle(.white)
     }
 
-    private func playerPanel(compact: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image("RedCrewmate")
-                .resizable()
-                .scaledToFit()
-                .frame(height: compact ? 44 : 64)
-                .frame(maxWidth: .infinity)
-                .accessibilityHidden(true)
-            Text("YOUR USERNAME")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .tracking(1.5)
-                .foregroundStyle(Color(red: 0.69, green: 0.82, blue: 0.92))
-            Text(store.playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Enter name" : store.playerName)
-                .font(.system(size: 23, weight: .bold, design: .rounded))
-                .lineLimit(1)
-                .minimumScaleFactor(0.65)
-                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                .padding(.horizontal, 10)
-                .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.3)))
-                .accessibilityIdentifier("local.username")
-            Button {
-                buttonAudio.play()
-                showingNameEditor = true
-            } label: {
-                Label("Edit name", systemImage: "pencil")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.25)))
-            .accessibilityIdentifier("local.editName")
-            .disabled(store.isEnteringLobby)
-            Spacer(minLength: 0)
-            if !compact {
-                Text("Visible to your crew")
-                    .font(.system(size: 10, design: .rounded))
+    private func crewmateCard(compact: Bool) -> some View {
+        card {
+            VStack(spacing: compact ? 4 : 8) {
+                Text("YOUR CREWMATE")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.65))
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image("LobbyPlayerRed")
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(height: compact ? 64 : 92)
+                    .accessibilityHidden(true)
+                Text(store.playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Enter name" : store.playerName)
+                    .font(.system(size: 23, weight: .bold, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .accessibilityIdentifier("local.username")
+                Button {
+                    buttonAudio.play()
+                    showingNameEditor = true
+                } label: {
+                    Label("EDIT NAME", systemImage: "pencil")
+                        .font(.system(size: 15, weight: .heavy, design: .rounded))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .buttonStyle(LobbyOutlineButtonStyle())
+                .accessibilityLabel("Edit name")
+                .accessibilityIdentifier("local.editName")
+                .disabled(store.isEnteringLobby)
+                if !compact {
+                    Text("Pick your color and face in the lobby")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.62))
+                        .multilineTextAlignment(.center)
+                }
             }
         }
-        .padding(12)
-        .frame(maxHeight: .infinity)
-        .background(
-            LinearGradient(colors: [Color(red: 0.10, green: 0.18, blue: 0.27), panelColor], startPoint: .top, endPoint: .bottom),
-            in: RoundedRectangle(cornerRadius: 12)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 0.46, green: 0.59, blue: 0.71)))
     }
 
-    private func modeTab(_ title: String, join: Bool) -> some View {
-        Button {
-            buttonAudio.play()
-            joining = join
-        } label: {
-            Text(title)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .contentShape(Rectangle())
-                .foregroundStyle(joining == join ? Color.black : .white)
-                .background(joining == join ? Color(red: 0.83, green: 0.91, blue: 0.96) : .clear, in: RoundedRectangle(cornerRadius: 7))
+    private func cardHeader(_ title: String, subtitle: String, @ViewBuilder icon: () -> some View) -> some View {
+        HStack(spacing: 12) {
+            icon()
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 20, weight: .black, design: .rounded))
+                    .accessibilityAddTraits(.isHeader)
+                Text(subtitle)
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.62))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier(join ? "local.joinTab" : "local.createTab")
-        .accessibilityAddTraits(joining == join ? .isSelected : [])
-        .disabled(store.isEnteringLobby)
     }
 
-    @ViewBuilder
-    private func actionPanel(compact: Bool) -> some View {
-        VStack(alignment: .leading, spacing: compact ? 6 : 10) {
-            Text(joining ? "Find your crew." : "Gather your crew.")
-                .font(.system(size: compact ? 21 : 25, weight: .bold, design: .rounded))
-                .accessibilityAddTraits(.isHeader)
-            Text(joining ? "Enter the host’s code or scan their QR." : "Create a lobby, then share its code or QR.")
-                .font(.system(size: 12, design: .rounded))
-                .foregroundStyle(.white.opacity(0.65))
-            if joining {
-                TextField("Room code", text: $code)
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
-                    .textInputAutocapitalization(.characters)
-                    .autocorrectionDisabled()
-                    .submitLabel(.go)
-                    .onSubmit {
-                        guard store.canEnterLobby && GameStore.isValidRoomCode(code) else { return }
-                        Task { await store.joinGame(code: code) }
-                    }
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 44)
-                    .background(panelColor, in: RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.4)))
-                    .accessibilityIdentifier("local.roomCode")
-                    .disabled(store.isEnteringLobby)
-                HStack(spacing: 8) {
-                    actionButton("Join game", symbol: "arrow.right", primary: true) {
-                        Task { await store.joinGame(code: code) }
-                    }
-                    .accessibilityIdentifier("local.joinGame")
-                    .disabled(!store.canEnterLobby || !GameStore.isValidRoomCode(code))
-                    actionButton("Scan QR", symbol: "qrcode.viewfinder", primary: false) { scanning = true }
-                        .accessibilityLabel("Scan lobby QR")
-                        .disabled(store.isEnteringLobby)
+    private func createCard(compact: Bool) -> some View {
+        card {
+            VStack(alignment: .leading, spacing: 10) {
+                cardHeader("CREATE GAME", subtitle: "Host a lobby, then share its code") {
+                    Image("GameModeCrewmate").resizable().frame(width: 52, height: 52).accessibilityHidden(true)
                 }
-            } else {
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Classic").font(.system(size: 14, weight: .semibold, design: .rounded))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Classic").font(.system(size: 14, weight: .heavy, design: .rounded))
                         Text("Tasks, impostors & meetings")
                             .font(.system(size: 11, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.65))
+                            .foregroundStyle(.white.opacity(0.62))
                     }
                     Spacer()
-                    Image(systemName: "checkmark").foregroundStyle(accentColor)
+                    Image(systemName: "checkmark").font(.system(size: 15, weight: .bold))
                 }
                 .padding(.horizontal, 12)
                 .frame(minHeight: 48)
-                .background(panelColor, in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.3)))
-                actionButton("Create game", symbol: "arrow.right", primary: true) {
+                .background(Self.fieldColor, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(.white.opacity(0.35), lineWidth: 1.5))
+                Spacer(minLength: 0)
+                Button {
+                    buttonAudio.play()
                     Task { await store.createGame() }
+                } label: {
+                    Text("CREATE").frame(maxWidth: .infinity, minHeight: 54)
                 }
+                .buttonStyle(LobbyStartButtonStyle())
                 .accessibilityIdentifier("local.createGame")
                 .disabled(!store.canEnterLobby)
             }
         }
     }
 
-    private func actionButton(_ title: String, symbol: String, primary: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            buttonAudio.play()
-            action()
-        } label: {
-            Label(title, systemImage: symbol)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .contentShape(Rectangle())
+    private func joinCard(compact: Bool) -> some View {
+        card {
+            VStack(alignment: .leading, spacing: 10) {
+                cardHeader("JOIN GAME", subtitle: "Enter the host’s code or scan it") {
+                    Image(systemName: "qrcode")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(.black)
+                        .frame(width: 52, height: 52)
+                        .background(.white.opacity(0.95), in: Circle())
+                        .overlay(Circle().stroke(Color(white: 0.55), lineWidth: 3))
+                        .accessibilityHidden(true)
+                }
+                roomCodeBoxes
+                Spacer(minLength: 0)
+                HStack(spacing: 8) {
+                    Button {
+                        buttonAudio.play()
+                        Task { await store.joinGame(code: code) }
+                    } label: {
+                        Text("JOIN").frame(maxWidth: .infinity, minHeight: 54)
+                    }
+                    .buttonStyle(LobbyStartButtonStyle())
+                    .accessibilityIdentifier("local.joinGame")
+                    .disabled(!store.canEnterLobby || !GameStore.isValidRoomCode(code))
+                    Button {
+                        buttonAudio.play()
+                        scanning = true
+                    } label: {
+                        Label("SCAN QR", systemImage: "qrcode.viewfinder")
+                            .font(.system(size: 15, weight: .heavy, design: .rounded))
+                            .frame(maxWidth: .infinity, minHeight: 54)
+                    }
+                    .buttonStyle(LobbyOutlineButtonStyle())
+                    .accessibilityLabel("Scan lobby QR")
+                    .disabled(store.isEnteringLobby)
+                }
+            }
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(primary ? Color(red: 0.03, green: 0.11, blue: 0.09) : .white)
-        .background(primary ? accentColor : panelColor, in: RoundedRectangle(cornerRadius: 8))
-        .opacity(store.isEnteringLobby ? 0.5 : 1)
+    }
+
+    /// Four code boxes like the lobby's CODE card. A clear text field on top takes the typing.
+    private var roomCodeBoxes: some View {
+        let letters = Array(code)
+        return HStack(spacing: 8) {
+            ForEach(0..<4, id: \.self) { i in
+                Text(i < letters.count ? String(letters[i]) : "–")
+                    .font(.system(size: 26, weight: .bold, design: .monospaced))
+                    .foregroundStyle(i < letters.count ? .white : .white.opacity(0.3))
+                    .frame(maxWidth: .infinity, minHeight: 48)
+                    .background(Self.fieldColor, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10)
+                        .stroke(i == min(letters.count, 3) && codeFocused ? .white : .white.opacity(0.35), lineWidth: 1.5))
+            }
+        }
+        .overlay {
+            TextField("", text: $code)
+                .font(.system(size: 40, weight: .bold, design: .monospaced)) // invisible; sized so the field is a 44 pt target
+                .foregroundStyle(.clear)
+                .tint(.clear)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .keyboardType(.asciiCapable)
+                .submitLabel(.go)
+                .focused($codeFocused)
+                .onChange(of: code) { _, newValue in
+                    let cleaned = String(newValue.uppercased().filter { $0.isLetter || $0.isNumber }.prefix(4))
+                    if cleaned != newValue { code = cleaned }
+                }
+                .onSubmit {
+                    guard store.canEnterLobby && GameStore.isValidRoomCode(code) else { return }
+                    Task { await store.joinGame(code: code) }
+                }
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .accessibilityLabel("Room code")
+                .accessibilityIdentifier("local.roomCode")
+                .disabled(store.isEnteringLobby)
+        }
     }
 
     private func showLobbyMessage(title: String, message: String) {
@@ -643,42 +668,95 @@ private struct LocalLobbyView: View {
     }
 }
 
-/// Editing in a sheet keeps the landscape picker intact while the keyboard is visible.
+/// The main menu's floating red crewmate, bobbing gently above the Local screen.
+private struct FloatingMenuCrewmate: View {
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            Image("RedCrewmate")
+                .resizable()
+                .scaledToFit()
+                .rotationEffect(.degrees(-8 + sin(t * 0.8) * 3))
+                .offset(y: sin(t * 1.1) * 5)
+                .accessibilityHidden(true)
+        }
+    }
+}
+
+/// Edit your display name in the white Among Us style popup, kept near the top so the keyboard
+/// doesn't cover it in landscape.
 private struct LocalPlayerNameEditor: View {
     @Environment(GameStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
+    let close: () -> Void
     @State private var name = ""
     @FocusState private var focused: Bool
 
+    private static let ink = Color(white: 0.106)
+
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Your username") {
-                    TextField("Display name", text: $name)
-                        .textInputAutocapitalization(.words)
-                        .autocorrectionDisabled()
-                        .accessibilityIdentifier("local.playerName")
-                        .focused($focused)
-                        .submitLabel(.done)
-                        .onSubmit(save)
+        ZStack(alignment: .top) {
+            Color.black.opacity(0.6).ignoresSafeArea().onTapGesture { close() }
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Your name")
+                    .font(.system(size: 20, weight: .black, design: .rounded))
+                    .padding(.leading, 22)
+                TextField("Display name", text: $name)
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .focused($focused)
+                    .submitLabel(.done)
+                    .onSubmit(save)
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 50)
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Self.ink, lineWidth: 3))
+                    .accessibilityIdentifier("local.playerName")
+                Text("Shown above your crewmate · up to 20 characters")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(white: 0.3))
+                HStack(spacing: 10) {
+                    Button(action: close) {
+                        Text("CANCEL")
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Self.ink, lineWidth: 3))
+                    }
+                    Button(action: save) {
+                        Text("SAVE")
+                            .frame(maxWidth: .infinity, minHeight: 46)
+                            .foregroundStyle(.white)
+                            .background(Self.ink, in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .accessibilityIdentifier("local.saveName")
                 }
+                .buttonStyle(.plain)
+                .font(.system(size: 15, weight: .black, design: .rounded))
             }
-            .navigationTitle("Edit name")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Done", action: save) }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 16)
+            .foregroundStyle(Self.ink)
+            .frame(maxWidth: 440)
+            .background(.white, in: RoundedRectangle(cornerRadius: 18))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(Self.ink, lineWidth: 4))
+            .overlay(alignment: .topLeading) {
+                Button(action: close) {
+                    Image("CloseMenuIcon").resizable().frame(width: 40, height: 40)
+                }
+                .offset(x: -14, y: -14)
+                .accessibilityLabel("Close")
             }
-            .onAppear {
-                name = store.playerName
-                focused = true
-            }
+            .padding(.top, 24)
+            .padding(.horizontal, 24)
+        }
+        .onAppear {
+            name = store.playerName
+            focused = true
         }
     }
 
     private func save() {
-        store.playerName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        dismiss()
+        store.playerName = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(20))
+        close()
     }
 }
 
