@@ -3,7 +3,6 @@
 The server's `PlayerView.id` identifies a character; `faceId` identifies their uploaded cut-out photo.
 Map dots, voting cards, role and result lineups, ejection, security-camera labels, the AR POC and lobby
 all carry that character's face along with their suit color. Reordering a lineup does not reorder the faces.
-The Shhh intro uses its layered source artwork for a character with a photo, preserving the 2.5-second reveal timing.
 Demo lineups use the selected local face only on their explicitly labeled “You” character.
 
 Kill presentations capture the victim's face and server URL, and resolve a late attacker event by player ID.

@@ -252,43 +252,17 @@ private struct PixelRoleTitle: View {
 }
 
 struct RoleRevealIntroView: View {
-    @Environment(GameStore.self) private var store
     let onComplete: () -> Void
-    @State private var appeared = false
-
-    var body: some View {
-        if store.roleIntroFaceURL != nil {
-            // The flattened movie cannot wear a photo; use its layered source art for this character.
-            ShhhPosterView()
-                .scaleEffect(appeared ? 1 : 0.92)
-                .task {
-                    withAnimation(.easeOut(duration: 0.35)) { appeared = true }
-                    do { try await Task.sleep(for: .seconds(2.5)) } catch { return }
-                    onComplete()
-                }
-        } else { IntroMovieView(onComplete: onComplete) }
-    }
-}
-
-private extension GameStore {
-    var roleIntroFaceURL: URL? {
-        if let state { return faceURL(state.player(state.me.id)?.faceId) }
-        return faceURL(preferredFaceId)
-    }
+    var body: some View { IntroMovieView(onComplete: onComplete) }
 }
 
 private struct ShhhPosterView: View {
-    @Environment(GameStore.self) private var store
     var body: some View {
         GeometryReader { geometry in
             let side = min(geometry.size.height, geometry.size.width)
             ZStack {
                 Image("RoleShhhBackground").resizable().scaledToFit()
                 Image("RoleShhhCrew").resizable().scaledToFit()
-                    .overlay {
-                        CharacterFaceOverlay(url: store.roleIntroFaceURL, sourceSize: CGSize(width: 345, height: 372),
-                            placement: CharacterFacePlacement(x: 173, y: 96, width: 174))
-                    }
                     .frame(width: side * 0.48).offset(y: side * 0.04)
                 Image("RoleShhhHand").resizable().scaledToFit()
                     .frame(width: side * 0.23).offset(x: side * 0.03, y: side * 0.31)
