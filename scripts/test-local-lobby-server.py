@@ -45,6 +45,8 @@ settings = dict(
 players = []
 phase = 'LOBBY'
 events = []
+player_colors = ['white', 'black', 'red', 'yellow', 'green', 'purple', 'pink',
+                 'blue', 'orange', 'brown', 'cyan', 'lime', 'maroon', 'rose', 'banana']
 
 def snapshot():
     return dict(
@@ -92,7 +94,7 @@ def player(id, name, host=False, bot=False):
     return dict(
         id=id,
         name=name,
-        color='red' if host else 'blue',
+        color=player_colors[len(players) % len(player_colors)],
         isHost=host,
         isBot=bot,
         connected=True,
@@ -121,7 +123,8 @@ class Handler(BaseHTTPRequestHandler):
         data = json.loads(self.rfile.read(int(self.headers.get('Content-Length', 0))))
         events.append(dict(path=self.path, data=data))
         phase = 'LOBBY'
-        players = [player('ben', data['name'], True)]
+        players = []
+        players.append(player('ben', data['name'], True))
         self.json(dict(code='ABCD', playerId='ben', token='test-token'))
 
     def do_GET(self):
@@ -165,7 +168,10 @@ class Handler(BaseHTTPRequestHandler):
                     message = json.loads(data)
                     events.append(message)
                     if message['action'] == 'add_bot':
-                        players.append(player('bot', 'Test Bot', bot=True))
+                        bot_number = len(players)
+                        bot_id = 'bot' if bot_number == 1 else f'bot-{bot_number}'
+                        bot_name = 'Test Bot' if bot_number == 1 else f'Test Bot {bot_number}'
+                        players.append(player(bot_id, bot_name, bot=True))
                     if message['action'] == 'start_game':
                         phase = 'ROLE_REVEAL'
                     if message['action'] == 'ack_role':

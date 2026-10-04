@@ -12,8 +12,8 @@ enum Role: String, Codable {
 }
 
 enum PlayerColor: String, Decodable, CaseIterable {
-    case red, blue, green, pink, orange, yellow, black, white
-    case purple, brown, cyan, lime, maroon, rose, banana
+    case white, black, red, yellow, green, purple, pink, blue
+    case orange, brown, cyan, lime, maroon, rose, banana
 
     var lobbyAssetName: String {
         "LobbyPlayer\(rawValue.capitalized)"

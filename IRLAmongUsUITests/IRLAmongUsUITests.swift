@@ -42,7 +42,7 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["ABCD"].exists)
         let hostSprite = app.descendants(matching: .any)["lobby.playerSprite.0"]
         XCTAssertTrue(hostSprite.waitForExistence(timeout: 5))
-        XCTAssertEqual(hostSprite.label, "Ben red player icon, host")
+        XCTAssertEqual(hostSprite.label, "Ben white player icon, host")
         XCTAssertFalse(app.buttons["START"].isEnabled)
         app.buttons["Add bot"].tap()
         let count = app.staticTexts["lobby.playerCount"]
@@ -51,7 +51,17 @@ final class IRLAmongUsUITests: XCTestCase {
         waitForExpectations(timeout: 5)
         let botSprite = app.descendants(matching: .any)["lobby.playerSprite.1"]
         XCTAssertTrue(botSprite.waitForExistence(timeout: 5))
-        XCTAssertEqual(botSprite.label, "Test Bot blue player icon")
+        XCTAssertEqual(botSprite.label, "Test Bot black player icon")
+        for (index, color) in ["red", "yellow", "green", "purple", "pink"].enumerated() {
+            app.buttons["Add bot"].tap()
+            let playerCount = index + 3
+            let hasExpectedCount = NSPredicate { _, _ in count.label == "\(playerCount)" }
+            expectation(for: hasExpectedCount, evaluatedWith: nil)
+            waitForExpectations(timeout: 5)
+            let sprite = app.descendants(matching: .any)["lobby.playerSprite.\(index + 2)"]
+            XCTAssertTrue(sprite.waitForExistence(timeout: 5))
+            XCTAssertTrue(sprite.label.contains(" \(color) player icon"))
+        }
         XCTAssertTrue(app.buttons["START"].isEnabled)
         captureVoting(app, name: "LOCAL live server lobby")
         app.buttons["START"].tap()
