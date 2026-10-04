@@ -304,7 +304,7 @@ struct HUDMapSquare: View {
             }
             .overlay(alignment: .bottom) {
                 if !state.me.alive {
-                    Text("YOU ARE DEAD · finish your tasks")
+                    Text(state.me.isBody ? "YOU WERE KILLED · stay put until your body is found" : "YOU ARE DEAD · finish your tasks")
                         .font(.system(size: 11, weight: .black, design: .rounded)).foregroundStyle(.white)
                         .padding(.horizontal, 10).padding(.vertical, 5)
                         .background(.black.opacity(0.75), in: Capsule())
@@ -550,14 +550,33 @@ struct HUDActionsPanel: View {
             HStack(alignment: .bottom, spacing: 10) {
                 Text(state.me.alive
                      ? "Point the camera at a task's sign to check in and start it."
+                     : state.me.isBody
+                     ? "You were killed. Stay where you are, quietly, until your body is found; then finish your tasks as a ghost."
                      : "You're a ghost: you can't report or vote, but your tasks still count. Tap Spectate on the map to watch everyone.")
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if state.me.alive { reportButton(size: button * 0.86) }
-                if state.me.alive || state.settings.ghostTasks { HUDScanButton(size: button, action: scan) }
+                // Whoever finds you can report your body right here on your phone.
+                if state.me.isBody { reportMyBodyButton(size: button * 0.86) }
+                if !state.me.isBody, state.me.alive || state.settings.ghostTasks { HUDScanButton(size: button, action: scan) }
             }
         }
+    }
+
+    /// On a body's phone: the person who found it reports here.
+    private func reportMyBodyButton(size: CGFloat) -> some View {
+        Button {
+            Task { await store.perform("report_body", ["method": "self"]) }
+        } label: {
+            VStack(spacing: 0) {
+                Image("ReportActionIcon").resizable().scaledToFit().frame(width: size, height: size)
+                TaskText("FOUND ME", size: 9)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Report this body (for whoever found it)")
+        .accessibilityIdentifier("hud.reportSelf")
     }
 
     private func reportButton(size: CGFloat) -> some View {

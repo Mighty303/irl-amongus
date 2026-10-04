@@ -72,7 +72,8 @@ struct GameRootView: View {
         case .LOBBY:
             if let lobbyContent { lobbyContent(state) } else { AnyView(LobbyView(state: state)) }
         case .ROLE_REVEAL: RoleRevealView(state: state)
-        case .PLAYING: state.me.isBody ? AnyView(BodyView(state: state)) : AnyView(GameHUDView(state: state))
+        // Killed players keep the game screen as a ghost (it says to stay put until the body is found).
+        case .PLAYING: GameHUDView(state: state)
         case .MEETING, .VOTING: MeetingView(state: state)
         // The Among Us ejection screen while the vote result shows.
         case .RESULT: EjectionView(state: state)
