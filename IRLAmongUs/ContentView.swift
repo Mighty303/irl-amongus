@@ -366,8 +366,6 @@ private struct LocalLobbyView: View {
 
                 ScrollView {
                 VStack(spacing: 24) {
-                    playerBar
-
                     hostHeader
 
                     connectionFields
@@ -484,46 +482,6 @@ private struct LocalLobbyView: View {
         }
         .textFieldStyle(.roundedBorder)
         .disabled(store.isEnteringLobby)
-    }
-
-    private var playerBar: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 19, weight: .medium))
-                .foregroundStyle(.black.opacity(0.7))
-                .frame(width: 42, height: 42)
-                .background(Color(white: 0.48), in: RoundedRectangle(cornerRadius: 4))
-
-            Circle()
-                .fill(Color(red: 0.05, green: 1, blue: 0.38))
-                .frame(width: 22, height: 22)
-                .shadow(color: Color.green.opacity(0.9), radius: 9)
-
-            Text(store.playerName.isEmpty ? "Choose your name below" : store.playerName)
-                .font(.system(size: 18, weight: .regular, design: .rounded))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-
-            Spacer(minLength: 6)
-
-            Button {
-                buttonAudio.play()
-                showLobbyMessage(title: "Friends", message: "Your local friends list is empty.")
-            } label: {
-                Text("FRIENDS")
-                    .font(.system(size: 16, weight: .light, design: .rounded))
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-            .buttonStyle(LobbyFilledButtonStyle())
-            .frame(width: 105, height: 42)
-        }
-        .padding(7)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(white: 0.14))
-                .shadow(color: Color(red: 0, green: 0.8, blue: 0.55).opacity(0.22), radius: 8)
-        )
     }
 
     private var hostHeader: some View {
