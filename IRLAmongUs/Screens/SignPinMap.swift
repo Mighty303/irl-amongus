@@ -58,10 +58,12 @@ struct SignPinPicker: View {
     /// The building and floor under the pin (nil outdoors or on the Apple map).
     @Binding var place: CampusPlace?
     let others: [Station]
+    /// The floor to open on (moving a sign that already has one).
+    var startPlace: CampusPlace? = nil
 
     var body: some View {
         if let buildings = FloorPlanPinMap.buildings(around: start, in: store.campus) {
-            FloorPlanPinMap(start: start, pin: $pin, place: $place, others: others, buildings: buildings)
+            FloorPlanPinMap(start: start, pin: $pin, place: $place, others: others, buildings: buildings, startPlace: startPlace)
         } else {
             SignPinMap(start: start, pin: $pin).onAppear { place = nil }
         }
@@ -77,6 +79,7 @@ struct FloorPlanPinMap: View {
     let others: [Station]
     /// The buildings drawn (those around the first guess).
     let buildings: [CampusBuilding]
+    var startPlace: CampusPlace? = nil
 
     @State private var scale: CGFloat = 2.2
     @GestureState private var gestureScale: CGFloat = 1
@@ -175,6 +178,7 @@ struct FloorPlanPinMap: View {
             .onAppear {
                 guard !centered else { return }
                 centered = true
+                if let startPlace { floorChoice[startPlace.buildingId] = startPlace.floorId }
                 if let start {
                     // Put the first guess under the pin, zoomed to about a building across.
                     let p = projection.point(CGPoint(x: start.longitude, y: start.latitude))

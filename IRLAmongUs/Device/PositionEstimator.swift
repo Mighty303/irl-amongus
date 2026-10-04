@@ -4,17 +4,49 @@ import CoreMotion
 import Observation
 import UIKit
 
+/// How this phone works out where it is (Settings, for testing them against each other).
+enum PositionMode: String, CaseIterable, Identifiable {
+    /// The original estimator: GPS always blended in, steps follow the compass only with the screen facing up.
+    case gps
+    /// Starts at the red button, steps move you the way you face (any tilt), sign scans correct; no GPS indoors.
+    case steps
+    /// Like steps, but ARKit camera tracking measures the movement while the phone is held up. Heavy on battery.
+    case ar
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .gps: return "GPS"
+        case .steps: return "Steps"
+        case .ar: return "AR"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .gps: return "The original: GPS blended with steps. GPS is off by tens of meters indoors."
+        case .steps: return "Starts you at the red button; steps move you the way the phone faces; each sign scan corrects you. GPS only outdoors."
+        case .ar: return "Like Steps, but the camera tracks your movement while the phone is held up (much more accurate, much more battery). Steps take over when the camera can't see."
+        }
+    }
+}
+
 /// This phone's best guess at where it is, from the phone's own sensors only (no beacons).
 ///
 /// A small filter in local meters: a position plus one uncertainty radius.
 /// - **Sign check-ins** are exact fixes: scanning a sign puts you at that sign, within a few meters.
-/// - **Steps** (CMPedometer) move the estimate along the compass heading while the phone is held up
-///   (as it is when looking at the map). With the phone in a pocket the direction is unknown, so steps
-///   only grow the radius: you can't be further from the last fix than you've walked.
+/// - **The red button** is where everyone starts, so the game's start is a fix there too.
+/// - **Steps** (CMPedometer) move the estimate along the way the player faces while the phone is held in
+///   front of them, at any tilt from flat to nearly upright (as when looking at the map). With the phone in
+///   a pocket the direction is unknown, so steps only grow the radius: you can't be further from the last
+///   fix than you've walked.
 /// - **GPS** pulls the estimate in proportion to how good the fix claims to be. Fixes that disagree
-///   wildly with everything else are mostly ignored rather than trusted (indoor GPS jumps).
+///   wildly with everything else are mostly ignored rather than trusted (indoor GPS jumps). Indoors, once
+///   a sign has placed you, GPS is ignored altogether: steps from that sign beat it (except in `PositionMode.gps`).
 /// - **The floor plan** keeps the dot out of walls when it's only just outside a room, and names the room.
 /// - **The barometer** notices going up or down a floor from the last sign (GPS can't).
+/// - **AR** (`PositionMode.ar`): ARKit's camera tracking moves the estimate instead of steps while it can see.
 ///
 /// The server adds what only it can see: who is standing next to whom over BLE (see positions.ts).
 @Observable
@@ -44,6 +76,11 @@ final class PositionEstimator {
         /// How far the last GPS fix moved the estimate, 0 (ignored) to 1 (taken as is).
         var gpsWeight: Double?
         var gpsOutlier = false
+        /// GPS is being ignored: indoors, after a sign fix.
+        var gpsIgnoredIndoors = false
+        /// AR mode: what the camera tracking is doing, and how far it has moved you since the last fix.
+        var arState: String?
+        var arMetersSinceFix = 0.0
         var stepsSinceFix = 0
         var metersSinceFix = 0.0
         var compassUsable = false
@@ -94,10 +131,20 @@ final class PositionEstimator {
     @ObservationIgnored private var fixFloorId: String?
     /// The game's play area: assumed until a sign check-in says otherwise.
     @ObservationIgnored var playArea: CampusPlace?
+    /// Which way to work out position (Settings).
+    @ObservationIgnored var mode: PositionMode = .steps
+    @ObservationIgnored private var arTrackingAt: Date?
+    @ObservationIgnored private var lastARMoveAt: Date?
+    /// True north minus magnetic north, degrees, from Core Location (the motion sensors only know magnetic north).
+    @ObservationIgnored private var declination = 0.0
+    /// Which way is up on the screen as the player sees it, in the phone's own axes (refreshed every second).
+    @ObservationIgnored private var screenUp = (x: 0.0, y: 1.0)
 
     // Tuning. Indoor GPS radii are optimistic and successive fixes share the same error, so they're
     // inflated and thinned out; the pedometer's step length is decent, the phone's heading less so.
-    private static let signFixM = 3.0
+    static let signFixM = 3.0
+    /// Everyone stands around the red button when the game starts.
+    static let startFixM = 5.0
     private static let gpsInflation = 1.5
     private static let gpsMinGap: TimeInterval = 2.5
     private static let compassStepError = 0.3
@@ -105,6 +152,8 @@ final class PositionEstimator {
     private static let minAccuracyM = 2.0
     private static let maxAccuracyM = 250.0
     private static let floorHeightM = 4.0
+    /// ARKit drifts about 1-3% of the distance walked.
+    private static let arMoveError = 0.03
 
     func start() {
         guard !running else { return }
@@ -118,11 +167,18 @@ final class PositionEstimator {
         }
         if motion.isDeviceMotionAvailable {
             motion.deviceMotionUpdateInterval = 0.1
-            motion.startDeviceMotionUpdates(to: .main) { [weak self] data, _ in
+            // A magnetic reference frame fills in `magneticField`, so the heading works at any tilt.
+            let magnetic = CMMotionManager.availableAttitudeReferenceFrames().contains(.xMagneticNorthZVertical)
+            motion.startDeviceMotionUpdates(using: magnetic ? .xMagneticNorthZVertical : .xArbitraryZVertical, to: .main) { [weak self] data, _ in
                 guard let data else { return }
                 self?.useMotion(data)
             }
         }
+        updateScreenUp()
+        // The barometer restarts from zero: its first reading becomes the baseline for the next fix.
+        relativeAltitude = nil
+        altitudeAtFix = nil
+        levelDelta = 0
         if CMAltimeter.isRelativeAltitudeAvailable() {
             altimeter.startRelativeAltitudeUpdates(to: .main) { [weak self] data, _ in
                 guard let data else { return }
@@ -159,19 +215,22 @@ final class PositionEstimator {
 
     // MARK: - Inputs
 
-    /// A verified sign check-in: we know exactly where the player is.
-    func fix(lat: Double, lng: Double, name: String, buildingId: String? = nil, floorId: String? = nil) {
+    /// A verified sign check-in (or the game starting at the red button): we know where the player is,
+    /// to within `accuracyM`.
+    func fix(lat: Double, lng: Double, name: String, buildingId: String? = nil, floorId: String? = nil,
+             accuracyM: Double = PositionEstimator.signFixM) {
         fixBuildingId = buildingId
         fixFloorId = floorId
         let p = meters(lat: lat, lng: lng)
         x = p.x
         y = p.y
-        variance = Self.signFixM * Self.signFixM
+        variance = accuracyM * accuracyM
         hasState = true
         diagnostics.lastFixName = name
         diagnostics.lastFixAt = Date()
         diagnostics.stepsSinceFix = 0
         diagnostics.metersSinceFix = 0
+        diagnostics.arMetersSinceFix = 0
         altitudeAtFix = relativeAltitude
         levelDelta = 0
         publish()
@@ -187,6 +246,13 @@ final class PositionEstimator {
         if let last = lastGPSProcessedAt, Date().timeIntervalSince(last) < Self.gpsMinGap { return }
         lastGPSProcessedAt = Date()
         lastGPSTimestamp = location.timestamp
+        // Indoors GPS is off by tens of meters and drags a good step-counted track around with it.
+        diagnostics.gpsIgnoredIndoors = mode != .gps && diagnostics.lastFixAt != nil && estimate?.buildingId != nil
+        if diagnostics.gpsIgnoredIndoors {
+            diagnostics.gpsWeight = 0
+            diagnostics.gpsOutlier = false
+            return
+        }
 
         let z = meters(lat: location.coordinate.latitude, lng: location.coordinate.longitude)
         var r = pow(max(h, 5) * Self.gpsInflation, 2)
@@ -220,21 +286,93 @@ final class PositionEstimator {
         guard newHeading.headingAccuracy >= 0 else { return }
         let degrees = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
         heading = (degrees, newHeading.headingAccuracy, Date())
+        if newHeading.trueHeading >= 0 {
+            declination = (newHeading.trueHeading - newHeading.magneticHeading + 540).truncatingRemainder(dividingBy: 360) - 180
+        }
     }
 
     private func useMotion(_ data: CMDeviceMotion) {
-        // Screen facing up within ~60°: the phone is in hand and the top of the screen points where
-        // the player is walking. Upright, flat on a table or in a pocket, the compass says nothing useful.
-        let heldUp = data.gravity.z < -0.5
-        diagnostics.phoneHeldUp = heldUp
-        let usable = heldUp && heading.map { $0.accuracy <= 35 && Date().timeIntervalSince($0.at) < 2 } == true
+        let g = data.gravity
+        let field = data.magneticField
+        // Core Location knows when the compass is disturbed (steel, wiring) or needs calibrating, but it
+        // stops giving headings with the phone upright; then the magnetometer's own calibration has to do.
+        let recentHeading = heading.flatMap { Date().timeIntervalSince($0.at) < 2 ? $0 : nil }
+        let direction: Double?
+        let compassTrusted: Bool
+        if mode != .gps, field.accuracy != .uncalibrated, field.field.x != 0 || field.field.y != 0 || field.field.z != 0 {
+            compassTrusted = recentHeading.map { $0.accuracy <= 35 } ?? (field.accuracy == .medium || field.accuracy == .high)
+            // Held in front of you, in the way the screen is being read, anywhere from flat to nearly upright.
+            let up = (x: screenUp.x, y: screenUp.y)
+            let heldUp = Self.isHeldUp(gravity: (g.x, g.y, g.z), screenUp: up)
+            diagnostics.phoneHeldUp = heldUp
+            direction = heldUp ? Self.facing(gravity: (g.x, g.y, g.z), magnetic: (field.field.x, field.field.y, field.field.z),
+                                             screenUp: up).map { $0 + declination } : nil
+        } else {
+            // No magnetometer through Core Motion: Core Location's heading, which only means something
+            // with the screen facing up (within ~60°).
+            let heldUp = g.z < -0.5
+            diagnostics.phoneHeldUp = heldUp
+            direction = heldUp ? recentHeading?.degrees : nil
+            compassTrusted = recentHeading.map { $0.accuracy <= 35 } ?? false
+        }
+        let usable = direction != nil && compassTrusted
         diagnostics.compassUsable = usable
         headingSum.total += 1
-        if usable, let heading {
-            let radians = heading.degrees * .pi / 180
+        if usable, let direction {
+            let radians = direction * .pi / 180
             headingSum.sin += sin(radians)
             headingSum.cos += cos(radians)
             headingSum.usable += 1
+        }
+    }
+
+    /// In hand and being looked at: the screen tilted back toward the player at least a little (not upright
+    /// in a pocket, not face down), and level side to side in the orientation the screen is being read in.
+    static func isHeldUp(gravity g: (x: Double, y: Double, z: Double), screenUp: (x: Double, y: Double)) -> Bool {
+        let n = (g.x * g.x + g.y * g.y + g.z * g.z).squareRoot()
+        guard n > 0.5 else { return false }
+        // Gravity points down, so "up" in the phone's axes is -g.
+        let upZ = -g.z / n
+        let upAlongTop = -(g.x * screenUp.x + g.y * screenUp.y) / n
+        // The screen's right edge: top × out-of-screen.
+        let upAlongRight = -(g.x * screenUp.y - g.y * screenUp.x) / n
+        return upZ > 0.1 && upAlongTop > -0.3 && abs(upAlongRight) < 0.5
+    }
+
+    /// The way the player faces, degrees clockwise from magnetic north, from the phone's gravity and
+    /// magnetic field (both in the phone's axes). Facing = the screen's top plus straight out the back: flat,
+    /// the back points at the floor and the top points ahead; upright, the top points at the sky and the back
+    /// points ahead; in between both lean forward. Their sum, flattened, is always ahead.
+    static func facing(gravity g: (x: Double, y: Double, z: Double), magnetic m: (x: Double, y: Double, z: Double),
+                       screenUp: (x: Double, y: Double)) -> Double? {
+        let gn = (g.x * g.x + g.y * g.y + g.z * g.z).squareRoot()
+        guard gn > 0.5 else { return nil }
+        let up = (x: -g.x / gn, y: -g.y / gn, z: -g.z / gn)
+        func flatten(_ v: (x: Double, y: Double, z: Double)) -> (x: Double, y: Double, z: Double) {
+            let d = v.x * up.x + v.y * up.y + v.z * up.z
+            return (v.x - d * up.x, v.y - d * up.y, v.z - d * up.z)
+        }
+        let north = flatten(m)
+        // East = north × up.
+        let east = (x: north.y * up.z - north.z * up.y, y: north.z * up.x - north.x * up.z, z: north.x * up.y - north.y * up.x)
+        let ahead = flatten((x: screenUp.x, y: screenUp.y, z: -1))
+        let a = ahead.x * east.x + ahead.y * east.y + ahead.z * east.z
+        let b = ahead.x * north.x + ahead.y * north.y + ahead.z * north.z
+        guard (a * a + b * b).squareRoot() > 1e-6 else { return nil }
+        return (atan2(a, b) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+    }
+
+    /// The top of the screen as the player sees it, in the phone's axes (x right, y top in portrait).
+    /// Interface and device orientation name landscape the opposite way round.
+    private func updateScreenUp() {
+        let orientation = MainActor.assumeIsolated {
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first?.interfaceOrientation
+        }
+        screenUp = switch orientation {
+        case .landscapeRight: (1, 0)
+        case .landscapeLeft: (-1, 0)
+        case .portraitUpsideDown: (0, -1)
+        default: (0, 1)
         }
     }
 
@@ -253,6 +391,8 @@ final class PositionEstimator {
         diagnostics.stepsSinceFix += max(0, steps - lastSteps)
         diagnostics.metersSinceFix += walked
         guard hasState else { return }
+        // The camera already measured this walk.
+        if mode == .ar, let arTrackingAt, Date().timeIntervalSince(arTrackingAt) < 3 { return }
 
         let sigma = variance.squareRoot()
         let compassShare = headingSum.total > 0 ? Double(headingSum.usable) / Double(headingSum.total) : 0
@@ -267,6 +407,25 @@ final class PositionEstimator {
             variance = pow(sigma + Self.pocketStepError * walked, 2)
         }
         publish()
+    }
+
+    /// AR mode: ARKit tracked the phone moving this far (meters east and north).
+    func useARMove(east: Double, north: Double) {
+        guard mode == .ar, hasState else { return }
+        let moved = (east * east + north * north).squareRoot()
+        x += east
+        y += north
+        variance = pow(variance.squareRoot() + Self.arMoveError * moved, 2)
+        arTrackingAt = Date()
+        lastARMoveAt = Date()
+        diagnostics.arMetersSinceFix += moved
+        publish()
+    }
+
+    /// AR mode: whether the camera is tracking right now (steps fill in when it isn't).
+    func useARState(_ state: ARPositionTracker.State) {
+        if state == .tracking { arTrackingAt = Date() }
+        diagnostics.arState = mode == .ar ? state.label : nil
     }
 
     private func useAltitude(_ meters: Double) {
@@ -284,6 +443,7 @@ final class PositionEstimator {
     }
 
     private func tick() {
+        updateScreenUp()
         let now = Date()
         let dt = now.timeIntervalSince(lastTick)
         lastTick = now
@@ -340,6 +500,7 @@ final class PositionEstimator {
         if recent(diagnostics.lastFixAt, 120) { sources.append("sign") }
         if recent(lastStepAt, 20) { sources.append("steps") }
         if recent(lastCompassMoveAt, 20) { sources.append("compass") }
+        if recent(lastARMoveAt, 20) { sources.append("ar") }
         if recent(lastGPSUsedAt, 20) { sources.append("gps") }
         if room != nil { sources.append("map") }
         if levelDelta != 0 { sources.append("baro") }

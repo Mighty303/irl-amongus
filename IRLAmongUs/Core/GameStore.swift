@@ -39,6 +39,15 @@ final class GameStore {
     var signThreshold: Float { didSet { preferences.set(signThreshold, forKey: "signThreshold") } }
     /// Local opt-in; the sign requirement itself remains authoritative on the server.
     var demoModeEnabled: Bool { didSet { preferences.set(demoModeEnabled, forKey: "demoModeEnabled") } }
+    /// How this phone works out where it is: GPS (the original), steps, or AR (Settings, for comparing them).
+    var positionMode: PositionMode {
+        didSet {
+            preferences.set(positionMode.rawValue, forKey: "positionMode")
+            positions.mode = positionMode
+            positions.useARState(.off)
+            updateARTracking()
+        }
+    }
     private(set) var isUpdatingDemoSigns = false
     private(set) var isUpdatingDemoVoting = false
     @ObservationIgnored private var demoSignRequirements: [String: Int] = [:]
@@ -48,6 +57,9 @@ final class GameStore {
     let signs = SignRecognizer()
     /// This phone's own position estimate (sensors only).
     let positions = PositionEstimator()
+    /// AR position mode's camera tracking.
+    @ObservationIgnored private let arTracker = ARPositionTracker()
+    @ObservationIgnored private var localTrackingOn = false
     /// Every SFU Burnaby building's floor plans, so play can happen anywhere on campus.
     let campus = CampusMap()
     /// Security cameras: the latest frame from each player's front camera, while you're watching.
@@ -98,16 +110,23 @@ final class GameStore {
         preferredFaceId = defaults.string(forKey: "preferredFaceId")
         signThreshold = defaults.object(forKey: "signThreshold") as? Float ?? 0.6
         demoModeEnabled = defaults.bool(forKey: "demoModeEnabled")
+        positionMode = defaults.string(forKey: "positionMode").flatMap(PositionMode.init(rawValue:)) ?? .steps
         if restoresSession, let data = defaults.data(forKey: "session") {
             session = try? JSONDecoder().decode(Session.self, from: data)
         }
         positions.campus = campus
+        positions.mode = positionMode
+        arTracker.onMove = { [positions] in positions.useARMove(east: $0, north: $1) }
+        arTracker.onState = { [positions] in positions.useARState($0) }
         location.onLocation = { [positions] in positions.useGPS($0) }
         location.onHeading = { [positions] in positions.useHeading($0) }
         if session != nil { connect() }
         if let base = serverURL { Task { [campus] in await campus.load(serverURL: base) } }
         cameraUsageObserver = NotificationCenter.default.addObserver(forName: CameraUsage.changed, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.updateCameraStream() }
+            MainActor.assumeIsolated {
+                self?.updateCameraStream()
+                self?.updateARTracking()
+            }
         }
     }
 
@@ -373,6 +392,8 @@ final class GameStore {
         ble.stop()
         location.stop()
         positions.reset()
+        localTrackingOn = false
+        updateARTracking()
     }
 
     // MARK: - WebSocket
@@ -560,12 +581,21 @@ final class GameStore {
         if newState.me.canWatchCams != true, isWatchingCams { isWatchingCams = false; camFeeds = [:] }
         updateCameraStream()
         // The local map follows movement even when position sharing is disabled.
-        if LocalMapTracking.isEnabled(phase: newState.phase, sharing: newState.settings.livePositions == true) {
+        localTrackingOn = LocalMapTracking.isEnabled(phase: newState.phase, sharing: newState.settings.livePositions == true)
+        if localTrackingOn {
             positions.start()
         } else {
             positions.stop()
         }
+        updateARTracking()
         if newState.settings.livePositions != true { livePositions = [] }
+        // Everyone starts the game at the red button: the first fix, before any sign is scanned.
+        // (Not in GPS mode, which is kept as it originally was for comparison.)
+        if positionMode != .gps, old?.phase == .ROLE_REVEAL, newState.phase == .PLAYING,
+           let button = newState.stations.first(where: { $0.kind == .emergency }), let lat = button.lat, let lng = button.lng {
+            positions.fix(lat: lat, lng: lng, name: "Red button (start)", buildingId: button.buildingId, floorId: button.floorId,
+                          accuracyM: PositionEstimator.startFixM)
+        }
         // A verified check-in at a sign tells us exactly where this phone is.
         if let cp = newState.me.lastCheckpoint, cp != old?.me.lastCheckpoint, cp.method != "manual",
            serverNow() - cp.at < 30_000, // not an old check-in replayed by a reconnect
@@ -771,12 +801,26 @@ final class GameStore {
         return false
     }
 
+    /// AR position mode runs the back camera whenever the map is tracking, except while another camera
+    /// view (sign scanning) or the security-camera stream needs it: a phone can't run both.
+    private func updateARTracking() {
+        guard positionMode == .ar, localTrackingOn else { arTracker.stop(); return }
+        if CameraUsage.backCameraInUse {
+            arTracker.stop(reason: "camera in use (scanning)")
+        } else if isStreamingCamera {
+            arTracker.stop(reason: "camera in use (security cams)")
+        } else {
+            arTracker.start()
+        }
+    }
+
     /// Sends this phone's front camera while someone is watching, except while the back camera is busy
     /// (scanning a sign): a phone can't run both.
     private func updateCameraStream() {
         let wanted = state?.phase == .PLAYING && state?.me.camWanted == true && isSynced && !CameraUsage.backCameraInUse
         guard wanted != isStreamingCamera else { return }
         isStreamingCamera = wanted
+        updateARTracking()
         if wanted {
             frontCamera.start { [weak self] jpeg in
                 Task { @MainActor in self?.sendCameraFrame(jpeg) }
