@@ -225,7 +225,7 @@ final class IRLAmongUsUITests: XCTestCase {
         app.collectionViews.firstMatch.swipeUp()
         app.buttons["developer.tools"].tap()
         app.collectionViews.firstMatch.swipeUp()
-        app.buttons["Body report animation"].tap()
+        app.buttons["Meeting banners (body, emergency)"].tap()
         app.buttons["bodyReport.preview.play"].tap()
         let banner = app.descendants(matching: .any)["bodyReport.animation"].firstMatch
         XCTAssertTrue(banner.waitForExistence(timeout: 3))
@@ -237,6 +237,53 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertFalse(banner.exists)
         app.buttons["bodyReport.preview.done"].tap()
         XCTAssertTrue(app.buttons["bodyReport.preview.play"].waitForExistence(timeout: 3))
+    }
+
+    func testEmergencyMeetingBannerShowsTheCallerAtTheButton() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Developer Mode"].waitForExistence(timeout: 5))
+        app.collectionViews.firstMatch.swipeUp()
+        app.buttons["developer.tools"].tap()
+        app.collectionViews.firstMatch.swipeUp()
+        app.buttons["Meeting banners (body, emergency)"].tap()
+        app.buttons["bodyReport.preview.kind"].tap()
+        app.buttons["Emergency meeting"].tap()
+        app.buttons["bodyReport.preview.play"].tap()
+        let banner = app.descendants(matching: .any)["emergencyMeeting.animation"].firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 3))
+        Thread.sleep(forTimeInterval: 0.8)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Emergency meeting over game map"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        XCTAssertTrue(app.buttons["bodyReport.preview.done"].waitForExistence(timeout: 5))
+    }
+
+    func testEjectionRevealsTheVerdictBehindTheCrewmate() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Developer Mode"].waitForExistence(timeout: 5))
+        app.collectionViews.firstMatch.swipeUp()
+        app.buttons["developer.tools"].tap()
+        let tool = app.buttons["Ejection animation"]
+        for _ in 0..<4 where !tool.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        tool.tap()
+        app.buttons["ejection.preview.play"].tap()
+        XCTAssertTrue(app.buttons["ejection.preview.done"].waitForExistence(timeout: 3))
+        for (seconds, name) in [(2.3, "Ejection: crewmate crossing the middle"), (3.6, "Ejection: verdict revealed")] {
+            Thread.sleep(forTimeInterval: seconds - (name.hasSuffix("middle") ? 0 : 2.3))
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = name
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        // Every letter revealed behind the crewmate has clicked.
+        let screen = app.descendants(matching: .any)["ejection.screen"].firstMatch
+        XCTAssertGreaterThan(Int(screen.value as? String ?? "") ?? 0, 10)
+        app.buttons["ejection.preview.done"].tap()
     }
 
     @MainActor

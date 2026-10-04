@@ -331,14 +331,11 @@ private struct LocalLobbyView: View {
                     .transition(.opacity)
             }
         }
-        .onChange(of: store.state?.phase, initial: true) { _, phase in
+        // The game is landscape in every phase (GameRootView keeps it so); asking for portrait here during
+        // meetings made the phone flip to portrait and straight back.
+        .onChange(of: store.state?.phase, initial: true) { _, _ in
             guard store.bodyReportPresentation == nil else { return }
-            if store.killPresentation == nil,
-               let phase, phase != .LOBBY && phase != .ROLE_REVEAL && phase != .PLAYING && phase != .GAME_OVER {
-                OrientationDelegate.requestPortrait()
-            } else {
-                OrientationDelegate.requestLandscape()
-            }
+            OrientationDelegate.requestLandscape()
         }
         .onChange(of: store.pendingJoinCode, initial: true) { _, pending in
             if let pending {
@@ -1981,23 +1978,7 @@ struct POCFloorPlan: View {
 
         ForEach(stations.filter { $0.style != .task }) { station in
             // Every other sign: special signs by kind, other players' signs as small grey pins.
-            VStack(spacing: 2) {
-                Image(systemName: station.style.icon)
-                    .font(.system(size: station.style == .sign ? 9 : 11, weight: .black))
-                    .foregroundStyle(.white)
-                    .frame(width: station.style == .sign ? 18 : 26, height: station.style == .sign ? 18 : 26)
-                    .background(station.style.color, in: Circle())
-                    .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 1.5))
-                if station.style != .sign || station.faded {
-                    Text(station.pinLabel)
-                        .font(.system(size: 7, weight: .black, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(.black.opacity(0.76), in: Capsule())
-                }
-            }
-            .opacity(station.faded ? 0.45 : 1)
+            SignPinView(station: station)
             .scaleEffect(1 / zoomScale)
             .position(projection.point(station.position))
             .allowsHitTesting(false)

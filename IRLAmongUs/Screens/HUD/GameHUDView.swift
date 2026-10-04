@@ -11,6 +11,8 @@ struct GameHUDView: View {
         case actions
         case detail(taskId: String)
         case task(taskId: String)
+        /// A special sign tapped on the map: its photo and what scanning it does.
+        case sign(stationId: String)
     }
 
     @State private var panel: Panel = .actions
@@ -29,7 +31,8 @@ struct GameHUDView: View {
             // Two equal squares side by side, as large as the screen allows.
             let side = max(240, min(geometry.size.height - 16, (geometry.size.width - 48) / 2))
             HStack(spacing: 16) {
-                HUDMapSquare(state: state, selectTask: { panel = .detail(taskId: $0) }, spectate: { spectating = true })
+                HUDMapSquare(state: state, selectTask: { panel = .detail(taskId: $0) },
+                             selectSign: { panel = .sign(stationId: $0) }, spectate: { spectating = true })
                     .frame(width: side, height: side)
                 rightSquare
                     .frame(width: side, height: side)
@@ -118,6 +121,14 @@ struct GameHUDView: View {
         case let .task(id):
             if let task = state.me.tasks.first(where: { $0.id == id }) {
                 HUDTaskSquare(state: state, task: task) { panel = .actions }
+            } else {
+                actions
+            }
+        case let .sign(id):
+            if let station = state.station(id) {
+                HUDSignDetail(state: state, station: station,
+                              close: { panel = .actions },
+                              scan: { scanTarget = station; scanning = true })
             } else {
                 actions
             }
@@ -262,6 +273,8 @@ struct HUDMapSquare: View {
     @Environment(GameStore.self) private var store
     let state: GameState
     let selectTask: (String) -> Void
+    /// A special sign tapped (security, red button, meeting point…).
+    var selectSign: (String) -> Void = { _ in }
     /// Ghosts: open everyone's cameras.
     var spectate: () -> Void = {}
 
@@ -281,10 +294,12 @@ struct HUDMapSquare: View {
             // Zoomed in to a little over a room across, locked on you.
             FollowFloorMap(
                 rooms: campus.rooms,
-                // This player's task signs, plus every other sign so the whole venue is on the map.
-                stations: pins.map(\.station) + state.otherSignPins(excluding: Set(pins.map(\.station.id)), campus: campus),
+                // This player's task signs and the special signs (red button, security…); other players'
+                // signs aren't yours to find, so they stay off.
+                stations: pins.map(\.station) + state.otherSignPins(excluding: Set(pins.map(\.station.id)), campus: campus,
+                                                                      includeSigns: false, includeMeeting: true),
                 completedStationIDs: Set(pins.filter(\.completed).map(\.station.id)),
-                meetingPoint: state.meetingPointPin,
+                meetingPoint: nil,
                 players: store.liveDots(state: state, campus: campus),
                 center: center,
                 centerIsPlayer: isPlayer,
@@ -293,6 +308,7 @@ struct HUDMapSquare: View {
                 isGhost: !state.me.alive,
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }
+                    else { selectSign(station.id) }
                 }
             )
             .overlay(alignment: .topTrailing) {
@@ -696,6 +712,74 @@ struct HUDTaskDetail: View {
             }
         }
         .foregroundStyle(.white.opacity(0.9))
+    }
+}
+
+/// A special sign tapped on the map: what it is, its photo, and SCAN THIS SIGN, like a task's detail.
+struct HUDSignDetail: View {
+    @Environment(GameStore.self) private var store
+    let state: GameState
+    let station: Station
+    let close: () -> Void
+    let scan: () -> Void
+
+    private var purpose: String {
+        switch station.kind {
+        case .emergency: return state.me.emergencyLeft > 0 ? "Scan it to call an emergency meeting (\(state.me.emergencyLeft) left)." : "No emergency meetings left."
+        case .meeting: return "Everyone gathers here for meetings."
+        case .security: return "Scan it to watch the cameras."
+        case .admin: return "Scan it to see who's in which room."
+        case .reactor: return "Meltdown: two people scan both reactor signs."
+        case .electrical: return "Lights out: scan it to fix the lights."
+        case .task: return "A sign."
+        }
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            VStack(alignment: .leading, spacing: 10) {
+                HUDSignPhoto(station: station, cornerRadius: 12)
+                    .frame(width: geometry.size.width, height: geometry.size.height * 0.48)
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(station.kind.label, systemImage: station.kind.icon)
+                        .font(.system(size: 18, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                    HStack(spacing: 6) {
+                        if let bearing = store.location.bearing(to: station), let heading = store.location.heading {
+                            Image(systemName: "location.north.fill").foregroundStyle(.cyan).rotationEffect(.degrees(bearing - heading))
+                        } else {
+                            Image(systemName: "mappin.and.ellipse").foregroundStyle(.cyan)
+                        }
+                        if let meters = store.location.distance(to: station) {
+                            Text("\(station.name) · \(HUDStyle.distance(meters))")
+                        } else {
+                            Text("\(station.name) · use the photo")
+                        }
+                    }
+                    .foregroundStyle(.white.opacity(0.9))
+                    Text(purpose).lineLimit(2)
+                    if let text = station.signText { Text("Text on the sign: “\(text)”") }
+                    Spacer(minLength: 0)
+                    Button(action: scan) {
+                        Label("SCAN THIS SIGN", systemImage: "camera.fill")
+                            .font(.system(size: 15, weight: .black, design: .rounded))
+                            .foregroundStyle(.black)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(.white, in: RoundedRectangle(cornerRadius: 10))
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(.black, lineWidth: 3))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("hud.sign.scan")
+                }
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .foregroundStyle(.white.opacity(0.75))
+                .lineLimit(1)
+            }
+        }
+        .padding(12)
+        .background(HUDStyle.panel())
+        .overlay(alignment: .topLeading) { HUDCloseButton(action: close) }
     }
 }
 

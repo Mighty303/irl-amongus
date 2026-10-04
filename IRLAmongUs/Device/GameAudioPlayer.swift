@@ -33,12 +33,13 @@ struct BodyReportSoundState {
     mutating func reset() { reported.removeAll() }
 }
 
-/// The winning team selects the cue; events and snapshots play it once per round.
+/// The winning team selects the cue, and everyone hears it (on the Defeat screen too, as in Among Us);
+/// events and snapshots play it once per round.
 struct VictorySoundState {
     private var played = false
 
     mutating func accept(winner: String, localRole: String?) -> GameSound? {
-        guard !played, GameOutcome.didWin(winner: winner, localRole: localRole) else { return nil }
+        guard !played else { return nil }
         let sound: GameSound
         switch winner {
         case "crewmates": sound = .crewmateVictory

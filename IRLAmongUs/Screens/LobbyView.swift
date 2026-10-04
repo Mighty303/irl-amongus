@@ -159,13 +159,15 @@ struct LobbyView: View {
     private func content(twoColumns: Bool) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
+                // Each category is built as its own view, not inline in this body: built inline, the whole
+                // settings grid sat on one stack and overflowed it (crash) when coming back from Saved games.
                 switch category {
-                case .game: gameSettings(twoColumns: twoColumns)
-                case .tasks: taskSettings(twoColumns: twoColumns)
-                case .timers: timerSettings(twoColumns: twoColumns)
-                case .signs: signSettings
-                case .players: playerSettings
-                case .advanced: advancedSettings(twoColumns: twoColumns)
+                case .game: LobbySettingsSection { gameSettings(twoColumns: twoColumns) }
+                case .tasks: LobbySettingsSection { taskSettings(twoColumns: twoColumns) }
+                case .timers: LobbySettingsSection { timerSettings(twoColumns: twoColumns) }
+                case .signs: LobbySettingsSection { signSettings }
+                case .players: LobbySettingsSection { playerSettings }
+                case .advanced: LobbySettingsSection { advancedSettings(twoColumns: twoColumns) }
                 }
             }
             .padding(2)
@@ -583,6 +585,12 @@ private struct SettingsSavedGameCard: View {
 
 /// Which SFU building and floor the game is on. The maps show that floor, positions assume it, and new
 /// signs default to it. Anyone in the lobby can change it.
+/// Builds its content in its own body, so SwiftUI evaluates it separately from the view that contains it.
+private struct LobbySettingsSection<Content: View>: View {
+    @ViewBuilder let content: () -> Content
+    var body: some View { content() }
+}
+
 private struct PlayAreaPicker: View {
     @Environment(GameStore.self) private var store
     let state: GameState

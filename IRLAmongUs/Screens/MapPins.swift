@@ -4,9 +4,13 @@ extension GameState {
     /// Pins for every sign with a location that isn't already a task pin: special signs by kind
     /// (red button, reactor, lights, security, admin) and other signs as small grey pins. The meeting
     /// point is drawn by the floor plan itself.
-    func otherSignPins(excluding taskPinIds: Set<String>, campus: CampusView = CampusView()) -> [POCStation] {
+    /// The game map passes `includeMeeting` (the meeting point as a tappable pin) and leaves out other
+    /// players' plain signs (`includeSigns: false`), which mean nothing to you in a game.
+    func otherSignPins(excluding taskPinIds: Set<String>, campus: CampusView = CampusView(),
+                       includeSigns: Bool = true, includeMeeting: Bool = false) -> [POCStation] {
         stations.compactMap { s in
-            guard !taskPinIds.contains(s.id), s.kind != .meeting, let lat = s.lat, let lng = s.lng else { return nil }
+            guard !taskPinIds.contains(s.id), includeMeeting || s.kind != .meeting, includeSigns || s.kind != .task,
+                  let lat = s.lat, let lng = s.lng else { return nil }
             let label = s.kind == .task ? (s.signText ?? s.name) : s.kind.shortLabel
             let offFloor = campus.isOffFloor(buildingId: s.buildingId, floorId: s.floorId)
             return POCStation(id: s.id, displayName: s.signText ?? s.name, taskType: s.kind.label,
@@ -78,11 +82,16 @@ extension GameStore {
 
     /// The floor shown for a building on the game maps: the play area's floor (picked at setup), else the
     /// one you're on, else the floor most of its signs are on.
+    /// The floor you're on (the red button at the start, then your scans and the barometer) comes first; then
+    /// the floor most of the signs are on; the play area last. Putting the play area first drew another
+    /// floor's plan under the signs when it was set to a different floor than the saved game's signs.
     func shownFloorHint(_ building: CampusBuilding, stations: [Station], playArea: CampusPlace?) -> String? {
-        if playArea?.buildingId == building.id { return playArea?.floorId }
         if positions.estimate?.buildingId == building.id, let floor = positions.estimate?.floorId { return floor }
         let signFloors = stations.filter { $0.buildingId == building.id }.compactMap(\.floorId)
-        return Dictionary(grouping: signFloors, by: { $0 }).max { $0.value.count < $1.value.count }?.key
+        if let most = Dictionary(grouping: signFloors, by: { $0 }).max(by: { $0.value.count < $1.value.count })?.key {
+            return most
+        }
+        return playArea?.buildingId == building.id ? playArea?.floorId : nil
     }
 }
 
@@ -113,5 +122,53 @@ struct CampusFloorControl: View {
         .background(.black.opacity(0.72), in: Capsule())
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(building.name), \(floor.name)")
+    }
+}
+
+/// A sign on a game map: Among Us artwork for the security room and the emergency button, a coloured
+/// symbol for the rest, with its label under it. Big enough to read at a glance while walking.
+struct SignPinView: View {
+    let station: POCStation
+
+    static let signSize: CGFloat = 40
+    static let specialSize: CGFloat = 56
+
+    var body: some View {
+        VStack(spacing: 2) {
+            icon
+            // The security art already says SECURITY.
+            if (station.style != .sign && station.style != .security) || station.faded {
+                Text(station.pinLabel)
+                    .font(.system(size: 9, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(.black.opacity(0.76), in: Capsule())
+            }
+        }
+        .opacity(station.faded ? 0.45 : 1)
+    }
+
+    @ViewBuilder private var icon: some View {
+        switch station.style {
+        case .security:
+            Image("SecurityActionIcon").resizable().scaledToFit()
+                .frame(width: Self.specialSize, height: Self.specialSize)
+                .shadow(color: .black.opacity(0.6), radius: 2)
+        case .emergency:
+            Image("EmergencyButtonIcon").resizable().interpolation(.high).scaledToFit()
+                .padding(4)
+                .frame(width: Self.specialSize * 1.25, height: Self.specialSize * 0.8)
+                .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(POCPinStyle.emergency.color, lineWidth: 2.5))
+        default:
+            let size = station.style == .sign ? Self.signSize : Self.specialSize
+            Image(systemName: station.style.icon)
+                .font(.system(size: size * 0.45, weight: .black))
+                .foregroundStyle(.white)
+                .frame(width: size, height: size)
+                .background(station.style.color, in: Circle())
+                .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 2))
+        }
     }
 }

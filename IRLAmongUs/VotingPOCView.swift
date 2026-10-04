@@ -17,6 +17,8 @@ struct VotingPOCView: View {
     var submitVote: (VoteTarget) async -> Bool = { _ in false }
     var checkIn: () -> Void = {}
     var advance: () -> Void = {}
+    /// Everyone's at the meeting point: start the discussion timer now instead of waiting for every check-in.
+    var startDiscussion: () -> Void = {}
     @State private var liveSelection: VoteTarget?
     @State private var submitting = false
     @State private var acceptedVote = false
@@ -65,7 +67,11 @@ struct VotingPOCView: View {
     }
 
     private func refresh() {
-        if liveState != nil { liveSeconds = secondsRemaining() } else { round.refresh() }
+        guard let state = liveState else { round.refresh(); return }
+        let seconds = secondsRemaining()
+        // The vote timer ticks through the last ten seconds of voting.
+        if state.phase == .VOTING, seconds != liveSeconds, (1...10).contains(seconds) { GameSoundEffect.voteTimer.play() }
+        liveSeconds = seconds
     }
     private func select(_ target: VoteTarget) {
         if liveState == nil { round.select(target) } else if canVote { liveSelection = target }
@@ -173,6 +179,12 @@ struct VotingPOCView: View {
                         if state.meeting?.stage == "gathering", state.me.alive,
                            state.meeting?.arrived.contains(state.me.id) != true {
                             Button("Check in") { checkIn() }.buttonStyle(.borderedProminent)
+                        }
+                        if state.meeting?.stage == "gathering", state.me.alive {
+                            Button("Everyone's here · Start") { startDiscussion() }
+                                .buttonStyle(.borderedProminent)
+                                .tint(Color(red: 0.2, green: 0.62, blue: 0.36))
+                                .accessibilityIdentifier("meeting.startDiscussion")
                         }
                     }
                     if liveState?.isHost == true { Button("Skip ahead") { advance() } }

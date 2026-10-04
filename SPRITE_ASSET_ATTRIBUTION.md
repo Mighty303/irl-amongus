@@ -79,3 +79,18 @@ that crop while preserving its original silhouette, visor, outline, and floor
 shadow. Regenerate them with `python3 scripts/generate-lobby-player-colors.py`.
 
 - Role-reveal audio (`RoleRevealSound`): original `Roundstart_MAIN.wav` from [Among Us — General Sounds](https://sounds.spriters-resource.com/pc_computer/amongus/asset/431696/), uploaded by imJJ. Bundled without re-encoding.
+
+## Emergency meeting
+
+`EmergencyMeetingLettering`, `EmergencyMeetingTable`, `EmergencyMeetingHand`, `EmergencyMeetingCrewmate`
+and `EmergencyButtonIcon` are unchanged crops (transparent edges trimmed, neighbouring sprites cleared)
+from the same [BeforeVoting atlas](https://github.com/AlvajoyAsante/among-us-assets/blob/main/Voting/BeforeVoting-sharedassets0.assets-196.png)
+as the body report. Playback recolours the crewmate and hand to the caller's suit. Regenerate with
+`swift scripts/import-emergency-meeting-assets.swift`. Among Us and its original artwork belong to Innersloth.
+
+## Game sounds
+
+The `Sound*` data assets under `IRLAmongUs/Assets.xcassets/Sounds` (emergency alarm, sabotage alarm,
+eject text, voting, panels, player leaving) are re-encoded to AAC by `scripts/import-game-sounds.py` from
+the "General Sounds" and "Player" packs on https://www.sounds-resource.com/pc_computer/amongus/,
+uploaded by imJJ. Among Us and its original audio belong to Innersloth.

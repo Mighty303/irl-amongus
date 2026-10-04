@@ -125,7 +125,9 @@ final class GameStore {
         location.onHeading = { [positions] in positions.useHeading($0) }
         if session != nil { connect() }
         if let base = serverURL { Task { [campus] in await campus.load(serverURL: base) } }
-        cameraUsageObserver = NotificationCenter.default.addObserver(forName: CameraUsage.changed, object: nil, queue: .main) { [weak self] _ in
+        // No queue: runs at once on the posting thread (always main), so AR lets go of the camera before
+        // the sign scanner's session is queued to start.
+        cameraUsageObserver = NotificationCenter.default.addObserver(forName: CameraUsage.changed, object: nil, queue: nil) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.updateCameraStream()
                 self?.updateARTracking()
@@ -376,6 +378,13 @@ final class GameStore {
     var pendingJoinCode: String?
 
     func leave() {
+        // Quitting a lobby removes you there (your name is free to rejoin), instead of leaving you offline.
+        // Close the connection only once the message is out.
+        if state?.phase == .LOBBY, isSynced, let socket,
+           let data = try? JSONSerialization.data(withJSONObject: ["id": 0, "action": "leave", "payload": [String: Any]()]) {
+            self.socket = nil
+            socket.send(.string(String(decoding: data, as: UTF8.self))) { _ in socket.cancel(with: .goingAway, reason: nil) }
+        }
         disconnect()
         alert = nil
         killAudio.stop()
@@ -395,6 +404,7 @@ final class GameStore {
         ble.stop()
         location.stop()
         positions.reset()
+        GameSoundEffect.sabotageAlarm.stop()
         localTrackingOn = false
         updateARTracking()
     }
@@ -549,6 +559,7 @@ final class GameStore {
         }
         clockOffset = newState.serverTime - Date().timeIntervalSince1970 * 1000
         state = newState
+        playStateSounds(old: old, new: newState)
         if deathSound.update(wasAlive: old?.me.alive, isAlive: newState.me.alive, isBody: newState.me.isBody) {
             killAudio.play(.victim)
         }
@@ -648,7 +659,10 @@ final class GameStore {
             }
             Haptics.alarm()
         case "EMERGENCY_MEETING":
-            alert = Alert(title: "🚨 EMERGENCY MEETING", subtitle: "\(data["callerName"] as? String ?? "Someone") pressed the button. Return to the meeting area.", color: .red)
+            if let state {
+                presentEmergencyMeeting(callerID: data["callerId"] as? String ?? state.meeting?.calledBy, roster: state.players,
+                                        backdrop: state.phase == .PLAYING ? state : nil)
+            }
             Haptics.alarm()
         case "VOTING_STARTED":
             Haptics.heavy()
@@ -657,8 +671,11 @@ final class GameStore {
             alert = Alert(title: kind == "reactor" ? "☢️ REACTOR MELTDOWN" : "💡 LIGHTS SABOTAGED",
                           subtitle: kind == "reactor" ? "Two people must activate both reactor stations!" : "Fix the lights at Electrical.",
                           color: .orange)
+            // Among Us sounds the alarm until the reactor is fixed; lights go out silently.
+            if kind == "reactor" { GameSoundEffect.sabotageAlarm.play(loop: true) }
             Haptics.alarm(times: 2)
         case "SABOTAGE_RESOLVED":
+            GameSoundEffect.sabotageAlarm.stop()
             Haptics.success()
         case "CREWMATES_WIN":
             playVictorySound(winner: "crewmates")
@@ -700,6 +717,30 @@ final class GameStore {
         bodyReportBackdrop = backdrop
         bodyReportPresentation = BodyReportPresentation(bodyID: bodyID,
             color: PlayerColor.rosterColor(for: bodyID, in: roster) ?? .black)
+    }
+
+    /// The emergency button: the caller at the table, "EMERGENCY MEETING" and the alarm, over everything.
+    private func presentEmergencyMeeting(callerID: String?, roster: [PlayerView], backdrop: GameState?) {
+        GameSoundEffect.emergencyMeeting.play()
+        killPresentation = nil
+        alert = nil
+        bodyReportBackdrop = backdrop
+        bodyReportPresentation = BodyReportPresentation(bodyID: callerID ?? "emergency",
+            color: callerID.flatMap { PlayerColor.rosterColor(for: $0, in: roster) } ?? .red, kind: .emergency)
+    }
+
+    /// Voting, lobby and sabotage sounds that follow from the snapshot rather than an event.
+    private func playStateSounds(old: GameState?, new: GameState) {
+        guard let old, old.code == new.code else { return }
+        let votes = { (s: GameState) in s.players.filter(\.hasVoted).count }
+        if new.phase == .VOTING, old.phase == .VOTING, votes(new) > votes(old) { GameSoundEffect.vote.play() }
+        if old.phase == .VOTING, new.phase != .VOTING { GameSoundEffect.voteLockIn.play() }
+        if new.phase == .LOBBY, old.phase == .LOBBY,
+           old.players.contains(where: { p in p.id != new.me.id && !new.players.contains { $0.id == p.id } }) {
+            GameSoundEffect.playerLeft.play()
+        }
+        // The reactor alarm stops with the reactor (fixed, a meeting, the game ending), however we hear of it.
+        if new.sabotage?.kind != "reactor" || new.phase != .PLAYING { GameSoundEffect.sabotageAlarm.stop() }
     }
 
     func dismissBodyReport(_ id: UUID) {
@@ -832,7 +873,11 @@ final class GameStore {
         }
     }
 
-    private var arRuns: Bool { positionMode == .ar && localTrackingOn && ARPositionTracker.isSupported }
+    /// Not in the lobby (unless the live map is open): that's where everyone photographs signs, and the
+    /// camera going back and forth between ARKit and the sign camera is what's risky.
+    private var arRuns: Bool {
+        positionMode == .ar && localTrackingOn && ARPositionTracker.isSupported && (state?.phase != .LOBBY || liveMapOpen)
+    }
 
     private enum CameraSource { case front, ar }
     @ObservationIgnored private var cameraSource: CameraSource?
