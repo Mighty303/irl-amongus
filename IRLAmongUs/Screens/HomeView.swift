@@ -4,6 +4,8 @@ struct HomeView: View {
     @Environment(GameStore.self) private var store
     @State private var code = ""
     @State private var scanning = false
+    @State private var scannedLobbyPayload: String?
+    @State private var showingJoinName = false
     @State private var serverStatus: String?
     @State private var busy = false
 
@@ -44,17 +46,25 @@ struct HomeView: View {
                 }
             }
             .navigationTitle("IRL Among Us")
-            .sheet(isPresented: $scanning) {
+            .sheet(isPresented: $scanning, onDismiss: {
+                guard let payload = scannedLobbyPayload else { return }
+                scannedLobbyPayload = nil
+                Task { await store.handleLobbyQRCode(payload) }
+            }) {
                 QRScanSheet(title: "Scan lobby QR") { payload in
-                    if case let .join(c, server) = QRPayload(payload) {
-                        if let server { store.serverURLString = server }
-                        code = c
-                        scanning = false
-                    }
+                    scannedLobbyPayload = payload
+                    scanning = false
                 }
             }
+            .sheet(isPresented: $showingJoinName) {
+                LobbyJoinNameSheet(code: code)
+            }
             .onChange(of: store.pendingJoinCode, initial: true) { _, pending in
-                if let pending { code = pending; store.pendingJoinCode = nil }
+                if let pending {
+                    code = pending
+                    store.pendingJoinCode = nil
+                    showingJoinName = store.playerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                }
             }
         }
     }
@@ -82,5 +92,41 @@ struct QRScanSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { Button("Close") { dismiss() } }
         }
+    }
+}
+
+/// Keeps the scanned lobby selected while a new player supplies their name.
+struct LobbyJoinNameSheet: View {
+    let code: String
+    @Environment(GameStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var nameFocused: Bool
+
+    var body: some View {
+        @Bindable var store = store
+        NavigationStack {
+            Form {
+                Section {
+                    Text("Enter your name to join lobby \(code).")
+                    TextField("Display name", text: $store.playerName)
+                        .textInputAutocapitalization(.words)
+                        .focused($nameFocused)
+                        .submitLabel(.go)
+                        .onSubmit { join() }
+                    Button("Join game") { join() }
+                        .disabled(!store.canEnterLobby)
+                }
+            }
+            .navigationTitle("Join lobby")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { Button("Cancel") { dismiss() } }
+            .onAppear { nameFocused = true }
+        }
+    }
+
+    private func join() {
+        guard store.canEnterLobby else { return }
+        dismiss()
+        Task { await store.joinGame(code: code) }
     }
 }
