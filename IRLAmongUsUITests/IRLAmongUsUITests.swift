@@ -2,6 +2,47 @@ import XCTest
 
 final class IRLAmongUsUITests: XCTestCase {
     @MainActor
+    func testARPresetMapSetupAlignsAndCompletesSelectedBeacon() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
+        app.launch()
+        let entry = app.buttons["developer.arWalking"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        if !entry.isHittable { app.collectionViews.firstMatch.swipeUp() }
+        entry.tap()
+        XCTAssertTrue(app.buttons["arWalking.simulation"].waitForExistence(timeout: 5))
+        app.buttons["arWalking.simulation"].tap()
+        app.buttons["Preset map"].tap()
+        XCTAssertTrue(app.buttons["arWalking.mapSetup"].waitForExistence(timeout: 3))
+        app.buttons["arWalking.mapSetup"].tap()
+        XCTAssertTrue(app.buttons["arWalking.saveMap"].waitForExistence(timeout: 3))
+        let defaults = app.buttons["arWalking.defaults"]
+        if !defaults.isHittable { app.scrollViews.firstMatch.swipeUp() }
+        defaults.tap()
+        app.buttons["arWalking.edit.reactor"].tap()
+        let map = app.descendants(matching: .any)["arWalking.measuredMap"].firstMatch
+        XCTAssertTrue(map.waitForExistence(timeout: 3))
+        map.coordinate(withNormalizedOffset: CGVector(dx: 0.65, dy: 0.45)).tap()
+        captureVoting(app, name: "AR preset task map setup")
+        app.buttons["arWalking.saveMap"].tap()
+        XCTAssertTrue(app.buttons["arWalking.align"].waitForExistence(timeout: 3))
+        app.buttons["arWalking.align"].tap()
+        XCTAssertTrue(app.buttons["arWalking.rescan"].waitForExistence(timeout: 3))
+        app.buttons["arWalking.walk"].tap()
+        XCTAssertFalse(app.buttons["arWalking.use"].isEnabled)
+        app.buttons["arWalking.stop"].tap()
+        XCTAssertTrue(app.buttons["arWalking.use"].isEnabled)
+        captureVoting(app, name: "AR preset map aligned")
+        app.buttons["arWalking.use"].tap()
+        app.buttons["arWalking.complete"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["arWalking.completed"].firstMatch.waitForExistence(timeout: 3))
+        app.buttons["arWalking.rescan"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["arWalking.completed"].firstMatch.exists)
+        app.buttons["arWalking.reset"].tap()
+        XCTAssertTrue(app.buttons["arWalking.align"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testARWalkingPOCRequiresStopAndBlocksTrackingLoss() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]

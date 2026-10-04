@@ -4,13 +4,25 @@ import Observation
 import SceneKit
 import UIKit
 
-/// One-room, one-task experiment. ARKit measures relative movement; no GPS or network is used.
+/// Local floor-placement and measured-map experiments. ARKit measures relative movement; no GPS or network is used.
 @MainActor @Observable
 final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
     private(set) var gate = NearbyTaskGate()
     private(set) var status = "Starting camera…"
     private(set) var tracking = false
-    private(set) var completed = false
+    private var floorCompleted = false
+    private(set) var layout = ARMapLayout.load()
+    private(set) var mapped = false
+    private(set) var aligned = false
+    private(set) var markerDetected = false
+    private(set) var completedTasks: Set<String> = []
+    private(set) var selectedTaskID = "electrical"
+    private(set) var mapPosition: SIMD2<Float>?
+    var selectedTask: ARMapTask? { layout.tasks.first { $0.id == selectedTaskID } }
+    var completed: Bool { mapped ? completedTasks.contains(selectedTaskID) : floorCompleted }
+    var completedCount: Int { mapped ? completedTasks.count : (floorCompleted ? 1 : 0) }
+    @ObservationIgnored private var alignment: ARMapAlignment?
+    @ObservationIgnored private var beaconNodes: [String: SCNNode] = [:]
     private(set) var taskOpen = false
     private(set) var origin: SIMD2<Float>?
     private(set) var heading: Float = 0
@@ -63,8 +75,18 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
         let configuration = ARWorldTrackingConfiguration()
         configuration.worldAlignment = .gravity
         configuration.planeDetection = [.horizontal]
+        if mapped {
+            guard let cgImage = UIImage(named: "ARAlignmentMarker")?.cgImage else {
+                status = "Alignment marker image is missing"
+                return
+            }
+            let reference = ARReferenceImage(cgImage, orientation: .up, physicalWidth: CGFloat(layout.markerWidthM))
+            reference.name = "walking-map-origin"
+            configuration.detectionImages = [reference]
+            configuration.maximumNumberOfTrackedImages = 1
+        }
         view?.session.run(configuration, options: [.resetTracking, .removeExistingAnchors])
-        status = "Move the camera slowly to find the floor"
+        status = mapped ? "Point at the printed ALIGN marker" : "Move the camera slowly to find the floor"
         resetRequired = false
     }
 
@@ -74,7 +96,14 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
         marker?.removeFromParentNode()
         marker = nil
         anchorID = nil
-        completed = false
+        floorCompleted = false
+        completedTasks = []
+        aligned = false
+        markerDetected = false
+        alignment = nil
+        mapPosition = nil
+        beaconNodes.values.forEach { $0.removeFromParentNode() }
+        beaconNodes = [:]
         taskOpen = false
         previousPose = nil
         lastProcessed = 0
@@ -85,7 +114,7 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
             simulationTime = 0
             tracking = true
             canPlace = true
-            status = "Simulation · place a task to begin"
+            status = mapped ? "Simulation · scan marker to align preset tasks" : "Simulation · place a task to begin"
         } else if active {
             Task { await requestCamera() }
         }
@@ -105,7 +134,7 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
     }
 
     func placeTask() {
-        guard tracking, !completed, gate.task == nil else { return }
+        guard !mapped, tracking, !completed, gate.task == nil else { return }
         if simulated {
             gate.placeTask(SIMD2(0, -4))
             origin = .zero
@@ -162,6 +191,8 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
         }
         guard !resetRequired else { return }
         tracking = true
+        markerDetected = frame.anchors.contains { ($0 as? ARImageAnchor)?.isTracked == true }
+        beaconNodes.values.forEach { $0.isHidden = false }
         canPlace = view.map { floorHit(in: $0) != nil } ?? false
         let transform = frame.camera.transform
         let point = SIMD2(transform.columns.3.x, transform.columns.3.z)
@@ -180,8 +211,20 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
             }
             marker?.simdPosition = SIMD3(task.x, anchor.transform.columns.3.y + 0.035, task.y)
         }
-        heading = atan2(-transform.columns.2.x, transform.columns.2.z)
+        if mapped {
+            guard let alignment else {
+                status = markerDetected ? "Marker found · tap Align map" : "Point at the printed ALIGN marker"
+                return
+            }
+            let camera = SIMD3(transform.columns.3.x, transform.columns.3.y, transform.columns.3.z)
+            mapPosition = alignment.mapPoint(camera)
+            let forward = SIMD3(-transform.columns.2.x, -transform.columns.2.y, -transform.columns.2.z)
+            heading = atan2(simd_dot(forward, alignment.right), simd_dot(forward, alignment.awayFromWall))
+        } else {
+            heading = atan2(-transform.columns.2.x, transform.columns.2.z)
+        }
         gate.update(position: point, at: frame.timestamp, tracking: true)
+        if mapped { updateMappedStatus(); return }
         if gate.task == nil { status = canPlace ? "Aim at the floor and place a task" : "Point down toward a clear floor surface" }
         else if completed { status = "Task completed · reset to test another route" }
         else if gate.ready { status = "Stopped nearby · tap Use" }
@@ -192,6 +235,8 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
     private func pause(_ message: String) {
         tracking = false
         canPlace = false
+        markerDetected = false
+        beaconNodes.values.forEach { $0.isHidden = true }
         previousPose = nil
         gate.pause()
         taskOpen = false
@@ -227,13 +272,125 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
     func completeTask() {
         checkFreshness()
         guard taskOpen, tracking, gate.ready else { taskOpen = false; return }
-        completed = true
+        if mapped {
+            completedTasks.insert(selectedTaskID)
+            refreshBeaconColours()
+        } else { floorCompleted = true }
         taskOpen = false
-        status = "Task completed · reset to test another route"
+        status = mapped ? "\(selectedTask?.name ?? "Task") completed · choose another beacon" : "Task completed · reset to test another route"
         Haptics.success()
     }
 
     func closeTask() { taskOpen = false }
+
+    func setMapped(_ enabled: Bool) {
+        guard mapped != enabled else { return }
+        mapped = enabled
+        reset()
+    }
+
+    func applyLayout(_ value: ARMapLayout) {
+        guard value.isValid else { return }
+        layout = value
+        layout.save()
+        if selectedTask == nil { selectedTaskID = value.tasks[0].id }
+        if mapped { reset() }
+    }
+
+    func alignMap() {
+        guard mapped, tracking, !resetRequired else { return }
+        let transform: simd_float4x4
+        if simulated {
+            transform = simd_float4x4(columns: (
+                SIMD4(1, 0, 0, 0), SIMD4(0, 0, 1, 0), SIMD4(0, -1, 0, 0),
+                SIMD4(0, layout.markerCentreHeightM, 0, 1)))
+        } else {
+            checkFreshness()
+            guard tracking, let frame = view?.session.currentFrame,
+                  case .normal = frame.camera.trackingState,
+                  let image = frame.anchors.compactMap({ $0 as? ARImageAnchor }).first(where: { $0.isTracked }) else {
+                status = "Keep the entire printed ALIGN marker visible, then retry"
+                return
+            }
+            transform = image.transform
+        }
+        guard let value = ARMapAlignment(markerTransform: transform, centreHeight: layout.markerCentreHeightM) else {
+            status = "Mount the marker upright on a vertical wall, then retry"
+            return
+        }
+        alignment = value
+        aligned = true
+        origin = SIMD2(value.floorOrigin.x, value.floorOrigin.z)
+        previousPose = nil
+        taskOpen = false
+        beaconNodes.values.forEach { $0.removeFromParentNode() }
+        beaconNodes = [:]
+        for task in layout.tasks {
+            let node = makeBeacon(task)
+            node.simdPosition = value.worldPoint(task.point)
+            view?.scene.rootNode.addChildNode(node)
+            beaconNodes[task.id] = node
+        }
+        selectTask(selectedTaskID)
+        if simulated {
+            let start = value.worldPoint(mapPosition ?? SIMD2(0, 1), height: 1.5)
+            sampleSimulation(SIMD2(start.x, start.z))
+        }
+        status = "Map aligned · walk toward a task beacon"
+    }
+
+    func selectTask(_ id: String) {
+        guard let task = layout.tasks.first(where: { $0.id == id }) else { return }
+        selectedTaskID = id
+        taskOpen = false
+        if let alignment {
+            let point = alignment.worldPoint(task.point)
+            gate.placeTask(SIMD2(point.x, point.z))
+        }
+        refreshBeaconColours()
+    }
+
+    private func makeBeacon(_ task: ARMapTask) -> SCNNode {
+        let node = SCNNode()
+        let ring = SCNNode(geometry: SCNTorus(ringRadius: 0.25, pipeRadius: 0.025))
+        ring.position.y = 0.04
+        let beam = SCNNode(geometry: SCNCylinder(radius: 0.035, height: 0.9))
+        beam.position.y = 0.5
+        let orb = SCNNode(geometry: SCNSphere(radius: 0.11))
+        orb.position.y = 1.05
+        let text = SCNText(string: task.name, extrusionDepth: 0)
+        text.font = .boldSystemFont(ofSize: 10)
+        text.flatness = 0.2
+        let label = SCNNode(geometry: text)
+        let bounds = text.boundingBox
+        label.pivot = SCNMatrix4MakeTranslation((bounds.min.x + bounds.max.x) / 2, bounds.min.y, 0)
+        label.scale = SCNVector3(0.025, 0.025, 0.025)
+        label.position.y = 1.25
+        let billboard = SCNBillboardConstraint()
+        billboard.freeAxes = .Y
+        label.constraints = [billboard]
+        for child in [ring, beam, orb, label] { node.addChildNode(child) }
+        return node
+    }
+
+    private func refreshBeaconColours() {
+        for (id, node) in beaconNodes {
+            let colour: UIColor = completedTasks.contains(id) ? .systemGreen : (id == selectedTaskID ? .systemYellow : .systemCyan)
+            for child in node.childNodes {
+                child.geometry?.firstMaterial?.diffuse.contents = colour
+                child.geometry?.firstMaterial?.emission.contents = colour
+                child.geometry?.firstMaterial?.lightingModel = .constant
+            }
+        }
+    }
+
+    private func updateMappedStatus() {
+        let name = selectedTask?.name ?? "Task"
+        if completed { status = "\(name) completed · choose another beacon" }
+        else if gate.ready { status = "\(name) · stopped nearby; tap Use" }
+        else if gate.distance.map({ $0 <= NearbyTaskGate.interactionRadius }) == true { status = "\(name) · stop briefly to use" }
+        else { status = "Walk toward \(name)" }
+    }
 
     func simulate() {
         simulated = true
@@ -244,21 +401,26 @@ final class ARWalkingSession: NSObject, @preconcurrency ARSessionDelegate {
     private func sampleSimulation(_ point: SIMD2<Float>) {
         simulationTime += 0.1
         gate.update(position: point, at: simulationTime, tracking: tracking)
+        if mapped, let alignment { mapPosition = alignment.mapPoint(SIMD3(point.x, alignment.floorOrigin.y + 1.5, point.y)) }
     }
 
     func simulateWalk() {
         guard gate.task != nil, tracking else { return }
         let start = gate.position ?? .zero
-        let end = SIMD2<Float>(0, -2.5)
-        for step in 1...15 { sampleSimulation(start + (end - start) * Float(step) / 15) }
+        let end = mapped ? (gate.task! - SIMD2<Float>(0, 1.5)) : SIMD2<Float>(0, -2.5)
+        let steps = max(1, Int(ceil(simd_distance(start, end) / 0.15)))
+        for step in 1...steps { sampleSimulation(start + (end - start) * Float(step) / Float(steps)) }
         status = "Simulation · stop briefly to use the task"
     }
 
     func simulateRunPast() {
         guard gate.task != nil, tracking else { return }
         gate.pause()
-        sampleSimulation(.zero)
-        for step in 1...20 { sampleSimulation(SIMD2(0, -Float(step) * 0.4)) }
+        let start = mapped ? gate.task! - SIMD2<Float>(0, 4) : .zero
+        sampleSimulation(start)
+        for step in 1...20 {
+            sampleSimulation(start + SIMD2(0, (mapped ? 1 : -1) * Float(step) * 0.4))
+        }
         status = "Simulation · ran past; task stayed locked"
     }
 

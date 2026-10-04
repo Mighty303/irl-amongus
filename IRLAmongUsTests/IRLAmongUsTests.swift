@@ -1,9 +1,111 @@
 import AVFoundation
 import Foundation
 import Observation
+import simd
 import Testing
 import UIKit
 @testable import IRLAmongUs
+
+struct ARMapAlignmentTests {
+    private func wallMarker() -> simd_float4x4 {
+        simd_float4x4(columns: (SIMD4(1, 0, 0, 0), SIMD4(0, 0, 1, 0),
+                               SIMD4(0, -1, 0, 0), SIMD4(7, 1.2, 11, 1)))
+    }
+
+    @Test func measuredMapConvertsThroughTranslatedAndRotatedWallMarker() throws {
+        let first = try #require(ARMapAlignment(markerTransform: wallMarker(), centreHeight: 1.2))
+        #expect(simd_distance(first.worldPoint(SIMD2(2, 3)), SIMD3(9, 0, 14)) < 0.0001)
+        #expect(simd_distance(first.mapPoint(SIMD3(9, 1.5, 14)), SIMD2(2, 3)) < 0.0001)
+        let rotation = simd_float4x4(simd_quatf(angle: .pi / 2, axis: SIMD3(0, 1, 0)))
+        var rotated = rotation * wallMarker()
+        rotated.columns.3 = SIMD4(7, 1.2, 11, 1)
+        let second = try #require(ARMapAlignment(markerTransform: rotated, centreHeight: 1.2))
+        let point = second.worldPoint(SIMD2(2, 3), height: 1)
+        #expect(simd_distance(point, SIMD3(10, 1, 9)) < 0.0001)
+        #expect(simd_distance(second.mapPoint(point), SIMD2(2, 3)) < 0.0001)
+    }
+
+    @Test func flatTiltedAndInvalidMarkersCannotAlignTheMap() {
+        #expect(ARMapAlignment(markerTransform: matrix_identity_float4x4, centreHeight: 1.2) == nil)
+        #expect(ARMapAlignment(markerTransform: wallMarker(), centreHeight: .nan) == nil)
+        var tilted = wallMarker()
+        tilted.columns.0 = SIMD4(0.5, 0.8, 0, 0)
+        #expect(ARMapAlignment(markerTransform: tilted, centreHeight: 1.2) == nil)
+        var corrupt = wallMarker()
+        corrupt.columns.3.x = .infinity
+        #expect(ARMapAlignment(markerTransform: corrupt, centreHeight: 1.2) == nil)
+    }
+
+    @Test func savedLayoutRoundTripsAndRejectsInvalidMeasurements() throws {
+        let name = "ARMapLayoutTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        var layout = ARMapLayout()
+        layout.tasks[0].x = 1.25
+        layout.tasks[0].y = 4.5
+        layout.markerCentreHeightM = 1.4
+        layout.save(to: defaults)
+        #expect(ARMapLayout.load(from: defaults) == layout)
+        var invalid = layout
+        invalid.tasks[0].y = -1
+        #expect(!invalid.isValid)
+        invalid.save(to: defaults)
+        #expect(ARMapLayout.load(from: defaults) == layout)
+        defaults.set(Data("invalid".utf8), forKey: ARMapLayout.storageKey)
+        #expect(ARMapLayout.load(from: defaults) == ARMapLayout())
+    }
+
+    @MainActor @Test func markerAndPrintableAreBundled() throws {
+        let marker = try #require(UIImage(named: "ARAlignmentMarker")?.cgImage)
+        #expect(marker.width == 800 && marker.height == 800)
+        let pdf = try #require(NSDataAsset(name: "ARAlignmentPrintable")?.data)
+        let provider = try #require(CGDataProvider(data: pdf as CFData))
+        let document = try #require(CGPDFDocument(provider))
+        #expect(document.numberOfPages == 1)
+        #expect(document.page(at: 1)?.getBoxRect(.mediaBox).width == 612)
+    }
+}
+
+@MainActor struct ARMappedSessionTests {
+    @Test func scanSelectionAndRescanShareTheMeasuredTaskCoordinates() {
+        let session = ARWalkingSession()
+        session.simulate()
+        session.applyLayout(ARMapLayout())
+        session.setMapped(true)
+        #expect(!session.aligned && session.gate.task == nil)
+        session.alignMap()
+        #expect(session.aligned)
+        #expect(session.gate.task == SIMD2(0, 3))
+        session.simulateWalk()
+        session.simulateStop()
+        #expect(session.gate.ready)
+        session.openTask()
+        session.completeTask()
+        #expect(session.completedTasks == ["electrical"])
+        session.selectTask("reactor")
+        #expect(session.gate.task == SIMD2(-3, 6))
+        #expect(!session.completed && !session.gate.ready)
+        session.alignMap()
+        #expect(session.completedTasks == ["electrical"])
+        #expect(!session.gate.ready)
+    }
+
+    @Test func editingMapAndResettingRequireFreshAlignment() {
+        let session = ARWalkingSession()
+        session.simulate()
+        session.setMapped(true)
+        session.alignMap()
+        var map = ARMapLayout()
+        map.tasks[0].x = 1
+        session.applyLayout(map)
+        #expect(!session.aligned && session.gate.task == nil)
+        session.alignMap()
+        #expect(session.gate.task == SIMD2(1, 3))
+        session.reset()
+        #expect(!session.aligned && session.mapPosition == nil)
+        session.applyLayout(ARMapLayout())
+    }
+}
 
 struct NearbyTaskGateTests {
     @Test func passingThroughRangeNeverUnlocksWithoutStopping() {
