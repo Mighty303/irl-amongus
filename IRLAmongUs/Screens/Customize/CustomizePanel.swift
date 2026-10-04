@@ -438,8 +438,8 @@ private struct FaceFitter: View {
     }
 }
 
-private extension PlayerColor {
-    /// The suit color, for the customize swatches.
+extension PlayerColor {
+    /// The suit color, for the customize swatches and map dots.
     var swatch: Color {
         switch self {
         case .red: return Color(hex: 0xC51111)
