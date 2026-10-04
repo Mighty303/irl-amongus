@@ -8,10 +8,11 @@ struct GameOverView: View {
     @State private var restarting = false
 
     private var role: Role { state.winner == "crewmates" ? .crewmate : .impostor }
+    private var didWin: Bool { GameOutcome.didWin(winner: state.winner, localRole: state.me.role?.rawValue) }
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            GameOverArtwork(role: role, players: GameOverArtwork.winners(
+            GameOverArtwork(role: role, didWin: didWin, players: GameOverArtwork.winners(
                 from: state.players, localID: state.me.id, role: role))
             HStack(alignment: .bottom, spacing: 16) {
                 GameOverActionButton(asset: "QuitActionIcon", label: "Quit",
@@ -50,6 +51,7 @@ struct GameOverView: View {
 /// The supplied backgrounds provide the glow; impostor wins reuse the Victory lettering in red.
 struct GameOverArtwork: View {
     let role: Role
+    var didWin = true
     let players: [RoleRevealPlayer]
 
     // Use the exact Victory pixels from the crew background as a tintable title.
@@ -77,19 +79,19 @@ struct GameOverArtwork: View {
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
-            let aspect: CGFloat = role == .crewmate ? 1280 / 720 : 1076 / 510
+            let aspect: CGFloat = !didWin || role == .crewmate ? 1280 / 720 : 1076 / 510
             let width = min(size.width, size.height * aspect)
             let height = width / aspect
             ZStack {
                 Color.black
                 ZStack {
-                    Image(role == .crewmate ? "CrewmateWinBackground" : "ImpostorWinBackground")
+                    Image(!didWin ? "DefeatBackground" : role == .crewmate ? "CrewmateWinBackground" : "ImpostorWinBackground")
                         .resizable().interpolation(.none)
                         .frame(width: width, height: height)
-                        .accessibilityLabel(role == .crewmate ? "Crewmates win" : "Impostors win")
+                        .accessibilityLabel(!didWin ? "Defeat" : role == .crewmate ? "Crewmates win" : "Impostors win")
                         .accessibilityIdentifier("gameOver.title")
                         .accessibilityAddTraits(.isHeader)
-                    if role == .impostor {
+                    if didWin && role == .impostor {
                         Color.black
                             .frame(width: width, height: height * 0.40)
                             .position(x: width / 2, y: height * 0.20)
@@ -141,10 +143,11 @@ private struct GameOverActionButton: View {
 
 struct GameOverPreview: View {
     @State private var role = Role.crewmate
+    @State private var didWin = true
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            GameOverArtwork(role: role, players: RoleRevealPlayer.preview(for: role))
+            GameOverArtwork(role: role, didWin: didWin, players: RoleRevealPlayer.preview(for: role))
             HStack(alignment: .bottom) {
                 GameOverActionButton(asset: "QuitActionIcon", label: "Quit",
                                      identifier: "gameOver.leave") {}
@@ -155,6 +158,12 @@ struct GameOverPreview: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 280)
+                Picker("Your result", selection: $didWin) {
+                    Text("Victory").tag(true)
+                    Text("Defeat").tag(false)
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 180)
                 Spacer()
                 GameOverActionButton(asset: "PlayAgainActionIcon", label: "Play again",
                                      identifier: "gameOver.restart") {}

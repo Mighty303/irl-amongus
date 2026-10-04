@@ -570,7 +570,7 @@ final class GameStore {
     }
 
     private func playVictorySound(winner: String) {
-        guard let sound = victorySound.accept(winner: winner) else { return }
+        guard let sound = victorySound.accept(winner: winner, localRole: state?.me.role?.rawValue) else { return }
         gameAudio.play(sound)
     }
 

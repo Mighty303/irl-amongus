@@ -245,6 +245,25 @@ struct NeckKillTests {
 }
 
 struct GameOverTests {
+    @Test func localTeamDeterminesVictoryAndDefeat() {
+        #expect(GameOutcome.didWin(winner: "crewmates", localRole: "crewmate"))
+        #expect(!GameOutcome.didWin(winner: "crewmates", localRole: "impostor"))
+        #expect(GameOutcome.didWin(winner: "impostors", localRole: "impostor"))
+        #expect(!GameOutcome.didWin(winner: "impostors", localRole: "crewmate"))
+        #expect(!GameOutcome.didWin(winner: nil, localRole: "crewmate"))
+        #expect(!GameOutcome.didWin(winner: "crewmates", localRole: nil))
+    }
+
+    @Test func losingPlayersDoNotHearVictoryAudio() {
+        var sound = VictorySoundState()
+        #expect(sound.accept(winner: "impostors", localRole: "crewmate") == nil)
+        #expect(sound.accept(winner: "crewmates", localRole: "impostor") == nil)
+        #expect(sound.accept(winner: "crewmates", localRole: "crewmate") == .crewmateVictory)
+        #expect(sound.accept(winner: "crewmates", localRole: "crewmate") == nil)
+        sound.reset()
+        #expect(sound.accept(winner: "impostors", localRole: "impostor") == .impostorVictory)
+    }
+
     @Test func winScreenShowsTheWinningTeamIncludingDeadPlayersWithTheirRosterColours() {
         func player(_ id: String, color: PlayerColor?, role: Role, alive: Bool = true) -> PlayerView {
             PlayerView(id: id, name: id, color: color, faceId: nil, isHost: false, isBot: nil,

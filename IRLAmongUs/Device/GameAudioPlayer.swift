@@ -37,8 +37,8 @@ struct BodyReportSoundState {
 struct VictorySoundState {
     private var played = false
 
-    mutating func accept(winner: String) -> GameSound? {
-        guard !played else { return nil }
+    mutating func accept(winner: String, localRole: String?) -> GameSound? {
+        guard !played, GameOutcome.didWin(winner: winner, localRole: localRole) else { return nil }
         let sound: GameSound
         switch winner {
         case "crewmates": sound = .crewmateVictory
