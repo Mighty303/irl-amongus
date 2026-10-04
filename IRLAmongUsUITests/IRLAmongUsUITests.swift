@@ -2,6 +2,26 @@ import XCTest
 
 final class IRLAmongUsUITests: XCTestCase {
     @MainActor
+    func testWinScreenUsesSuppliedBackgroundsAndColouredSprites() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Developer Mode"].waitForExistence(timeout: 5))
+        app.collectionViews.firstMatch.swipeUp()
+        XCTAssertTrue(app.buttons["developer.gameOver"].waitForExistence(timeout: 5))
+        app.buttons["developer.gameOver"].tap()
+        let title = app.images["gameOver.title"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.label, "Crewmates win")
+        XCTAssertTrue(app.descendants(matching: .any)["gameOver.player.preview-0"].exists)
+        captureVoting(app, name: "Crewmate victory")
+        app.buttons["Impostors"].tap()
+        XCTAssertEqual(title.label, "Impostors win")
+        XCTAssertTrue(app.descendants(matching: .any)["gameOver.player.preview-1"].exists)
+        captureVoting(app, name: "Impostor victory")
+    }
+
+    @MainActor
     func testDemoModeWaivesAndRestoresLobbySigns() throws {
         guard let server = ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_SERVER"],
               ProcessInfo.processInfo.environment["LOCAL_LOBBY_TEST_SIGNS"] == "3" else {

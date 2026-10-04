@@ -165,9 +165,10 @@ struct RoleRevealArtwork: View {
 }
 
 /// Staggered, overlapping rows keep the local player in front, like the game reveal.
-private struct RoleRevealLineup: View {
+struct RoleRevealLineup: View {
     let players: [RoleRevealPlayer]
     let showsNames: Bool
+    var accessibilityPrefix = "roles"
 
     var body: some View {
         GeometryReader { geometry in
@@ -205,7 +206,7 @@ private struct RoleRevealLineup: View {
                     .zIndex(Double(players.count - index))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel("\(player.name), \(player.color.rawValue)")
-                    .accessibilityIdentifier("roles.player.\(player.id)")
+                    .accessibilityIdentifier("\(accessibilityPrefix).player.\(player.id)")
                 }
             }
         }

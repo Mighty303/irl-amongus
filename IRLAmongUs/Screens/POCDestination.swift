@@ -2,7 +2,7 @@ import SwiftUI
 
 /// POC screens opened from the shake-to-open Developer Mode menu (Debug builds).
 enum POCDestination: String, CaseIterable, Identifiable {
-    case onlineGame, demoMode, signsLab, bluetoothLab, tools
+    case onlineGame, demoMode, gameOver, signsLab, bluetoothLab, tools
 
     var id: String { rawValue }
 
@@ -10,6 +10,7 @@ enum POCDestination: String, CaseIterable, Identifiable {
         switch self {
         case .onlineGame: return "Online game"
         case .demoMode: return "Demo mode"
+        case .gameOver: return "Win screen"
         case .signsLab: return "Sign recognition test"
         case .bluetoothLab: return "Bluetooth proximity test"
         case .tools: return "GPS, QR, haptics & mini-games"
@@ -20,6 +21,7 @@ enum POCDestination: String, CaseIterable, Identifiable {
         switch self {
         case .onlineGame: return "gamecontroller.fill"
         case .demoMode: return "flag.fill"
+        case .gameOver: return "trophy.fill"
         case .signsLab: return "camera.viewfinder"
         case .bluetoothLab: return "dot.radiowaves.left.and.right"
         case .tools: return "wrench.and.screwdriver"
@@ -47,13 +49,17 @@ struct POCDestinationView: View {
                 .background(.bar)
             }
             // The online game sets its own orientation per phase; the test benches are portrait.
-            .onAppear { if destination != .onlineGame { OrientationDelegate.requestPortrait() } }
+            .onAppear {
+                if destination == .gameOver { OrientationDelegate.requestLandscape() }
+                else if destination != .onlineGame { OrientationDelegate.requestPortrait() }
+            }
     }
 
     @ViewBuilder private var content: some View {
         switch destination {
         case .onlineGame: GameRootView()
         case .demoMode: DemoModeView()
+        case .gameOver: GameOverPreview()
         case .signsLab: SignsLabView()
         case .bluetoothLab: BluetoothLabView()
         case .tools: ToolsLabView()

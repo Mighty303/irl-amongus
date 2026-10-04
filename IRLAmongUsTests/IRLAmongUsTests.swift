@@ -115,6 +115,26 @@ struct NeckKillTests {
     }
 }
 
+struct GameOverTests {
+    @Test func winScreenShowsTheWinningTeamIncludingDeadPlayersWithTheirRosterColours() {
+        func player(_ id: String, color: PlayerColor?, role: Role, alive: Bool = true) -> PlayerView {
+            PlayerView(id: id, name: id, color: color, faceId: nil, isHost: false, isBot: nil,
+                       connected: true, alive: alive, ejected: false, role: role, hasVoted: false)
+        }
+        let players = [player("impostor", color: .purple, role: .impostor),
+                       player("dead-crew", color: .cyan, role: .crewmate, alive: false),
+                       player("me", color: nil, role: .crewmate),
+                       player("partner", color: .pink, role: .impostor)]
+        let crew = GameOverArtwork.winners(from: players, localID: "me", role: .crewmate)
+        #expect(crew.map(\.id) == ["me", "dead-crew"])
+        #expect(crew.map(\.color) == [.green, .cyan])
+        let impostors = GameOverArtwork.winners(from: players, localID: "me", role: .impostor)
+        #expect(impostors.map(\.id) == ["impostor", "partner"])
+        #expect(impostors.map(\.color) == [.purple, .pink])
+    }
+
+}
+
 struct IRLAmongUsTests {
     @Test func roleRevealLineupUsesRosterColorsAndHidesCrewFromImpostors() {
         func player(_ id: String, color: PlayerColor?, role: Role?) -> PlayerView {

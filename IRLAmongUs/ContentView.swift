@@ -331,7 +331,7 @@ private struct LocalLobbyView: View {
             }
         }
         .onChange(of: store.state?.phase, initial: true) { _, phase in
-            if let phase, phase != .LOBBY && phase != .ROLE_REVEAL && phase != .PLAYING {
+            if let phase, phase != .LOBBY && phase != .ROLE_REVEAL && phase != .PLAYING && phase != .GAME_OVER {
                 OrientationDelegate.requestPortrait()
             } else {
                 OrientationDelegate.requestLandscape()

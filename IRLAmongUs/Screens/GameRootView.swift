@@ -37,7 +37,7 @@ struct GameRootView: View {
         }
         .onChange(of: store.state?.phase, initial: true) { _, phase in
             guard store.killPresentation == nil else { return }
-            if phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == nil {
+            if phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == .GAME_OVER || phase == nil {
                 OrientationDelegate.requestLandscape()
             } else {
                 OrientationDelegate.requestPortrait()
@@ -45,7 +45,7 @@ struct GameRootView: View {
         }
         .onChange(of: store.killPresentation?.id) { _, id in
             let phase = store.state?.phase
-            if id != nil || phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == nil {
+            if id != nil || phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == .GAME_OVER || phase == nil {
                 OrientationDelegate.requestLandscape()
             } else {
                 OrientationDelegate.requestPortrait()
@@ -53,7 +53,7 @@ struct GameRootView: View {
         }
         .safeAreaInset(edge: .bottom) {
             // The in-game HUD has Leave game in its settings menu, so it keeps the full screen height.
-            if store.session != nil && store.state?.phase != .ROLE_REVEAL
+            if store.session != nil && store.state?.phase != .ROLE_REVEAL && store.state?.phase != .GAME_OVER
                 && (!store.isSynced || (lobbyContent != nil && store.state?.phase != .LOBBY && store.state?.phase != .PLAYING)) {
                 Button("Leave Game", role: .destructive) { store.leave() }
                     .allowsHitTesting(store.killPresentation == nil)
