@@ -1003,8 +1003,7 @@ private struct GameLobbyView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text("MY SIGNS").lobbyCaps()
                 if required > 0 {
-                    (Text("\(count)") + Text("/\(required)").foregroundColor(.white.opacity(0.45)))
-                        .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    LobbySignCount(count: count, required: required)
                 } else {
                     Text(state.gameset == nil ? "None needed" : "Saved game has them")
                         .font(.system(size: 12, weight: .bold, design: .rounded))
@@ -1285,6 +1284,26 @@ private struct LobbyAlert: Identifiable {
     let message: String
 
     var id: String { title }
+}
+
+/// "2/3" on the lobby panel: blinks red while you still owe signs (the game can't start), white once done.
+private struct LobbySignCount: View {
+    let count: Int
+    let required: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dim = false
+
+    var body: some View {
+        let short = count < required
+        (Text("\(count)") + Text("/\(required)").foregroundColor(short ? .red.opacity(0.75) : .white.opacity(0.45)))
+            .font(.system(size: 22, weight: .heavy, design: .rounded))
+            .foregroundStyle(short ? Color.red : .white)
+            .opacity(short && dim && !reduceMotion ? 0.25 : 1)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true)) { dim = true }
+            }
+            .accessibilityLabel("\(count) of \(required) signs\(short ? ", more needed to start" : "")")
+    }
 }
 
 private extension Text {
