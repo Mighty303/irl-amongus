@@ -1,9 +1,10 @@
 import SwiftUI
+import CoreImage
+import UIKit
 
 struct GameOverView: View {
     @Environment(GameStore.self) private var store
     let state: GameState
-    @State private var showingRoles = false
     @State private var restarting = false
 
     private var role: Role { state.winner == "crewmates" ? .crewmate : .impostor }
@@ -16,19 +17,10 @@ struct GameOverView: View {
                 GameOverActionButton(asset: "QuitActionIcon", label: "Quit",
                                      identifier: "gameOver.leave") { store.leave() }
                 Spacer(minLength: 0)
-                VStack(spacing: 6) {
-                    if let reason = state.winReason { Text(reason).font(.subheadline) }
-                    Text("\(state.taskProgress.done) / \(state.taskProgress.total) tasks completed")
-                        .font(.caption).foregroundStyle(.white.opacity(0.7))
-                    Button("Roles") { showingRoles = true }
-                        .buttonStyle(.bordered).tint(.white)
-                    if !state.isHost {
-                        Text("Waiting for the host…").font(.caption)
-                    }
+                if !state.isHost {
+                    Text("Waiting for the host…")
+                        .font(.caption).foregroundStyle(.white)
                 }
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-                Spacer(minLength: 0)
                 if state.isHost {
                     GameOverActionButton(asset: "PlayAgainActionIcon",
                                          label: restarting ? "Starting…" : "Play again",
@@ -51,34 +43,27 @@ struct GameOverView: View {
         .preferredColorScheme(.dark)
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
-        .sheet(isPresented: $showingRoles) {
-            NavigationStack {
-                List(state.players) { player in
-                    HStack {
-                        Image((player.color ?? .white).lobbyAssetName)
-                            .resizable().scaledToFit().frame(width: 28, height: 36)
-                        Text(player.name)
-                        Spacer()
-                        Text(player.role == .impostor ? "Impostor" : "Crewmate")
-                            .foregroundStyle(player.role == .impostor ? .red : .cyan)
-                        if !player.alive {
-                            Image(systemName: player.ejected ? "arrow.up.circle" : "xmark.circle")
-                                .accessibilityLabel(player.ejected ? "Ejected" : "Dead")
-                        }
-                    }
-                }
-                .navigationTitle("Roles")
-                .toolbar { Button("Done") { showingRoles = false } }
-            }
-            .preferredColorScheme(.dark)
-        }
+
     }
 }
 
-/// The supplied bitmap backgrounds include the title and glow. Only the roster is layered on top.
+/// The supplied backgrounds provide the glow; impostor wins reuse the Victory lettering in red.
 struct GameOverArtwork: View {
     let role: Role
     let players: [RoleRevealPlayer]
+
+    // Use the exact Victory pixels from the crew background as a tintable title.
+    // Its blue channel becomes the alpha mask, leaving the black background transparent.
+    private static let victoryTitle: UIImage? = {
+        guard let source = UIImage(named: "CrewmateWinBackground")?.cgImage,
+              let crop = source.cropping(to: CGRect(x: 410, y: 80, width: 480, height: 100)),
+              let filter = CIFilter(name: "CIColorMatrix") else { return nil }
+        filter.setValue(CIImage(cgImage: crop), forKey: kCIInputImageKey)
+        filter.setValue(CIVector(x: 0, y: 0, z: 1, w: 0), forKey: "inputAVector")
+        guard let output = filter.outputImage,
+              let image = CIContext().createCGImage(output, from: output.extent) else { return nil }
+        return UIImage(cgImage: image)
+    }()
 
     nonisolated static func winners(from players: [PlayerView], localID: String, role: Role) -> [RoleRevealPlayer] {
         let winners = players.enumerated().compactMap { index, player -> RoleRevealPlayer? in
@@ -104,6 +89,20 @@ struct GameOverArtwork: View {
                         .accessibilityLabel(role == .crewmate ? "Crewmates win" : "Impostors win")
                         .accessibilityIdentifier("gameOver.title")
                         .accessibilityAddTraits(.isHeader)
+                    if role == .impostor {
+                        Color.black
+                            .frame(width: width, height: height * 0.40)
+                            .position(x: width / 2, y: height * 0.20)
+                            .accessibilityHidden(true)
+                        if let title = Self.victoryTitle {
+                            Image(uiImage: title).renderingMode(.template)
+                                .resizable().interpolation(.none).scaledToFit()
+                                .foregroundStyle(Color(red: 1, green: 0.06, blue: 0.06))
+                                .frame(width: width * 0.46, height: height * 0.20)
+                                .position(x: width / 2, y: height * 0.20)
+                                .accessibilityHidden(true)
+                        }
+                    }
                     RoleRevealLineup(players: players, showsNames: role == .impostor,
                                      accessibilityPrefix: "gameOver")
                         .frame(width: width * 0.8, height: height * 0.32)
