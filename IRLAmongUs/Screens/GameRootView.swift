@@ -35,31 +35,17 @@ struct GameRootView: View {
                 AlertOverlay(alert: alert) { store.alert = nil }
             }
         }
-        .onChange(of: store.state?.phase, initial: true) { _, phase in
+        .onChange(of: store.state?.phase, initial: true) { _, _ in
             guard store.killPresentation == nil && store.bodyReportPresentation == nil else { return }
-            if phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == .RESULT || phase == .GAME_OVER || phase == nil {
-                OrientationDelegate.requestLandscape()
-            } else {
-                OrientationDelegate.requestPortrait()
-            }
+            OrientationDelegate.requestLandscape()
         }
-        .onChange(of: store.killPresentation?.id) { _, id in
+        .onChange(of: store.killPresentation?.id) { _, _ in
             guard store.bodyReportPresentation == nil else { return }
-            let phase = store.state?.phase
-            if id != nil || phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == .RESULT || phase == .GAME_OVER || phase == nil {
-                OrientationDelegate.requestLandscape()
-            } else {
-                OrientationDelegate.requestPortrait()
-            }
+            OrientationDelegate.requestLandscape()
         }
         .onChange(of: store.bodyReportPresentation?.id) { _, id in
             guard id == nil else { return } // The report window chooses and locks the landscape side.
-            let phase = store.state?.phase
-            if store.killPresentation != nil || phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == .RESULT || phase == .GAME_OVER || phase == nil {
-                OrientationDelegate.requestLandscape()
-            } else {
-                OrientationDelegate.requestPortrait()
-            }
+            OrientationDelegate.requestLandscape()
         }
         .safeAreaInset(edge: .bottom) {
             // The in-game HUD has Leave game in its settings menu, so it keeps the full screen height.
