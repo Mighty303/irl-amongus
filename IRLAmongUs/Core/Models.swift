@@ -117,6 +117,11 @@ struct GameState: Decodable, Equatable {
     var requiredSigns: Int { requiredSigns(for: me.id) }
     /// The red button sign is required to start.
     var hasRedButton: Bool { stations.contains { $0.kind == .emergency } }
+    /// The building and floor picked for this game, if any.
+    var playArea: CampusPlace? {
+        guard let b = settings.mapBuildingId, !b.isEmpty, let f = settings.mapFloorId, !f.isEmpty else { return nil }
+        return CampusPlace(buildingId: b, floorId: f)
+    }
     func signs(addedBy playerId: String) -> [Station] {
         stations.filter { $0.kind == .task && $0.addedBy == playerId }
     }
@@ -175,6 +180,9 @@ struct Settings: Codable, Equatable {
     var reactorWindowSec: Int
     /// Testing: everyone sees everyone's estimated position on the map. Optional for older servers.
     var livePositions: Bool?
+    /// Play area: the SFU building and floor the game is on (campus map ids). Empty = not set.
+    var mapBuildingId: String?
+    var mapFloorId: String?
 }
 
 struct Station: Codable, Identifiable, Hashable {

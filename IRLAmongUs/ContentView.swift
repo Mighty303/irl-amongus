@@ -993,6 +993,13 @@ private struct GameLobbyView: View {
                     Text("Saved game: \(gameset.name)")
                         .font(.caption).foregroundStyle(.white.opacity(0.65))
                 }
+                if let area = state.playArea, let building = store.campus.building(area.buildingId) {
+                    Text("Play area: \(building.id) · \(building.floor(area.floorId)?.name ?? area.floorId)")
+                        .font(.caption).foregroundStyle(.white.opacity(0.65))
+                } else {
+                    Text("Pick the play area in Settings → Game")
+                        .font(.caption).foregroundStyle(.white.opacity(0.65))
+                }
                 if state.isHost {
                     Button {
                         buttonAudio.play()

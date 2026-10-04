@@ -178,6 +178,9 @@ struct LobbyView: View {
 
     private func gameSettings(twoColumns: Bool) -> some View {
         LazyVGrid(columns: columns(twoColumns), spacing: 6) {
+            if current.settings.mapBuildingId != nil {
+                settingCard("Play area") { PlayAreaPicker(state: current) }
+            }
             integer("Impostors", \.impostors, "impostors", 1...3)
             integer("Minimum players", \.minPlayers, "minPlayers", 2...12)
             if store.demoModeEnabled {
@@ -520,5 +523,51 @@ private struct SettingsSavedGameCard: View {
         .padding(10)
         .background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))
         .task { games = (try? await store.gamesets()) ?? [] }
+    }
+}
+
+/// Which SFU building and floor the game is on. The maps show that floor, positions assume it, and new
+/// signs default to it. Anyone in the lobby can change it.
+private struct PlayAreaPicker: View {
+    @Environment(GameStore.self) private var store
+    let state: GameState
+
+    private var building: CampusBuilding? { store.campus.building(state.playArea?.buildingId) }
+
+    var body: some View {
+        let buildings = store.campus.buildings.sorted { $0.name < $1.name }
+        VStack(alignment: .leading, spacing: 4) {
+            Picker("Building", selection: Binding(
+                get: { state.playArea?.buildingId ?? "" },
+                set: { id in
+                    // A new building starts on its main floor.
+                    let floor = store.campus.building(id)?.mainFloor.id ?? ""
+                    Task { await store.perform("update_settings", ["mapBuildingId": id, "mapFloorId": id.isEmpty ? "" : floor]) }
+                }
+            )) {
+                Text("Not set").tag("")
+                ForEach(buildings) { Text("\($0.name) (\($0.id))").tag($0.id) }
+            }
+            .pickerStyle(.menu).tint(.white)
+            .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+            .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+            .accessibilityIdentifier("settings.mapBuildingId")
+            if let building {
+                Picker("Floor", selection: Binding(
+                    get: { state.playArea?.floorId ?? building.mainFloor.id },
+                    set: { store.updateSetting("mapFloorId", $0) }
+                )) {
+                    // Top floor first, like a building directory.
+                    ForEach(building.floors.reversed()) { Text($0.name).tag($0.id) }
+                }
+                .pickerStyle(.menu).tint(.white)
+                .frame(maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                .background(.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+                .accessibilityIdentifier("settings.mapFloorId")
+            }
+            Text(store.campus.isFullCampus ? "Maps open on this floor." : "Downloading the SFU campus… (SUB only for now)")
+                .font(.caption2).foregroundStyle(.white.opacity(0.6))
+        }
+        .disabled(!store.isSynced)
     }
 }

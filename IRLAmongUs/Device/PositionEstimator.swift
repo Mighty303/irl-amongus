@@ -92,6 +92,8 @@ final class PositionEstimator {
     /// Building and floor of the last sign check-in: the barometer counts floors from there.
     @ObservationIgnored private var fixBuildingId: String?
     @ObservationIgnored private var fixFloorId: String?
+    /// The game's play area: assumed until a sign check-in says otherwise.
+    @ObservationIgnored var playArea: CampusPlace?
 
     // Tuning. Indoor GPS radii are optimistic and successive fixes share the same error, so they're
     // inflated and thinned out; the pedometer's step length is decent, the phone's heading less so.
@@ -310,8 +312,11 @@ final class PositionEstimator {
         // from the last sign scanned in that building. Elsewhere the floor isn't known, so no room or snapping.
         let (building, floor) = MainActor.assumeIsolated { () -> (CampusBuilding?, CampusFloor?) in
             guard let campus, let building = campus.building(at: coordinate) else { return (nil, nil) }
-            guard building.id == fixBuildingId, let fixIndex = building.floorIndex(fixFloorId) else { return (building, nil) }
-            let index = min(max(fixIndex + levelDelta, 0), building.floors.count - 1)
+            // Count floors from the last sign scanned in this building, else from the play area's floor.
+            let base = building.id == fixBuildingId ? building.floorIndex(fixFloorId)
+                : building.id == playArea?.buildingId ? building.floorIndex(playArea?.floorId) : nil
+            guard let base else { return (building, nil) }
+            let index = min(max(base + levelDelta, 0), building.floors.count - 1)
             return (building, building.floors[index])
         }
         if let building, let floor {

@@ -44,7 +44,7 @@ struct LiveMapView: View {
             let landscape = geo.size.width > geo.size.height
             let layout = landscape ? AnyLayout(HStackLayout(spacing: 14)) : AnyLayout(VStackLayout(spacing: 14))
             let campus = store.campusView(points: state.locatedStationPoints + store.livePositions.map { CGPoint(x: $0.lng, y: $0.lat) },
-                                          stations: state.stations)
+                                          stations: state.stations, playArea: state.playArea)
             layout {
                 POCFloorPlan(
                     rooms: campus.rooms,
@@ -59,7 +59,7 @@ struct LiveMapView: View {
                 .overlay(alignment: .bottomTrailing) {
                     if let building = campus.focus, building.floors.count > 1, let floor = campus.floors[building.id] {
                         CampusFloorControl(building: building, floor: floor) { step in
-                            store.campus.stepFloor(building, by: step, hint: store.shownFloorHint(building, stations: state.stations))
+                            store.campus.stepFloor(building, by: step, hint: store.shownFloorHint(building, stations: state.stations, playArea: state.playArea))
                         }
                         .padding(12)
                     }
