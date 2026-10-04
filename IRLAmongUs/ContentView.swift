@@ -303,7 +303,6 @@ private struct LocalLobbyView: View {
     @State private var scanning = false
     @State private var scannedLobbyPayload: String?
     @State private var showingJoinName = false
-    @State private var serverStatus: String?
 
     var body: some View {
         Group {
@@ -467,16 +466,6 @@ private struct LocalLobbyView: View {
             TextField("Display name", text: $store.playerName)
                 .textInputAutocapitalization(.words)
                 .accessibilityIdentifier("local.playerName")
-            TextField("Server address (http://192.168.x.x:3000)", text: $store.serverURLString)
-                .keyboardType(.URL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("local.serverURL")
-            Button("Test connection") {
-                serverStatus = "Testing…"
-                Task { serverStatus = await store.checkServer() }
-            }
-            if let serverStatus { Text(serverStatus).font(.caption) }
         }
         .textFieldStyle(.roundedBorder)
         .disabled(store.isEnteringLobby)
