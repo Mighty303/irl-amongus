@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The networked game. Routes to a screen based purely on the server's phase + this player's state.
+/// Routes server phases, with the physical-map POC following the role presentation.
 struct GameRootView: View {
     var lobbyContent: ((GameState) -> AnyView)? = nil
     @Environment(GameStore.self) private var store
@@ -43,7 +43,7 @@ struct GameRootView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            if store.session != nil && (!store.isSynced || (lobbyContent != nil && store.state?.phase != .LOBBY)) {
+            if store.session != nil && store.state?.phase != .ROLE_REVEAL && (!store.isSynced || (lobbyContent != nil && store.state?.phase != .LOBBY)) {
                 Button("Leave Game", role: .destructive) { store.leave() }
                     .padding(8)
                     .frame(maxWidth: .infinity)
@@ -63,7 +63,7 @@ struct GameRootView: View {
         case .LOBBY:
             if let lobbyContent { lobbyContent(state) } else { AnyView(LobbyView(state: state)) }
         case .ROLE_REVEAL: RoleRevealView(state: state)
-        case .PLAYING: state.me.isBody ? AnyView(BodyView(state: state)) : AnyView(PlayingView(state: state))
+        case .PLAYING: state.me.isBody ? AnyView(BodyView(state: state)) : AnyView(PhysicalMapPOCView(showsCloseButton: false))
         case .MEETING, .VOTING, .RESULT: MeetingView(state: state)
         case .GAME_OVER: GameOverView(state: state)
         }

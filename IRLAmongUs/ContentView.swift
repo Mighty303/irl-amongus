@@ -1214,7 +1214,8 @@ private final class ShakeDetectorViewController: UIViewController {
 }
 #endif
 
-private struct PhysicalMapPOCView: View {
+struct PhysicalMapPOCView: View {
+    var showsCloseButton = true
     private static let rooms = SUBLevel2Map.rooms
 
     private static let stations = [
@@ -1297,6 +1298,7 @@ private struct PhysicalMapPOCView: View {
             .navigationTitle("Map POC")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if showsCloseButton {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
                         dismiss()
@@ -1304,6 +1306,7 @@ private struct PhysicalMapPOCView: View {
                         Label("Close", systemImage: "xmark")
                     }
                     .accessibilityLabel("Close physical map")
+                }
                 }
             }
         }

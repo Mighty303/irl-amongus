@@ -7,72 +7,73 @@ struct RoleRevealPOCView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var role: Role?
     @State private var revealed = false
+    @State private var showingMap = false
     @State private var playbackID = UUID()
     @StateObject private var revealAudio = RoleRevealAudioPlayer()
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color.black.ignoresSafeArea()
-                if let role {
-                    if revealed {
-                        RoleRevealArtwork(role: role, impostorCount: 1)
-                        VStack {
-                            Spacer()
-                            HStack(spacing: 24) {
-                                Button("Replay") { start(role) }
-                                    .accessibilityIdentifier("roles.replay")
-                                Button("Try \(role == .impostor ? "Crewmate" : "Impostor")") {
-                                    start(role == .impostor ? .crewmate : .impostor)
+        Group {
+            if showingMap {
+                PhysicalMapPOCView()
+            } else {
+                GeometryReader { geometry in
+                    ZStack {
+                        Color.black.ignoresSafeArea()
+                        if let role {
+                            if revealed {
+                                RoleRevealArtwork(role: role, impostorCount: 1)
+                            } else {
+                                RoleRevealIntroView {
+                                    revealed = true
+                                    revealAudio.play()
                                 }
-                                .accessibilityIdentifier("roles.switch")
+                                    .id(playbackID)
+                                    .accessibilityLabel("Shhh. Keep your role secret.")
+                                    .accessibilityIdentifier("roles.intro")
                             }
-                            .font(.system(size: 14, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .padding(.bottom, 12)
+                        } else {
+                            VStack(spacing: 16) {
+                                ShhhPosterView().frame(width: 120, height: 120)
+                                Text("Role Reveal").font(.largeTitle)
+                                Text("Choose a role to preview").foregroundStyle(.secondary)
+                                HStack(spacing: 24) {
+                                    roleButton(.crewmate, title: "Crewmate", color: .cyan)
+                                    roleButton(.impostor, title: "Impostor", color: .red)
+                                }
+                            }
+                            .foregroundStyle(.white)
                         }
-                    } else {
-                        RoleRevealIntroView {
-                            revealed = true
-                            revealAudio.play()
+                        if role == nil {
+                            VStack {
+                                HStack {
+                                    Spacer()
+                                    Button { dismiss() } label: {
+                                        Image("CloseMenuIcon").resizable().scaledToFit()
+                                            .frame(width: 32, height: 32).frame(width: 44, height: 44)
+                                    }
+                                    .accessibilityLabel("Close role reveal")
+                                    .accessibilityIdentifier("roles.close")
+                                }
+                                Spacer()
+                            }
+                            .padding(8)
                         }
-                            .id(playbackID)
-                            .accessibilityLabel("Shhh. Keep your role secret.")
-                            .accessibilityIdentifier("roles.intro")
                     }
-                } else {
-                    VStack(spacing: 16) {
-                        ShhhPosterView().frame(width: 120, height: 120)
-                        Text("Role Reveal").font(.largeTitle)
-                        Text("Choose a role to preview").foregroundStyle(.secondary)
-                        HStack(spacing: 24) {
-                            roleButton(.crewmate, title: "Crewmate", color: .cyan)
-                            roleButton(.impostor, title: "Impostor", color: .red)
-                        }
-                    }
-                    .foregroundStyle(.white)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                 }
-                VStack {
-                    HStack {
-                        Spacer()
-                        Button { dismiss() } label: {
-                            Image("CloseMenuIcon").resizable().scaledToFit()
-                                .frame(width: 32, height: 32).frame(width: 44, height: 44)
-                        }
-                        .accessibilityLabel("Close role reveal")
-                        .accessibilityIdentifier("roles.close")
-                    }
-                    Spacer()
-                }
-                .padding(8)
             }
-            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+        .task(id: revealed) {
+            guard revealed else { return }
+            do { try await Task.sleep(for: .seconds(3)) } catch { return }
+            revealAudio.stop()
+            showingMap = true
         }
         .buttonStyle(.plain)
         .preferredColorScheme(.dark)
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
-        .onAppear { OrientationDelegate.requestLandscape() }
+        .onAppear { if !showingMap { OrientationDelegate.requestLandscape() } }
         .onDisappear { revealAudio.stop() }
     }
 

@@ -99,11 +99,11 @@ the game's mini-map still uses MapKit (the SFU SUB floor plan from the Physical 
 
 ## Role reveal POC
 
-Shake the phone to open Developer Mode, then choose **Open Role Reveal POC**. Choose **Crewmate** or **Impostor** to play the bundled Shhh intro followed by the role screen. Replay repeats the intro; Try switches roles; Close returns to the main menu, including during playback. This preview uses landscape and runs offline. It does not assign roles or contact the game server.
+Shake the phone to open Developer Mode, then choose **Open Role Reveal POC**. Choose **Crewmate** or **Impostor** to play the bundled Shhh intro followed by the role screen. The role remains visible for three seconds, then opens the portrait Map POC automatically. The reveal has no exit or replay controls. This preview uses landscape and runs offline. It does not assign roles or contact the game server.
 
 Asset sources are recorded in [sprite attribution](SPRITE_ASSET_ATTRIBUTION.md).
 
-Previews: [Shhh](docs/role-shhh.png), [Crewmate](docs/role-crewmate.png), [Impostor](docs/role-impostor.png).
+Original artwork previews (before the automatic map transition): [Shhh](docs/role-shhh.png), [Crewmate](docs/role-crewmate.png), [Impostor](docs/role-impostor.png).
 
 ## LOCAL server lobby
 

@@ -56,7 +56,10 @@ final class IRLAmongUsUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Got it"].exists)
         XCTAssertGreaterThan(app.windows.firstMatch.frame.width, app.windows.firstMatch.frame.height)
         captureVoting(app, name: "Automatic multiplayer role reveal")
-        XCTAssertTrue(app.staticTexts["0 / 1 tasks"].waitForExistence(timeout: 12))
+        XCTAssertFalse(app.buttons["Leave Game"].exists)
+        XCTAssertFalse(app.buttons["roles.close"].exists)
+        XCTAssertTrue(app.staticTexts["PHYSICAL MAP"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Close physical map"].exists)
         let portrait = NSPredicate { _, _ in app.windows.firstMatch.frame.height > app.windows.firstMatch.frame.width }
         expectation(for: portrait, evaluatedWith: nil)
         waitForExpectations(timeout: 5)
@@ -259,32 +262,35 @@ extension IRLAmongUsUITests {
 
 extension IRLAmongUsUITests {
     @MainActor
-    func testRoleRevealIntroReplayAndBothRoles() {
-        XCUIDevice.shared.orientation = .landscapeLeft
-        let app = XCUIApplication()
-        app.launchArguments += ["-disableAudio", "-showDeveloperMenu"]
-        app.launch()
-        let open = app.buttons["developer.openRoles"]
-        XCTAssertTrue(open.waitForExistence(timeout: 5))
-        if !open.isHittable { app.swipeUp() }
-        open.tap()
-        XCTAssertTrue(app.buttons["roles.crewmate"].waitForExistence(timeout: 5))
-        XCTAssertGreaterThan(app.windows.firstMatch.frame.width, app.windows.firstMatch.frame.height)
-        app.buttons["roles.crewmate"].tap()
-        XCTAssertTrue(app.otherElements["roles.intro"].waitForExistence(timeout: 2))
-        captureVoting(app, name: "Role Shhh intro")
-        XCTAssertTrue(app.buttons["roles.replay"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["There is 1 Impostor among us"].exists)
-        captureVoting(app, name: "Crewmate role reveal")
-        app.buttons["roles.switch"].tap()
-        XCTAssertTrue(app.otherElements["roles.intro"].waitForExistence(timeout: 2))
-        XCTAssertTrue(app.buttons["roles.replay"].waitForExistence(timeout: 8))
-        XCTAssertFalse(app.staticTexts["There is 1 Impostor among us"].exists)
-        captureVoting(app, name: "Impostor role reveal")
-        app.buttons["roles.replay"].tap()
-        XCTAssertTrue(app.otherElements["roles.intro"].waitForExistence(timeout: 2))
-        app.buttons["roles.close"].tap()
-        XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
-        XCTAssertGreaterThan(app.windows.firstMatch.frame.width, app.windows.firstMatch.frame.height)
+    func testRoleRevealAutomaticallyOpensMapForBothRoles() {
+        for role in ["crewmate", "impostor"] {
+            XCUIDevice.shared.orientation = .landscapeLeft
+            let app = XCUIApplication()
+            app.launchArguments += ["-disableAudio", "-showDeveloperMenu", "-session", ""]
+            app.launch()
+            let open = app.buttons["developer.openRoles"]
+            XCTAssertTrue(open.waitForExistence(timeout: 5))
+            if !open.isHittable { app.swipeUp() }
+            open.tap()
+            XCTAssertTrue(app.buttons["roles.\(role)"].waitForExistence(timeout: 5))
+            app.buttons["roles.\(role)"].tap()
+            XCTAssertTrue(app.otherElements["roles.intro"].waitForExistence(timeout: 2))
+            XCTAssertFalse(app.buttons["roles.close"].exists)
+            let title = app.descendants(matching: .any)["roles.title"].firstMatch
+            XCTAssertTrue(title.waitForExistence(timeout: 8))
+            XCTAssertFalse(app.buttons["roles.replay"].exists)
+            XCTAssertFalse(app.buttons["Leave Game"].exists)
+            XCTAssertFalse(app.staticTexts["PHYSICAL MAP"].exists)
+            captureVoting(app, name: role == "crewmate" ? "Crewmate role reveal" : "Impostor role reveal")
+            XCTAssertTrue(app.staticTexts["PHYSICAL MAP"].waitForExistence(timeout: 5))
+            let portrait = NSPredicate { _, _ in
+                app.windows.firstMatch.frame.height > app.windows.firstMatch.frame.width
+            }
+            expectation(for: portrait, evaluatedWith: nil)
+            waitForExpectations(timeout: 5)
+            app.buttons["Close physical map"].tap()
+            XCTAssertTrue(app.buttons["Local"].waitForExistence(timeout: 5))
+            app.terminate()
+        }
     }
 }
