@@ -35,9 +35,9 @@ struct O2Game: View {
                         .rotationEffect(.degrees(leaf.angle))
                         .scaleEffect(1 - (leaf.sucked ?? 0) * 0.7)
                         .opacity(1 - (leaf.sucked ?? 0))
-                        .at(leaf.position.x, leaf.position.y)
                         .gesture(drag(leaf.id))
                         .allowsHitTesting(leaf.sucked == nil)
+                        .at(leaf.position.x, leaf.position.y)
                 }
                 Image("TaskO2Top").at(51.5, 250).allowsHitTesting(false)
                 arrows.allowsHitTesting(false)
