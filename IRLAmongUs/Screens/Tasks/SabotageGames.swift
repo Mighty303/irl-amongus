@@ -90,7 +90,7 @@ struct OxygenKeypadGame: View {
                     .font(.custom("Noteworthy-Bold", size: 38))
                     .foregroundStyle(.black.opacity(0.85))
                     .rotationEffect(.degrees(-8))
-                    .at(118, 185)
+                    .at(96, 185) // about one digit left of the note's middle, which sits under its curl
                     .accessibilityLabel("Code on the note: \(code.map(String.init).joined(separator: " "))")
                 Image("SabotageKeypad").at(Self.keypadX + 187, 251.5)
                 Text(display)
