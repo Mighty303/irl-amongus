@@ -151,6 +151,8 @@ struct Settings: Codable, Equatable {
     var sabotageCooldownSec: Int
     var reactorSec: Int
     var reactorWindowSec: Int
+    /// Testing: everyone sees everyone's estimated position on the map. Optional for older servers.
+    var livePositions: Bool?
 }
 
 struct Station: Codable, Identifiable, Hashable {
@@ -181,6 +183,22 @@ struct PlayerView: Decodable, Identifiable, Equatable {
     let ejected: Bool
     let role: Role?
     let hasVoted: Bool
+}
+
+/// A player's estimated position from the server's `positions` stream (live map, testing).
+struct LivePosition: Decodable, Identifiable, Equatable {
+    let playerId: String
+    let lat: Double
+    let lng: Double
+    /// One-sigma uncertainty radius, meters.
+    let accuracyM: Double
+    let at: Double
+    let roomId: String?
+    let room: String?
+    let levelDelta: Int
+    let sources: [String]
+    let stale: Bool
+    var id: String { playerId }
 }
 
 struct TaskProgress: Decodable, Equatable {

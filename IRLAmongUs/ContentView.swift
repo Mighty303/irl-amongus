@@ -691,6 +691,7 @@ private struct GameLobbyView: View {
     @State private var showingInvite = false
     @State private var showingCustomize = false
     @State private var showingMySigns = false
+    @State private var showingLiveMap = false
     @StateObject private var spawningAudio = PlayerSpawningAudioPlayer()
     @State private var knownPlayerIDs: Set<String> = []
     @State private var visiblePlayerIDs: Set<String> = []
@@ -958,6 +959,18 @@ private struct GameLobbyView: View {
             }
 
             Spacer()
+
+            Button {
+                buttonAudio.play()
+                showingLiveMap = true
+            } label: {
+                Image(systemName: "map.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .frame(width: 48, height: 48)
+            }
+            .buttonStyle(LobbyCircleButtonStyle())
+            .accessibilityLabel("Live map (testing)")
+            .fullScreenCover(isPresented: $showingLiveMap) { LiveMapView() }
 
             Button {
                 buttonAudio.play()
@@ -1608,6 +1621,9 @@ struct POCFloorPlan: View {
     let selectedStation: POCStation?
     let ownLastCheckpoint: POCCheckpoint
     let onSelectStation: (POCStation) -> Void
+    /// Live positions (testing): estimated positions with their uncertainty circles. When this
+    /// includes `isMe`, the YOU marker follows it instead of the last check-in.
+    var players: [POCPlayerDot] = []
 
     private static let playerZoomScale: CGFloat = 2.2
 
@@ -1748,6 +1764,36 @@ struct POCFloorPlan: View {
             .accessibilityLabel("\(station.displayName) station, \(station.roomLabel), \(isCompleted ? "completed" : "assigned")")
         }
 
+        ForEach(players) { player in
+            let center = projection.point(player.position)
+            let radius = max(projection.points(meters: player.accuracyM), 3)
+            Circle()
+                .fill(player.color.opacity(player.faded ? 0.07 : 0.16))
+                .overlay(Circle().stroke(player.color.opacity(player.faded ? 0.3 : 0.75), lineWidth: 1 / zoomScale))
+                .frame(width: radius * 2, height: radius * 2)
+                .position(center)
+                .allowsHitTesting(false)
+            if !player.isMe {
+                VStack(spacing: 1) {
+                    Circle()
+                        .fill(player.color)
+                        .frame(width: 16, height: 16)
+                        .overlay(Circle().stroke(.white, lineWidth: 2))
+                    Text(player.name)
+                        .font(.system(size: 8, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.black.opacity(0.76), in: Capsule())
+                }
+                .opacity(player.faded ? 0.45 : 1)
+                .scaleEffect(1 / zoomScale)
+                .position(center)
+                .allowsHitTesting(false)
+                .accessibilityLabel("\(player.name), within about \(Int(player.accuracyM.rounded())) meters")
+            }
+        }
+
         if let meetingPoint {
             VStack(spacing: 2) {
                 Image(systemName: "megaphone.fill")
@@ -1764,7 +1810,14 @@ struct POCFloorPlan: View {
             .accessibilityLabel("Emergency meeting point")
         }
 
-        if let checkpointStation = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) {
+        if let me = players.first(where: \.isMe) {
+            ownMarker
+                .scaleEffect(1 / Self.playerZoomScale)
+                .position(projection.point(me.position))
+                .accessibilityElement(children: .ignore)
+                .accessibilityIdentifier("map.ownPosition")
+                .accessibilityLabel("You, estimated within about \(Int(me.accuracyM.rounded())) meters")
+        } else if let checkpointStation = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) {
             VStack(spacing: 0) {
                 Image("PlayerMarker")
                     .resizable()
@@ -1824,12 +1877,32 @@ struct POCFloorPlan: View {
         )
     }
 
+    /// The YOU crewmate, for the live position.
+    private var ownMarker: some View {
+        VStack(spacing: 0) {
+            Image("PlayerMarker")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 58, height: 58)
+                .shadow(color: .cyan.opacity(0.75), radius: 8)
+            Text("YOU")
+                .font(.system(size: 9, weight: .black, design: .rounded))
+                .foregroundStyle(.black)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(.cyan, in: Capsule())
+        }
+    }
+
     private func focusOnPlayer(projection: POCMapProjection, size: CGSize) {
-        guard let station = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) else {
+        let playerPosition: CGPoint
+        if let me = players.first(where: \.isMe) {
+            playerPosition = projection.point(me.position)
+        } else if let station = stations.first(where: { $0.id == ownLastCheckpoint.stationID }) {
+            playerPosition = playerMarkerPosition(for: station, projection: projection)
+        } else {
             return
         }
-
-        let playerPosition = playerMarkerPosition(for: station, projection: projection)
         let offset = CGSize(
             width: (size.width / 2 - playerPosition.x) * Self.playerZoomScale,
             height: (size.height / 2 - playerPosition.y) * Self.playerZoomScale
@@ -1984,6 +2057,24 @@ struct POCMapProjection {
             y: origin.y + ((bounds.maxY - coordinate.y) * scale)
         )
     }
+
+    /// Screen points for a distance on the ground, e.g. an uncertainty radius.
+    func points(meters: Double) -> CGFloat {
+        CGFloat(meters / 111_320) * scale
+    }
+}
+
+/// A player's estimated position on the floor plan (live positions, testing).
+struct POCPlayerDot: Identifiable {
+    let id: String
+    let name: String
+    let color: Color
+    /// x = longitude, y = latitude, like the room geometry.
+    let position: CGPoint
+    let accuracyM: Double
+    let isMe: Bool
+    /// No fresh input for a while.
+    let faded: Bool
 }
 
 enum SUBLevel2Map {

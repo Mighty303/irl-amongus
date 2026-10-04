@@ -38,6 +38,11 @@ final class GameStore {
     let ble = BLEProximity()
     let location = LocationService()
     let signs = SignRecognizer()
+    /// This phone's own position estimate (sensors only).
+    let positions = PositionEstimator()
+    /// Everyone's estimated positions, while the host has live positions on.
+    private(set) var livePositions: [LivePosition] = []
+    var livePositionsOn: Bool { state?.settings.livePositions == true }
 
     @ObservationIgnored private let killAudio = KillAudioPlayer()
     @ObservationIgnored private var deathSound = DeathSoundState()
@@ -51,6 +56,7 @@ final class GameStore {
     @ObservationIgnored private var nextRequestId = 1
     @ObservationIgnored private var reconnectTask: Task<Void, Never>?
     @ObservationIgnored private var proximityTask: Task<Void, Never>?
+    @ObservationIgnored private var positionTask: Task<Void, Never>?
     @ObservationIgnored private var reconnectAttempt = 0
 
     init(defaults: UserDefaults = .standard, httpSession: URLSession = .shared, restoresSession: Bool = true) {
@@ -68,6 +74,8 @@ final class GameStore {
         if restoresSession, let data = defaults.data(forKey: "session") {
             session = try? JSONDecoder().decode(Session.self, from: data)
         }
+        location.onLocation = { [positions] in positions.useGPS($0) }
+        location.onHeading = { [positions] in positions.useHeading($0) }
         if session != nil { connect() }
     }
 
@@ -309,8 +317,10 @@ final class GameStore {
         initializedCooldownForLobby = nil
         session = nil
         state = nil
+        livePositions = []
         ble.stop()
         location.stop()
+        positions.reset()
     }
 
     // MARK: - WebSocket
@@ -335,11 +345,13 @@ final class GameStore {
         task.resume()
         receive(on: task)
         startProximityReporting()
+        startPositionReporting()
     }
 
     func disconnect() {
         reconnectTask?.cancel()
         proximityTask?.cancel()
+        positionTask?.cancel()
         socket?.cancel(with: .goingAway, reason: nil)
         socket = nil
         connection = .disconnected
@@ -399,6 +411,7 @@ final class GameStore {
         let error: String?
         let event: String?
         let state: GameState?
+        let positions: [LivePosition]?
     }
 
     private func handleMessage(_ data: Data) {
@@ -419,6 +432,8 @@ final class GameStore {
         case "event":
             let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
             handleEvent(envelope.event ?? "", data: json?["data"] as? [String: Any] ?? [:])
+        case "positions":
+            livePositions = envelope.positions ?? []
         default:
             break
         }
@@ -443,12 +458,26 @@ final class GameStore {
             }
         }
 
-        if newState.phase == .LOBBY || newState.phase == .GAME_OVER {
+        // BLE also runs in the lobby while live positions are on: who's next to whom sharpens the map.
+        if newState.phase == .GAME_OVER || (newState.phase == .LOBBY && newState.settings.livePositions != true) {
             ble.stop()
         } else {
             ble.start(token: newState.me.bleToken)
         }
         location.start()
+        // Steps, compass and barometer only run (and only ask for Motion permission) while it's on.
+        if newState.settings.livePositions == true {
+            positions.start()
+        } else {
+            positions.stop()
+            livePositions = []
+        }
+        // A verified check-in at a sign tells us exactly where this phone is.
+        if let cp = newState.me.lastCheckpoint, cp != old?.me.lastCheckpoint, cp.method != "manual",
+           serverNow() - cp.at < 30_000, // not an old check-in replayed by a reconnect
+           let station = newState.station(cp.stationId), let lat = station.lat, let lng = station.lng {
+            positions.fix(lat: lat, lng: lng, name: station.signText ?? station.name)
+        }
 
         if old?.stations != newState.stations, let base = serverURL {
             let stations = newState.stations
@@ -571,10 +600,30 @@ final class GameStore {
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))
                 guard let self, let socket = self.socket, self.isSynced,
-                      let phase = self.state?.phase, phase != .LOBBY, phase != .GAME_OVER else { continue }
+                      let phase = self.state?.phase, phase != .GAME_OVER,
+                      phase != .LOBBY || self.livePositionsOn else { continue }
                 let sightings = self.ble.freshSightings().map { ["token": $0.token, "rssi": $0.rssi] }
                 guard !sightings.isEmpty,
                       let data = try? JSONSerialization.data(withJSONObject: ["id": 0, "action": "proximity", "payload": ["sightings": sightings]])
+                else { continue }
+                socket.send(.string(String(decoding: data, as: UTF8.self))) { _ in }
+            }
+        }
+    }
+
+    /// While the host has live positions on, sends this phone's estimate every 2 seconds.
+    private func startPositionReporting() {
+        positionTask?.cancel()
+        positionTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                guard let self, let socket = self.socket, self.isSynced, self.livePositionsOn,
+                      let e = self.positions.estimate else { continue }
+                var payload: [String: Any] = ["lat": e.lat, "lng": e.lng, "accuracyM": e.accuracyM,
+                                              "levelDelta": e.levelDelta, "sources": e.sources]
+                if let roomId = e.roomId { payload["roomId"] = roomId }
+                if let room = e.room { payload["room"] = room }
+                guard let data = try? JSONSerialization.data(withJSONObject: ["id": 0, "action": "position", "payload": payload])
                 else { continue }
                 socket.send(.string(String(decoding: data, as: UTF8.self))) { _ in }
             }

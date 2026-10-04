@@ -17,6 +17,7 @@ struct GameHUDView: View {
     @State private var scanning = false
     @State private var confirmingEmergency = false
     @State private var showingDiagnostics = false
+    @State private var showingLiveMap = false
     @State private var showingMyQR = false
     @State private var scanningPlayer = false
 
@@ -56,6 +57,7 @@ struct GameHUDView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        .fullScreenCover(isPresented: $showingLiveMap) { LiveMapView() }
         .sheet(isPresented: $showingDiagnostics) {
             NavigationStack { DebugView().toolbar { Button("Done") { showingDiagnostics = false } } }
         }
@@ -105,6 +107,7 @@ struct GameHUDView: View {
                         selectTask: { panel = .detail(taskId: $0) },
                         scan: { scanning = true },
                         showDiagnostics: { showingDiagnostics = true },
+                        showLiveMap: { showingLiveMap = true },
                         showMyQR: { showingMyQR = true },
                         scanPlayer: { scanningPlayer = true })
     }
@@ -230,6 +233,7 @@ struct HUDCloseButton: View {
 /// Martin's SUB floor plan with this player's task signs on it: orange while due, green once done,
 /// and the player marker at the last verified check-in. Signs without GPS (or outside the SUB) have no pin.
 struct HUDMapSquare: View {
+    @Environment(GameStore.self) private var store
     let state: GameState
     let selectTask: (String) -> Void
 
@@ -251,7 +255,8 @@ struct HUDMapSquare: View {
                 ownLastCheckpoint: checkpoint,
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }
-                }
+                },
+                players: store.liveDots(state: state)
             )
             if lightsOut {
                 // Lights sabotage: crewmates lose the map until someone fixes Electrical.
@@ -310,6 +315,7 @@ struct HUDActionsPanel: View {
     let selectTask: (String) -> Void
     let scan: () -> Void
     let showDiagnostics: () -> Void
+    let showLiveMap: () -> Void
     let showMyQR: () -> Void
     let scanPlayer: () -> Void
 
@@ -353,6 +359,7 @@ struct HUDActionsPanel: View {
                     Button("Show my player QR", action: showMyQR)
                     Button("Scan a player QR", action: scanPlayer)
                 }
+                Button("Live map (testing)", action: showLiveMap)
                 Button("Diagnostics", action: showDiagnostics)
                 Button("Leave game", role: .destructive) { store.leave() }
             } label: {

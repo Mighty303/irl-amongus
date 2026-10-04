@@ -1,9 +1,11 @@
 import CoreLocation
 import Observation
+import UIKit
 
 /// GPS is used to tag stations during setup, place pins on the mini-map, and as a coarse
-/// checkpoint method (server-side geofence). It is never sent to other players, and indoors
-/// it's only a rough hint. Sign recognition is the primary way to prove presence.
+/// checkpoint method (server-side geofence). Indoors it's only a rough hint; sign recognition is
+/// the primary way to prove presence. It also feeds `PositionEstimator`, whose estimate is only
+/// sent to the server while the host has live positions (testing) turned on.
 @Observable
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private(set) var location: CLLocation?
@@ -12,6 +14,10 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private(set) var authorization: CLAuthorizationStatus = .notDetermined
 
     @ObservationIgnored private let manager = CLLocationManager()
+    /// Every fix and heading, for the position estimator.
+    @ObservationIgnored var onLocation: ((CLLocation) -> Void)?
+    @ObservationIgnored var onHeading: ((CLHeading) -> Void)?
+    @ObservationIgnored private var orientationCheckedAt = Date.distantPast
 
     override init() {
         super.init()
@@ -60,10 +66,28 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         location = locations.last
+        locations.forEach { onLocation?($0) }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {
         heading = newHeading.trueHeading >= 0 ? newHeading.trueHeading : newHeading.magneticHeading
+        onHeading?(newHeading)
+        matchHeadingToScreen()
+    }
+
+    /// Headings are measured toward the top of the screen as the player sees it (the game is landscape).
+    private func matchHeadingToScreen() {
+        guard Date().timeIntervalSince(orientationCheckedAt) > 2 else { return }
+        orientationCheckedAt = Date()
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
+        // Interface and device orientation name landscape the opposite way round.
+        let orientation: CLDeviceOrientation = switch scene?.interfaceOrientation {
+        case .landscapeLeft: .landscapeRight
+        case .landscapeRight: .landscapeLeft
+        case .portraitUpsideDown: .portraitUpsideDown
+        default: .portrait
+        }
+        if manager.headingOrientation != orientation { manager.headingOrientation = orientation }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
