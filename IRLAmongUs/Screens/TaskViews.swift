@@ -64,7 +64,7 @@ struct TaskSheet: View {
         case .divert:
             if task.step == 0 {
                 VStack(spacing: 8) {
-                    DivertPowerGame(target: divertTarget, onDone: complete)
+                    DivertPowerGame(onDone: complete)
                     if let dest = state.station(task.steps.last) {
                         Text("Then accept the power at \(dest.name)").font(.caption.bold()).foregroundStyle(.white)
                     }
@@ -85,9 +85,6 @@ struct TaskSheet: View {
             }
         }
     }
-
-    /// Which switch Divert Power asks for. Stable per task, so reopening the panel shows the same one.
-    private var divertTarget: Int { task.id.unicodeScalars.reduce(0) { $0 + Int($1.value) } % 8 }
 
     private func complete() {
         Task {
