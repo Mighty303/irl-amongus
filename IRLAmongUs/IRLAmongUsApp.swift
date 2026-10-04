@@ -11,7 +11,7 @@ struct IRLAmongUsApp: App {
         WindowGroup {
             ContentView()
                 .environment(store)
-                .onOpenURL { store.handle(url: $0) }
+                .onOpenURL { url in Task { await store.handle(url: url) } }
                 .onChange(of: scenePhase) { _, phase in store.scenePhaseChanged(phase) }
                 .onChange(of: store.session) { _, session in
                     // Phones stay face-up and awake during play (bodies especially).
