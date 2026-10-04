@@ -32,6 +32,8 @@ final class GameStore {
     var errorMessage: String?
     var alert: Alert?
     var killPresentation: KillPresentation?
+    var bodyReportPresentation: BodyReportPresentation?
+    private(set) var bodyReportBackdrop: GameState?
     /// serverTime - localTime, in ms
     private(set) var clockOffset: Double = 0
     var signThreshold: Float { didSet { preferences.set(signThreshold, forKey: "signThreshold") } }
@@ -64,6 +66,7 @@ final class GameStore {
     @ObservationIgnored private var victorySound = VictorySoundState()
     @ObservationIgnored private var deathSound = DeathSoundState()
     @ObservationIgnored private var killPresentationState = KillPresentationState()
+    @ObservationIgnored private var bodyReportState = BodyReportState()
     @ObservationIgnored private var awaitingKillAck = false
     @ObservationIgnored private var pendingKillVictims = Set<String>()
     @ObservationIgnored private var initializedCooldownForLobby: String? {
@@ -342,6 +345,9 @@ final class GameStore {
         deathSound = DeathSoundState()
         killPresentation = nil
         killPresentationState.reset()
+        bodyReportPresentation = nil
+        bodyReportBackdrop = nil
+        bodyReportState.reset()
         initializedCooldownForLobby = nil
         session = nil
         state = nil
@@ -484,15 +490,18 @@ final class GameStore {
             && (newState.phase == .LOBBY || newState.phase == .ROLE_REVEAL)) {
             bodyReportSound.reset()
             victorySound.reset()
+            bodyReportPresentation = nil
+            bodyReportBackdrop = nil
+            bodyReportState.reset()
         }
         if old != nil, old?.phase != .GAME_OVER, newState.phase == .GAME_OVER,
            let winner = newState.winner {
             playVictorySound(winner: winner)
         }
-        // Play on a confirmed transition if the report event was missed.
+        // Snapshot fallback covers a missed event, without replaying on reconnect.
         if old?.phase == .PLAYING, newState.phase == .MEETING,
            newState.meeting?.kind == "body", let bodyID = newState.meeting?.bodyId {
-            playBodyReportSound(bodyID: bodyID)
+            presentBodyReport(bodyID: bodyID, roster: newState.players, backdrop: old)
         }
         if (old?.phase != newState.phase && (newState.phase == .LOBBY || newState.phase == .ROLE_REVEAL))
             || (old?.me.alive == false && newState.me.alive) {
@@ -583,11 +592,12 @@ final class GameStore {
             }
             if data["victimId"] as? String == session?.playerId { Haptics.alarm(times: 2) } else { Haptics.success() }
         case "BODY_REPORTED":
-            if let bodyID = data["bodyId"] as? String ?? state?.meeting?.bodyId {
-                playBodyReportSound(bodyID: bodyID)
+            if let state, state.phase == .PLAYING || state.phase == .MEETING,
+               let bodyID = data["bodyId"] as? String ?? state.meeting?.bodyId
+                ?? state.players.first(where: { !$0.alive && $0.name == data["bodyName"] as? String })?.id {
+                presentBodyReport(bodyID: bodyID, roster: state.players,
+                                  backdrop: state.phase == .PLAYING ? state : nil)
             }
-            let body = data["bodyName"] as? String
-            alert = Alert(title: "🚨 BODY REPORTED", subtitle: "\(body.map { "\($0)'s body was found. " } ?? "")Return to the meeting area.", color: .red)
             Haptics.alarm()
         case "EMERGENCY_MEETING":
             alert = Alert(title: "🚨 EMERGENCY MEETING", subtitle: "\(data["callerName"] as? String ?? "Someone") pressed the button. Return to the meeting area.", color: .red)
@@ -619,7 +629,7 @@ final class GameStore {
     // MARK: - Actions
 
     private func presentKill(victimID: String, killerID: String?) {
-        guard let state else { return }
+        guard let state, bodyReportPresentation == nil else { return }
         let attacker = killerID.flatMap { PlayerColor.rosterColor(for: $0, in: state.players) }
         if killPresentationState.accept(victimID: victimID) {
             killPresentation = KillPresentation(victimID: victimID, attackerColor: attacker,
@@ -632,6 +642,22 @@ final class GameStore {
 
     func dismissKill(_ id: UUID) {
         if killPresentation?.id == id { killPresentation = nil }
+    }
+
+    private func presentBodyReport(bodyID: String, roster: [PlayerView], backdrop: GameState?) {
+        guard bodyReportState.accept(bodyID: bodyID) else { return }
+        playBodyReportSound(bodyID: bodyID)
+        killPresentation = nil
+        alert = nil
+        bodyReportBackdrop = backdrop
+        bodyReportPresentation = BodyReportPresentation(bodyID: bodyID,
+            color: PlayerColor.rosterColor(for: bodyID, in: roster) ?? .black)
+    }
+
+    func dismissBodyReport(_ id: UUID) {
+        guard bodyReportPresentation?.id == id else { return }
+        bodyReportPresentation = nil
+        bodyReportBackdrop = nil
     }
 
     /// Sends an action and waits for the server's ack. Throws the server's rejection reason.

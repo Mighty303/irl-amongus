@@ -1,5 +1,14 @@
 # UI sprite attribution
 
+## Body report
+
+`BodyReportStreak`, `BodyReportLettering`, `BodyReportCorpse` and `BodyReportSkull`
+are unchanged crops from [BeforeVoting-sharedassets0.assets-196.png](https://github.com/AlvajoyAsante/among-us-assets/blob/main/Voting/BeforeVoting-sharedassets0.assets-196.png).
+Playback recolours the corpse suit to the reported player's lobby palette and
+maps the atlas's green visor channel to the silver visor. Regenerate the crops
+with `python3 scripts/import-body-report-assets.py` (requires ImageMagick).
+Among Us and its original artwork belong to Innersloth.
+
 ## Neck kill animation
 
 `IRLAmongUs/Assets/KillAnimation/Neck_Kill.gif` is the original user-supplied

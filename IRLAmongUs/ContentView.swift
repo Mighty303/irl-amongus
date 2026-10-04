@@ -331,7 +331,9 @@ private struct LocalLobbyView: View {
             }
         }
         .onChange(of: store.state?.phase, initial: true) { _, phase in
-            if let phase, phase != .LOBBY && phase != .ROLE_REVEAL && phase != .PLAYING && phase != .GAME_OVER {
+            guard store.bodyReportPresentation == nil else { return }
+            if store.killPresentation == nil,
+               let phase, phase != .LOBBY && phase != .ROLE_REVEAL && phase != .PLAYING && phase != .GAME_OVER {
                 OrientationDelegate.requestPortrait()
             } else {
                 OrientationDelegate.requestLandscape()
@@ -1626,6 +1628,7 @@ struct PhysicalMapView: View {
     var showsCloseButton = true
     var previewRole: Role? = nil
     var gameState: GameState? = nil
+    var requestsPortrait = true
 
     private var isImpostor: Bool { (gameState?.me.role ?? previewRole) == .impostor }
     private static let rooms = SUBLevel2Map.rooms
@@ -1729,7 +1732,7 @@ struct PhysicalMapView: View {
             }
         }
         .preferredColorScheme(.dark)
-        .onAppear { OrientationDelegate.requestPortrait() }
+        .onAppear { if requestsPortrait { OrientationDelegate.requestPortrait() } }
         .sheet(item: $selectedStation) { station in
             POCStationDetailView(
                 station: station,

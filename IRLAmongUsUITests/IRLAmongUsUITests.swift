@@ -106,6 +106,29 @@ final class IRLAmongUsUITests: XCTestCase {
     }
 
     @MainActor
+    func testBodyReportBannerAutomaticallyOpensMeeting() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-disableAudio", "-session", "", "-showDeveloperMenu"]
+        app.launch()
+        XCTAssertTrue(app.navigationBars["Developer Mode"].waitForExistence(timeout: 5))
+        app.collectionViews.firstMatch.swipeUp()
+        app.buttons["developer.tools"].tap()
+        app.collectionViews.firstMatch.swipeUp()
+        app.buttons["Body report animation"].tap()
+        app.buttons["bodyReport.preview.play"].tap()
+        let banner = app.descendants(matching: .any)["bodyReport.animation"].firstMatch
+        XCTAssertTrue(banner.waitForExistence(timeout: 3))
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Dead body reported over game map"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        XCTAssertTrue(app.buttons["bodyReport.preview.done"].waitForExistence(timeout: 5))
+        XCTAssertFalse(banner.exists)
+        app.buttons["bodyReport.preview.done"].tap()
+        XCTAssertTrue(app.buttons["bodyReport.preview.play"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testLocalLobbyRequiresNameAndValidServer() throws {
         XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()

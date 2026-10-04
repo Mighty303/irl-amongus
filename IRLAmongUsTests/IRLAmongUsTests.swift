@@ -4,6 +4,60 @@ import Testing
 import UIKit
 @testable import IRLAmongUs
 
+struct BodyReportTests {
+    @Test func reportIsNotReplayedByDuplicateEventsOrReconnectsAndResetsForNextRound() {
+        var reports = BodyReportState()
+        let first = reports.accept(bodyID: "cyan")
+        let duplicate = reports.accept(bodyID: "cyan")
+        let secondBody = reports.accept(bodyID: "pink")
+        #expect(first && !duplicate && secondBody)
+        reports.reset()
+        let nextRound = reports.accept(bodyID: "cyan")
+        #expect(nextRound)
+    }
+
+    @Test func originalReportSpritesLoadAndEverySuitGetsItsOwnCorpseColour() throws {
+        for name in ["BodyReportStreak", "BodyReportLettering", "BodyReportSkull"] {
+            #expect(UIImage(named: name)?.cgImage != nil)
+        }
+        var variants = Set<Data>()
+        for color in PlayerColor.allCases {
+            let image = BodyReportArtwork.corpse(color: color)
+            let bitmap = try #require(image.cgImage)
+            #expect(bitmap.width == 180 && bitmap.height == 115)
+            variants.insert(try #require(image.pngData()))
+        }
+        #expect(variants.count == PlayerColor.allCases.count)
+    }
+
+    @MainActor
+    @Test func reportWindowCoversScannersWithoutTakingFocusAndDismissesCleanly() throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let originalKey = scene.windows.first(where: \.isKeyWindow)
+        let game = UIWindow(windowScene: scene)
+        let controller = UIViewController()
+        game.rootViewController = controller
+        game.makeKeyAndVisible()
+        let scanner = UIViewController()
+        controller.present(scanner, animated: false)
+        let presenter = BodyReportPresenter.Coordinator()
+        defer { presenter.close(); game.isHidden = true; originalKey?.makeKey() }
+        let report = BodyReportPresentation(bodyID: "cyan", color: .cyan)
+        presenter.presentation = report
+        presenter.update(anchor: controller.view)
+        let overlay = try #require(presenter.overlayWindow)
+        #expect(overlay.windowLevel > .alert)
+        #expect(!overlay.isKeyWindow && game.isKeyWindow)
+        #expect(controller.presentedViewController === scanner)
+        presenter.update(anchor: controller.view)
+        #expect(presenter.overlayWindow === overlay)
+        presenter.presentation = nil
+        presenter.update(anchor: controller.view)
+        #expect(presenter.overlayWindow == nil)
+        #expect(controller.presentedViewController === scanner)
+    }
+}
+
 struct NeckKillTests {
     @Test func hdPlaybackPreservesAspectRatioAndUsesCurrentSuitColours() throws {
         let purple = try NeckKillFrames.load(attacker: .purple, victim: .cyan)

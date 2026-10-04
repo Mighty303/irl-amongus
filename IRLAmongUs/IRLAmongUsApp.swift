@@ -14,6 +14,8 @@ struct IRLAmongUsApp: App {
                 .background {
                     KillAnimationPresenter(presentation: store.killPresentation) { store.dismissKill($0) }
                         .frame(width: 0, height: 0)
+                    BodyReportPresenter(presentation: store.bodyReportPresentation) { store.dismissBodyReport($0) }
+                        .frame(width: 0, height: 0)
                 }
                 .onOpenURL { url in Task { await store.handle(url: url) } }
                 .onChange(of: scenePhase) { _, phase in store.scenePhaseChanged(phase) }
@@ -37,7 +39,7 @@ final class OrientationDelegate: NSObject, UIApplicationDelegate {
     static func requestLandscape() { requestOrientation(.landscape) }
     static func requestPortrait() { requestOrientation(.portrait) }
 
-    private static func requestOrientation(_ mask: UIInterfaceOrientationMask) {
+    static func requestOrientation(_ mask: UIInterfaceOrientationMask) {
         supportedOrientations = mask
         for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
             guard scene.activationState == .foregroundActive else { continue }

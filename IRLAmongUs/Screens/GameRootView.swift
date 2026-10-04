@@ -12,8 +12,8 @@ struct GameRootView: View {
                 if store.session == nil {
                     HomeView()
                 } else if let state = store.state {
-                    screen(for: state)
-                        .allowsHitTesting(store.isSynced)
+                    screen(for: store.bodyReportBackdrop ?? state)
+                        .allowsHitTesting(store.isSynced && store.bodyReportPresentation == nil)
                 } else {
                     VStack(spacing: 16) {
                         ProgressView()
@@ -36,7 +36,7 @@ struct GameRootView: View {
             }
         }
         .onChange(of: store.state?.phase, initial: true) { _, phase in
-            guard store.killPresentation == nil else { return }
+            guard store.killPresentation == nil && store.bodyReportPresentation == nil else { return }
             if phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == .RESULT || phase == .GAME_OVER || phase == nil {
                 OrientationDelegate.requestLandscape()
             } else {
@@ -44,8 +44,18 @@ struct GameRootView: View {
             }
         }
         .onChange(of: store.killPresentation?.id) { _, id in
+            guard store.bodyReportPresentation == nil else { return }
             let phase = store.state?.phase
             if id != nil || phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == .RESULT || phase == .GAME_OVER || phase == nil {
+                OrientationDelegate.requestLandscape()
+            } else {
+                OrientationDelegate.requestPortrait()
+            }
+        }
+        .onChange(of: store.bodyReportPresentation?.id) { _, id in
+            guard id == nil else { return } // The report window chooses and locks the landscape side.
+            let phase = store.state?.phase
+            if store.killPresentation != nil || phase == .LOBBY || phase == .ROLE_REVEAL || phase == .PLAYING || phase == .RESULT || phase == .GAME_OVER || phase == nil {
                 OrientationDelegate.requestLandscape()
             } else {
                 OrientationDelegate.requestPortrait()
