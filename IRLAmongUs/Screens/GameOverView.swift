@@ -12,35 +12,40 @@ struct GameOverView: View {
         ZStack(alignment: .bottom) {
             GameOverArtwork(role: role, players: GameOverArtwork.winners(
                 from: state.players, localID: state.me.id, role: role))
-            VStack(spacing: 8) {
-                if let reason = state.winReason { Text(reason).font(.subheadline) }
-                Text("\(state.taskProgress.done) / \(state.taskProgress.total) tasks completed")
-                    .font(.caption).foregroundStyle(.white.opacity(0.7))
-                HStack(spacing: 18) {
+            HStack(alignment: .bottom, spacing: 16) {
+                GameOverActionButton(asset: "QuitActionIcon", label: "Quit",
+                                     identifier: "gameOver.leave") { store.leave() }
+                Spacer(minLength: 0)
+                VStack(spacing: 6) {
+                    if let reason = state.winReason { Text(reason).font(.subheadline) }
+                    Text("\(state.taskProgress.done) / \(state.taskProgress.total) tasks completed")
+                        .font(.caption).foregroundStyle(.white.opacity(0.7))
                     Button("Roles") { showingRoles = true }
-                    if state.isHost {
-                        Button(restarting ? "Starting…" : "Play again") {
-                            restarting = true
-                            Task {
-                                await store.perform("restart")
-                                restarting = false
-                            }
-                        }
-                        .disabled(restarting || !store.isSynced)
-                        .accessibilityIdentifier("gameOver.restart")
-                    } else {
+                        .buttonStyle(.bordered).tint(.white)
+                    if !state.isHost {
                         Text("Waiting for the host…").font(.caption)
                     }
-                    Button("Leave") { store.leave() }
-                        .accessibilityIdentifier("gameOver.leave")
                 }
-                .buttonStyle(.bordered)
-                .tint(.white)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                Spacer(minLength: 0)
+                if state.isHost {
+                    GameOverActionButton(asset: "PlayAgainActionIcon",
+                                         label: restarting ? "Starting…" : "Play again",
+                                         identifier: "gameOver.restart") {
+                        restarting = true
+                        Task {
+                            await store.perform("restart")
+                            restarting = false
+                        }
+                    }
+                    .disabled(restarting || !store.isSynced)
+                } else {
+                    Color.clear.frame(width: 90, height: 108)
+                }
             }
-            .foregroundStyle(.white)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 12)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
         }
         .background(.black)
         .preferredColorScheme(.dark)
@@ -113,19 +118,50 @@ struct GameOverArtwork: View {
     }
 }
 
+/// Shared with the preview so the artwork and button placement can be reviewed together.
+private struct GameOverActionButton: View {
+    let asset: String
+    let label: String
+    let identifier: String
+    let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Button(action: action) {
+            Image(asset)
+                .resizable().scaledToFit()
+                .frame(width: 90, height: 108)
+                .opacity(isEnabled ? 1 : 0.45)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(identifier)
+    }
+}
+
 struct GameOverPreview: View {
     @State private var role = Role.crewmate
 
     var body: some View {
         ZStack(alignment: .bottom) {
             GameOverArtwork(role: role, players: RoleRevealPlayer.preview(for: role))
-            Picker("Winning team", selection: $role) {
-                Text("Crewmates").tag(Role.crewmate)
-                Text("Impostors").tag(Role.impostor)
+            HStack(alignment: .bottom) {
+                GameOverActionButton(asset: "QuitActionIcon", label: "Quit",
+                                     identifier: "gameOver.leave") {}
+                Spacer()
+                Picker("Winning team", selection: $role) {
+                    Text("Crewmates").tag(Role.crewmate)
+                    Text("Impostors").tag(Role.impostor)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 280)
+                Spacer()
+                GameOverActionButton(asset: "PlayAgainActionIcon", label: "Play again",
+                                     identifier: "gameOver.restart") {}
             }
-            .pickerStyle(.segmented)
-            .frame(width: 280)
-            .padding(16)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 8)
         }
         .background(.black)
         .onAppear { OrientationDelegate.requestLandscape() }
