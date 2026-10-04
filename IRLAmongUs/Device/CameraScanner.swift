@@ -31,6 +31,11 @@ final class CameraViewController: UIViewController, AVCaptureMetadataOutputObjec
     private let session = AVCaptureSession()
     private let videoQueue = DispatchQueue(label: "camera.frames")
     private var previewLayer: AVCaptureVideoPreviewLayer?
+    private var videoOutput: AVCaptureVideoDataOutput?
+    /// Tracks how the phone is physically held, so the preview and captured frames stay upright in
+    /// portrait and landscape alike (sign photos were saved sideways when taken from the landscape lobby).
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    private var rotationObservations: [NSKeyValueObservation] = []
     private var lastFrameAt = Date.distantPast
     private var lastQR: (String, Date)?
 
@@ -64,10 +69,7 @@ final class CameraViewController: UIViewController, AVCaptureMetadataOutputObjec
         video.setSampleBufferDelegate(self, queue: videoQueue)
         if session.canAddOutput(video) {
             session.addOutput(video)
-            // Deliver upright portrait frames so they match the reference photos.
-            if let conn = video.connection(with: .video), conn.isVideoRotationAngleSupported(90) {
-                conn.videoRotationAngle = 90
-            }
+            videoOutput = video
         }
         session.commitConfiguration()
 
@@ -76,7 +78,32 @@ final class CameraViewController: UIViewController, AVCaptureMetadataOutputObjec
         layer.frame = view.bounds
         view.layer.addSublayer(layer)
         previewLayer = layer
+
+        let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: layer)
+        rotationCoordinator = coordinator
+        applyRotation()
+        rotationObservations = [
+            coordinator.observe(\.videoRotationAngleForHorizonLevelPreview) { [weak self] _, _ in
+                DispatchQueue.main.async { self?.applyRotation() }
+            },
+            coordinator.observe(\.videoRotationAngleForHorizonLevelCapture) { [weak self] _, _ in
+                DispatchQueue.main.async { self?.applyRotation() }
+            },
+        ]
         videoQueue.async { self.session.startRunning() }
+    }
+
+    /// Keeps the preview level with the horizon and delivers frames (and so sign photos) upright.
+    private func applyRotation() {
+        guard let coordinator = rotationCoordinator else { return }
+        let previewAngle = coordinator.videoRotationAngleForHorizonLevelPreview
+        if let connection = previewLayer?.connection, connection.isVideoRotationAngleSupported(previewAngle) {
+            connection.videoRotationAngle = previewAngle
+        }
+        let captureAngle = coordinator.videoRotationAngleForHorizonLevelCapture
+        if let connection = videoOutput?.connection(with: .video), connection.isVideoRotationAngleSupported(captureAngle) {
+            connection.videoRotationAngle = captureAngle
+        }
     }
 
     override func viewDidLayoutSubviews() {

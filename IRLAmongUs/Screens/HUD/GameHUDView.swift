@@ -171,16 +171,17 @@ struct HUDSignPhoto: View {
     var cornerRadius: CGFloat = 8
 
     var body: some View {
-        ZStack {
-            Color(white: 0.23)
-            if let photoId = station?.photoId, let base = store.serverURL {
-                AsyncImage(url: base.appendingPathComponent("photos/\(photoId).jpg")) { $0.resizable().scaledToFill() }
-                    placeholder: { ProgressView() }
-            } else {
-                Image(systemName: "photo").foregroundStyle(.white.opacity(0.45))
+        // The frame comes from the caller; the image fills it and is cropped, never resizing the view.
+        Color(white: 0.23)
+            .overlay {
+                if let photoId = station?.photoId, let base = store.serverURL {
+                    AsyncImage(url: base.appendingPathComponent("photos/\(photoId).jpg")) { $0.resizable().scaledToFill() }
+                        placeholder: { ProgressView() }
+                } else {
+                    Image(systemName: "photo").foregroundStyle(.white.opacity(0.45))
+                }
             }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .overlay(RoundedRectangle(cornerRadius: cornerRadius).stroke(.white.opacity(0.25), lineWidth: 1.5))
     }
 }
@@ -524,7 +525,7 @@ struct HUDTaskDetail: View {
         GeometryReader { geometry in
             VStack(alignment: .leading, spacing: 10) {
                 HUDSignPhoto(station: station, cornerRadius: 12)
-                    .frame(height: geometry.size.height * 0.5)
+                    .frame(width: geometry.size.width, height: geometry.size.height * 0.48)
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(HUDStyle.title(task))
