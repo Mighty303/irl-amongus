@@ -20,7 +20,7 @@ struct MySignsView: View {
                         Text("MY SIGNS · \(min(mine.count, required)) OF \(required) ADDED")
                             .font(.system(size: 12, weight: .heavy, design: .rounded))
                             .foregroundStyle(.white.opacity(0.7))
-                        Text("Add \(required) signs from around the venue")
+                        Text("Take photos of \(required) signs around the venue")
                             .font(.system(size: 24, weight: .light, design: .rounded))
                     }
                     Spacer()
@@ -30,7 +30,7 @@ struct MySignsView: View {
                     }
                     .buttonStyle(MySignsOutlineButtonStyle())
                 }
-                Text("Walk to a sign (room number, poster, exit sign) and photograph it. Every player's signs become the game's task stations; tasks are dealt randomly when the game starts.")
+                Text("Just point and shoot: no naming needed, the app reads what the sign says. Everyone's signs become the game's task stations; tasks are dealt randomly when the game starts.")
                     .font(.system(size: 13, design: .rounded))
                     .foregroundStyle(.white.opacity(0.75))
 
@@ -55,7 +55,8 @@ struct MySignsView: View {
             .preferredColorScheme(.dark)
             .sheet(isPresented: $adding, onDismiss: { OrientationDelegate.requestLandscape() }) {
                 // Portrait, like in-game check-ins, so reference photos match what the scanner sees later.
-                StationEditorView(signOnly: true, title: "Sign \(min(mine.count + 1, required)) of \(required)")
+                StationEditorView(signOnly: true, title: "Sign \(min(mine.count + 1, required)) of \(required)",
+                                  fallbackName: "Sign \(mine.count + 1)")
                     .onAppear { OrientationDelegate.requestPortrait() }
             }
         }
@@ -83,9 +84,9 @@ struct MySignsView: View {
             }
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(sign.name).font(.system(size: 14, weight: .heavy, design: .rounded)).lineLimit(1)
-                    Text([sign.lat != nil ? "GPS tagged" : "No GPS", sign.signText.map { "text “\($0)”" }]
-                        .compactMap { $0 }.joined(separator: " · "))
+                    Text(sign.signText.map { "Reads “\($0)”" } ?? sign.name)
+                        .font(.system(size: 14, weight: .heavy, design: .rounded)).lineLimit(1)
+                    Text(sign.lat != nil ? "Location tagged" : "No GPS (photo only)")
                         .font(.system(size: 11, design: .rounded)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
                 }
                 Spacer(minLength: 6)
