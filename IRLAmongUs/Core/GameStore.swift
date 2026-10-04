@@ -63,6 +63,7 @@ final class GameStore {
         let isStale = saved.map { $0.contains("trycloudflare.com") || $0 == "http://192.168.1.100:3000" } ?? true
         serverURLString = isStale ? Self.defaultServerURL : saved!
         playerName = defaults.string(forKey: "playerName") ?? ""
+        gamesetPassword = defaults.string(forKey: "gamesetPassword") ?? ""
         signThreshold = defaults.object(forKey: "signThreshold") as? Float ?? 0.6
         if restoresSession, let data = defaults.data(forKey: "session") {
             session = try? JSONDecoder().decode(Session.self, from: data)
@@ -155,33 +156,74 @@ final class GameStore {
         }
     }
 
-    struct SignSet: Decodable, Identifiable, Equatable {
+    struct GamesetSummary: Decodable, Identifiable, Equatable {
+        let id: String
         let name: String
         let signs: Int
-        let savedAt: Double
-        var id: String { name }
+        let updatedAt: Double
     }
 
-    /// Saved sign sets (already-photographed signs) a host can load for a quick demo lobby.
-    func signSets() async throws -> [SignSet] {
+    struct Gameset: Decodable, Identifiable, Equatable {
+        let id: String
+        let name: String
+        let stations: [Station]
+        let updatedAt: Double
+    }
+
+    /// Shared password for creating and editing saved games (until accounts exist). Remembered once it works.
+    var gamesetPassword: String { didSet { preferences.set(gamesetPassword, forKey: "gamesetPassword") } }
+    var canEditGamesets: Bool { !gamesetPassword.isEmpty }
+
+    /// Saved games: sets of already-photographed signs for no-setup demos. Anyone can list and use them.
+    func gamesets() async throws -> [GamesetSummary] { try await getJSON("gamesets") }
+    func gameset(_ id: String) async throws -> Gameset { try await getJSON("gamesets/\(id)") }
+
+    private func getJSON<T: Decodable>(_ path: String) async throws -> T {
         guard let base = serverURL else { throw ClientError.server("Invalid server URL") }
-        let (data, response) = try await httpSession.data(from: base.appendingPathComponent("sign-sets"))
+        let (data, response) = try await httpSession.data(from: base.appendingPathComponent(path))
         try validateHTTPResponse(response)
-        return try JSONDecoder().decode([SignSet].self, from: data)
+        return try JSONDecoder().decode(T.self, from: data)
     }
 
-    /// Host: save the lobby's signs under `name`, or load a saved set into the lobby. Returns the sign count.
-    func signSet(_ action: String, name: String) async -> Int? {
-        guard let base = serverURL, let session else { return nil }
+    /// Checks the password with the server and remembers it if it's right.
+    func unlockGamesets(password: String) async -> Bool {
+        guard let base = serverURL else { return false }
         do {
-            let response = try await postJSON(
-                base.appendingPathComponent("games/\(session.code)/sign-sets/\(action)"),
-                body: ["playerId": session.playerId, "token": session.token, "name": name]
-            )
-            return response["signs"] as? Int ?? 0
+            _ = try await postJSON(base.appendingPathComponent("gamesets/check"), body: ["password": password])
+            gamesetPassword = password
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    /// Password-protected change to saved games (create, add/remove signs, delete). nil if it failed (error shown).
+    @discardableResult
+    func editGamesets(_ path: String, _ body: [String: Any] = [:]) async -> [String: Any]? {
+        guard let base = serverURL else { return nil }
+        var payload = body
+        payload["password"] = gamesetPassword
+        do {
+            return try await postJSON(base.appendingPathComponent(path), body: payload)
+        } catch {
+            if error.localizedDescription == "Wrong password" { gamesetPassword = "" }
+            errorMessage = error.localizedDescription
             return nil
+        }
+    }
+
+    /// Host: use a saved game's signs in this lobby, or `nil` to go back to players' own signs.
+    @discardableResult
+    func useGameset(_ id: String?) async -> Bool {
+        guard let base = serverURL, let session else { return false }
+        do {
+            _ = try await postJSON(base.appendingPathComponent("games/\(session.code)/gameset"),
+                                   body: ["playerId": session.playerId, "token": session.token, "gamesetId": id as Any? ?? NSNull()])
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 

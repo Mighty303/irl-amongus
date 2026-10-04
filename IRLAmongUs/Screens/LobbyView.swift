@@ -81,7 +81,7 @@ struct LobbyView: View {
 
                 if state.isHost {
                     SettingsSection(settings: state.settings, players: state.players)
-                    SignSetsSection(state: state)
+                    GamesetSection(state: state)
                     Section {
                         Button("Start game") { Task { await store.perform("start_game") } }
                             .font(.headline)
@@ -230,82 +230,43 @@ private struct SettingsSection: View {
     }
 }
 
-/// Host: load a saved set of already-photographed signs (quick demo / judging setup), or save this lobby's.
-private struct SignSetsSection: View {
+/// Host: use a saved game's signs (no-setup demo) or none, where players photograph their own.
+private struct GamesetSection: View {
     @Environment(GameStore.self) private var store
     let state: GameState
-    @State private var sets: [GameStore.SignSet] = []
-    @State private var newName = ""
-    @State private var status: String?
+    @State private var games: [GameStore.GamesetSummary] = []
     @State private var busy = false
-    @State private var confirmLoad: GameStore.SignSet?
-
-    private var lobbySigns: Int { state.stations.filter { $0.kind == .task }.count }
 
     var body: some View {
         Section {
-            ForEach(sets) { set in
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(set.name)
-                        Text("\(set.signs) signs · saved \(Date(timeIntervalSince1970: set.savedAt / 1000).formatted(date: .abbreviated, time: .shortened))")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Load") {
-                        if state.stations.isEmpty { load(set) } else { confirmLoad = set }
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(busy)
+            Picker("Game", selection: Binding(
+                get: { state.gameset?.id ?? "" },
+                set: { id in use(id.isEmpty ? nil : id) }
+            )) {
+                Text("None: players photograph signs").tag("")
+                ForEach(games) { game in Text("\(game.name) · \(game.signs) signs").tag(game.id) }
+                if let current = state.gameset, !games.contains(where: { $0.id == current.id }) {
+                    Text(current.name).tag(current.id)
                 }
             }
-            if sets.isEmpty { Text("No saved sign sets yet.").foregroundStyle(.secondary) }
-            HStack {
-                TextField("Name, e.g. Judging demo", text: $newName)
-                Button("Save \(lobbySigns) signs") { save() }
-                    .buttonStyle(.borderless)
-                    .disabled(busy || lobbySigns == 0 || newName.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            if let status { Text(status).font(.caption).foregroundStyle(.secondary) }
+            .disabled(busy)
+            NavigationLink("Manage saved games…") { GamesetsView() }
         } header: {
-            Text("Sign sets (demo / judging)")
+            Text("Saved game")
         } footer: {
-            Text("Save this lobby's photographed signs, then load them into any later lobby in one tap. Loading replaces the lobby's signs and turns off the per-player sign requirement.")
-        }
-        .task { await refresh() }
-        .confirmationDialog("Replace this lobby's \(state.stations.count) signs?", isPresented: Binding(
-            get: { confirmLoad != nil }, set: { if !$0 { confirmLoad = nil } }
-        ), titleVisibility: .visible) {
-            if let set = confirmLoad {
-                Button("Load \(set.name)", role: .destructive) { load(set) }
+            if let current = state.gameset {
+                Text("Using “\(current.name)”. The per-player sign requirement is off; players can still add their own. Pick None to go back.")
+            } else {
+                Text("Pick a saved game to use its already-photographed signs, so a demo needs no setup.")
             }
-            Button("Cancel", role: .cancel) {}
         }
+        .task { games = (try? await store.gamesets()) ?? [] }
     }
 
-    private func refresh() async {
-        sets = (try? await store.signSets()) ?? []
-    }
-
-    private func save() {
-        let name = newName.trimmingCharacters(in: .whitespaces)
+    private func use(_ id: String?) {
         busy = true
         Task {
-            if let count = await store.signSet("save", name: name) {
-                status = "Saved \(count) signs as “\(name)”."
-                newName = ""
-                await refresh()
-            }
-            busy = false
-        }
-    }
-
-    private func load(_ set: GameStore.SignSet) {
-        busy = true
-        Task {
-            if let count = await store.signSet("load", name: set.name) {
-                status = "Loaded \(count) signs from “\(set.name)”. The sign requirement is off."
-            }
+            await store.useGameset(id)
             busy = false
         }
     }
