@@ -62,8 +62,7 @@ struct FollowFloorMap: View {
                     Canvas { context, _ in
                         for room in rooms {
                             let path = projection.path(room)
-                            let corridor = room.roomType.localizedCaseInsensitiveContains("corridor")
-                            context.fill(path, with: .color(corridor ? .cyan.opacity(0.10) : .white.opacity(0.12)))
+                            context.fill(path, with: .color(room.mapFill))
                             context.stroke(path, with: .color(.white.opacity(0.4)), lineWidth: 1)
                         }
                         // At this zoom every room can carry its name.
@@ -72,7 +71,7 @@ struct FollowFloorMap: View {
                             guard p.x > -40, p.y > -40, p.x < big.width + 40, p.y < big.height + 40 else { continue }
                             context.draw(Text(room.label.count > 22 ? room.roomID : room.label)
                                 .font(.system(size: 9, weight: .bold, design: .rounded))
-                                .foregroundStyle(.white.opacity(0.6)), at: p)
+                                .foregroundStyle(room.mapCategory.labelColor), at: p)
                         }
                     }
                     .frame(width: big.width, height: big.height)

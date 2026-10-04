@@ -9,3 +9,15 @@ The bundled Student Union Building level 2 room geometry is an extracted subset 
 - Scope: room and corridor polygons plus room metadata; no routing or live-position data
 
 The project maintainer confirmed permission from the SFU Companion owner to use this data for the POC. SFU Companion is an independent student project and is not an official Simon Fraser University application. SFU names and data remain the property of their respective owners.
+
+## Room map colors
+
+The indoor maps use the room palette and room-type classification adapted from
+[SFU Companion's mobile RoomFinderScreen](https://gitlab.com/HolyChicken99/sfu-companion/-/blob/b458870/screens/RoomFinderScreen.tsx),
+snapshot `b458870`. Source code is copyright (c) 2026 TCombinator, MIT licensed;
+the license is retained in `licenses/SFU-Companion-MIT.txt`.
+
+Teaching rooms are blue, student amenities pink, washrooms green, general rooms slate,
+and corridors dark. Selection uses pale yellow. Adaptations share the palette across
+SwiftUI floor maps, use contrasting label text, and retain gameplay fog, task/player
+markers and the admin occupancy tint. Campus 3D models and textures are not bundled.

@@ -81,7 +81,7 @@ struct TaskMapOverviewView: View {
                         Canvas { context, _ in
                             for room in campus.rooms {
                                 let path = projection.path(room)
-                                context.fill(path, with: .color(.cyan.opacity(0.12)))
+                                context.fill(path, with: .color(room.mapFill))
                                 context.stroke(path, with: .color(.white.opacity(0.4)), lineWidth: 1)
                             }
                         }.accessibilityHidden(true)

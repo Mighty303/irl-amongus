@@ -1954,12 +1954,9 @@ struct POCFloorPlan: View {
         Canvas { context, _ in
             for room in rooms {
                 let isHighlighted = selectedStation?.roomID == room.roomID
-                let isCorridor = room.roomType.localizedCaseInsensitiveContains("corridor")
                 let path = room.path(using: projection)
-                let fill = isHighlighted
-                    ? Color.orange.opacity(0.42)
-                    : isCorridor ? Color.cyan.opacity(0.10) : Color.white.opacity(0.12)
-                let stroke = isHighlighted ? Color.orange : Color.white.opacity(0.34)
+                let fill = isHighlighted ? RoomMapCategory.selected.opacity(0.9) : room.mapFill
+                let stroke = isHighlighted ? RoomMapCategory.selected : Color.white.opacity(0.34)
 
                 context.fill(path, with: .color(fill))
                 context.stroke(path, with: .color(stroke), lineWidth: isHighlighted ? 2.5 : 0.8)
@@ -1972,7 +1969,7 @@ struct POCFloorPlan: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
                 .minimumScaleFactor(0.65)
-                .foregroundStyle(.white.opacity(0.72))
+                .foregroundStyle(selectedStation?.roomID == room.roomID ? RoomMapCategory.color(0x0c1620) : room.mapCategory.labelColor)
                 .frame(width: 54)
                 .scaleEffect(1 / zoomScale)
                 .position(projection.point(room.center))
