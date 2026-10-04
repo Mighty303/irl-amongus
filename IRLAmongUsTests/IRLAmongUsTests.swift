@@ -1,8 +1,69 @@
 import AVFoundation
 import Foundation
+import Observation
 import Testing
 import UIKit
 @testable import IRLAmongUs
+
+@MainActor
+struct LocalMapTrackingTests {
+    private func remote(_ id: String, accuracy: Double = 3, at: Double = 10_000, stale: Bool = false) -> LivePosition {
+        LivePosition(playerId: id, lat: 49.2786, lng: -122.9180, accuracyM: accuracy, at: at,
+                     roomId: nil, room: nil, buildingId: nil, floorId: nil,
+                     levelDelta: 0, sources: ["ble"], stale: stale)
+    }
+
+    @Test func walkingTrackingRunsInGameWithSharingOffAndStopsAfterGame() {
+        for phase in [Phase.PLAYING, .MEETING, .VOTING, .RESULT] {
+            #expect(LocalMapTracking.isEnabled(phase: phase, sharing: false))
+        }
+        #expect(!LocalMapTracking.isEnabled(phase: .LOBBY, sharing: false))
+        #expect(LocalMapTracking.isEnabled(phase: .LOBBY, sharing: true))
+        #expect(!LocalMapTracking.isEnabled(phase: .GAME_OVER, sharing: true))
+    }
+
+    @Test func ownServerMovementIsUsedWhenLocalEstimateIsMissingOrLessAccurate() {
+        let estimator = PositionEstimator()
+        estimator.fix(lat: 49.27855, lng: -122.91825, name: "Start")
+        var local = estimator.estimate!
+        local.accuracyM = 40
+        let own = remote("me")
+        let ownPoint = CGPoint(x: own.lng, y: own.lat)
+        #expect(LocalMapTracking.coordinate(local: nil, positions: [remote("other"), own],
+                                            playerID: "me", serverNow: 11_000) == ownPoint)
+        #expect(LocalMapTracking.coordinate(local: local, positions: [own],
+                                            playerID: "me", serverNow: 11_000) == ownPoint)
+        local.accuracyM = 2
+        #expect(LocalMapTracking.coordinate(local: local, positions: [own],
+                                            playerID: "me", serverNow: 11_000) == CGPoint(x: local.lng, y: local.lat))
+    }
+
+    @Test func otherPlayersAndStalePositionsCannotMoveTheLocalCamera() {
+        for positions in [[remote("other")], [remote("me", stale: true)], [remote("me", at: 1_000)]] {
+            #expect(LocalMapTracking.coordinate(local: nil, positions: positions,
+                                                playerID: "me", serverNow: 11_000) == nil)
+        }
+    }
+
+    @Test func aLocalMoveInvalidatesTheMapWithoutAnyRemotePlayerUpdate() {
+        let estimator = PositionEstimator()
+        estimator.fix(lat: 49.27855, lng: -122.91825, name: "Start")
+        let before = LocalMapTracking.coordinate(local: estimator.estimate, positions: [],
+                                                 playerID: "me", serverNow: 11_000)
+        let changes = MapChangeFlag()
+        withObservationTracking {
+            _ = LocalMapTracking.coordinate(local: estimator.estimate, positions: [],
+                                             playerID: "me", serverNow: 11_000)
+        } onChange: { changes.changed = true }
+        estimator.fix(lat: 49.27860, lng: -122.91820, name: "Moved")
+        let after = LocalMapTracking.coordinate(local: estimator.estimate, positions: [],
+                                                playerID: "me", serverNow: 11_000)
+        #expect(changes.changed)
+        #expect(after != before)
+    }
+}
+
+private final class MapChangeFlag: @unchecked Sendable { var changed = false }
 
 struct BodyReportTests {
     @Test func reportIsNotReplayedByDuplicateEventsOrReconnectsAndResetsForNextRound() {

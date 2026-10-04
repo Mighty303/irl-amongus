@@ -378,7 +378,10 @@ struct HUDMapSquare: View {
     /// What the map keeps in the middle: your live position, else your last check-in, else the red
     /// button or the play area's building.
     private func mapCenter(_ campus: CampusView) -> (CGPoint, Bool) {
-        if let e = store.positions.estimate { return (CGPoint(x: e.lng, y: e.lat), true) }
+        if let position = LocalMapTracking.coordinate(local: store.positions.estimate,
+                positions: store.livePositions, playerID: state.me.id, serverNow: store.serverNow()) {
+            return (position, true)
+        }
         if let cp = state.me.lastCheckpoint, let s = state.station(cp.stationId), let lat = s.lat, let lng = s.lng {
             return (CGPoint(x: lng, y: lat), true)
         }

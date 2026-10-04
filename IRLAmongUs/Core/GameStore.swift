@@ -539,13 +539,13 @@ final class GameStore {
         positions.playArea = newState.playArea
         if newState.me.canWatchCams != true, isWatchingCams { isWatchingCams = false; camFeeds = [:] }
         updateCameraStream()
-        // Steps, compass and barometer only run (and only ask for Motion permission) while it's on.
-        if newState.settings.livePositions == true {
+        // The local map follows movement even when position sharing is disabled.
+        if LocalMapTracking.isEnabled(phase: newState.phase, sharing: newState.settings.livePositions == true) {
             positions.start()
         } else {
             positions.stop()
-            livePositions = []
         }
+        if newState.settings.livePositions != true { livePositions = [] }
         // A verified check-in at a sign tells us exactly where this phone is.
         if let cp = newState.me.lastCheckpoint, cp != old?.me.lastCheckpoint, cp.method != "manual",
            serverNow() - cp.at < 30_000, // not an old check-in replayed by a reconnect
