@@ -39,19 +39,28 @@ struct SpecialSignsView: View {
     /// Adds a sign; true when it worked.
     let submit: ([String: Any]) async -> Bool
     let delete: (Station) async -> Void
+    /// Moves a sign's pin and floor (`SignPinStep` placement); true when it worked.
+    let move: (Station, [String: Any]) async -> Bool
     let close: () -> Void
     /// Open straight on this sign's capture (e.g. tapped its tile in the lobby).
     var startSlot: SpecialSignSlot? = nil
 
     @State private var capturing: SpecialSignSlot?
+    @State private var moving: (slot: SpecialSignSlot, station: Station)?
     @State private var started = false
 
     var body: some View {
         SignPanelContainer { compact in
             VStack(alignment: .leading, spacing: 12) {
-                SignPanel.header(capturing?.title ?? "Special signs",
-                                 subtitle: capturing?.detail ?? "The red button is required · the rest are optional")
-                if let slot = capturing {
+                SignPanel.header(moving.map { "Move \($0.slot.title)" } ?? capturing?.title ?? "Special signs",
+                                 subtitle: moving != nil ? "Put the pin exactly on the sign"
+                                     : capturing?.detail ?? "The red button is required · the rest are optional")
+                if let moving {
+                    SignPinStep(compact: compact, station: moving.station,
+                                others: stations.filter { $0.id != moving.station.id },
+                                save: { await move(moving.station, $0) },
+                                done: { self.moving = nil })
+                } else if let slot = capturing {
                     SignCaptureStep(
                         compact: compact,
                         title: slot.title,
@@ -69,9 +78,10 @@ struct SpecialSignsView: View {
                     slots
                 }
             }
-            .signPanel(closeLabel: capturing == nil ? "Close special signs" : "Back to special signs") {
+            .signPanel(closeLabel: capturing == nil && moving == nil ? "Close special signs" : "Back to special signs") {
                 // Opened on one sign: the X goes straight back to the lobby.
-                if capturing != nil, startSlot == nil { capturing = nil } else { close() }
+                if moving != nil { moving = nil }
+                else if capturing != nil, startSlot == nil { capturing = nil } else { close() }
             }
         }
         .onAppear {
@@ -112,8 +122,9 @@ struct SpecialSignsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(alignment: .topLeading) { badge(slot, set: true) }
             Text(slot.title).font(.system(size: 14, weight: .black, design: .rounded))
-            Text(station.signText.map { "Reads “\($0)”" } ?? (station.lat != nil ? "On the map" : "No map pin"))
-                .font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(SignPanel.muted).lineLimit(1)
+            Text(station.pinLabel(store.campus))
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundStyle(station.lat == nil ? SignPanel.error : SignPanel.muted).lineLimit(1)
             HStack(spacing: 6) {
                 Button { capturing = slot } label: {
                     Text("REPLACE").font(.system(size: 12, weight: .black, design: .rounded))
@@ -121,6 +132,7 @@ struct SpecialSignsView: View {
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(SignPanel.ink, lineWidth: 2))
                 }
                 .buttonStyle(.plain)
+                SignPinStep.button(slot.title) { moving = (slot, station) }
                 Button { Task { await delete(station) } } label: {
                     Image(systemName: "trash").font(.system(size: 13, weight: .bold))
                         .frame(width: 32, height: 32)
@@ -182,6 +194,9 @@ extension SpecialSignsView {
             stations: stations,
             submit: { await store.perform("add_station", $0) },
             delete: { await store.perform("delete_station", ["stationId": $0.id]) },
+            move: { station, placement in
+                await store.perform("move_station", placement.merging(["stationId": station.id]) { $1 })
+            },
             close: close,
             startSlot: startSlot
         )

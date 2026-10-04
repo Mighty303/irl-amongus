@@ -8,6 +8,7 @@ struct MySignsView: View {
     let close: () -> Void
 
     @State private var capturing = false
+    @State private var moving: Station?
 
     var body: some View {
         SignPanelContainer { compact in
@@ -22,10 +23,15 @@ struct MySignsView: View {
         let mine = state.mySigns.count
         let number = min(mine + 1, required)
         return VStack(alignment: .leading, spacing: 12) {
-            SignPanel.header(capturing ? "Add a sign" : "My signs",
-                             subtitle: capturing ? "Fill the frame with the sign · no naming needed"
+            SignPanel.header(moving != nil ? "Move pin" : capturing ? "Add a sign" : "My signs",
+                             subtitle: moving != nil ? "Put the pin exactly on the sign"
+                                 : capturing ? "Fill the frame with the sign · no naming needed"
                                  : "\(min(mine, required)) of \(required) · point and shoot, the app reads each sign")
-            if capturing {
+            if let moving {
+                SignPinStep(compact: compact, station: moving, others: state.stations.filter { $0.id != moving.id },
+                            save: { await store.perform("move_station", $0.merging(["stationId": moving.id]) { $1 }) },
+                            done: { self.moving = nil })
+            } else if capturing {
                 SignCaptureStep(compact: compact, title: "Sign \(number) of \(required)", fallbackName: "Sign \(number)") {
                     await store.perform("add_station", $0)
                 } onSaved: {
@@ -35,8 +41,8 @@ struct MySignsView: View {
                 slots(state.mySigns, required: required)
             }
         }
-        .signPanel(closeLabel: capturing ? "Back to my signs" : "Close my signs") {
-            if capturing { capturing = false } else { close() }
+        .signPanel(closeLabel: capturing || moving != nil ? "Back to my signs" : "Close my signs") {
+            if moving != nil { moving = nil } else if capturing { capturing = false } else { close() }
         }
     }
 
@@ -82,10 +88,12 @@ struct MySignsView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(sign.signText.map { "Reads “\($0)”" } ?? sign.name)
                         .font(.system(size: 13, weight: .black, design: .rounded)).lineLimit(1)
-                    Text(sign.lat != nil ? "Location tagged" : "No GPS (photo only)")
-                        .font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(SignPanel.muted)
+                    Text(sign.pinLabel(store.campus))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(sign.lat == nil ? SignPanel.error : SignPanel.muted).lineLimit(1)
                 }
                 Spacer(minLength: 0)
+                SignPinStep.button("Sign \(number)") { moving = sign }
                 Button {
                     Task { await store.perform("delete_station", ["stationId": sign.id]) }
                 } label: {
