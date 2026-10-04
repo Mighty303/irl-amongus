@@ -21,6 +21,8 @@ struct FollowFloorMap: View {
     let centerIsPlayer: Bool
     /// How far you can see, meters; nil = no fog (ghosts, or no position yet).
     var visionM: Double? = nil
+    /// Your suit colour, for the YOU crewmate.
+    var myColor: PlayerColor? = nil
     let onSelectStation: (POCStation) -> Void
 
     /// Meters across the shorter side: a little over a room's width. Fixed, so nobody can zoom out to look around.
@@ -125,7 +127,7 @@ struct FollowFloorMap: View {
 
     private var you: some View {
         VStack(spacing: 0) {
-            Image("PlayerMarker").resizable().scaledToFit().frame(width: 40, height: 40)
+            Image(myColor?.lobbyAssetName ?? "PlayerMarker").resizable().scaledToFit().frame(width: 40, height: 40)
                 .shadow(color: .cyan.opacity(0.75), radius: 6)
             Text("YOU")
                 .font(.system(size: 8, weight: .black, design: .rounded)).foregroundStyle(.black)
@@ -139,23 +141,17 @@ struct FollowFloorMap: View {
 
     @ViewBuilder private func pin(_ station: POCStation) -> some View {
         if station.style == .task {
-            let done = completedStationIDs.contains(station.id)
-            Button { onSelectStation(station) } label: {
-                VStack(spacing: 2) {
-                    Image(systemName: done ? "checkmark" : "wrench.and.screwdriver.fill")
-                        .font(.caption.weight(.black)).foregroundStyle(.black)
-                        .frame(width: 30, height: 30)
-                        .background(done ? Color.green : Color.orange, in: Circle())
-                        .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
-                    Text(station.pinLabel)
-                        .font(.system(size: 8, weight: .black, design: .rounded)).foregroundStyle(.white)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(.black.opacity(0.76), in: Capsule())
+            // Among Us map style: a yellow "!" for each task still to do; finished ones leave the map.
+            if !completedStationIDs.contains(station.id) {
+                Button { onSelectStation(station) } label: {
+                    AmongUsTaskMarker()
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .opacity(station.faded ? 0.5 : 1)
+                .accessibilityLabel("\(station.displayName) task")
             }
-            .buttonStyle(.plain)
-            .opacity(station.faded ? 0.5 : 1)
-            .accessibilityLabel("\(station.displayName) task\(done ? ", done" : "")")
         } else {
             VStack(spacing: 2) {
                 Image(systemName: station.style.icon)
@@ -179,8 +175,13 @@ struct FollowFloorMap: View {
     /// Just the player's dot and name; the uncertainty circles are only on the live map (testing).
     private func dot(_ player: POCPlayerDot, at p: CGPoint, ppm: CGFloat) -> some View {
         ZStack {
-            VStack(spacing: 1) {
-                Circle().fill(player.color).frame(width: 16, height: 16).overlay(Circle().stroke(.white, lineWidth: 2))
+            VStack(spacing: 0) {
+                // Their crewmate in their suit colour, like your own marker.
+                if let suit = player.playerColor {
+                    Image(suit.lobbyAssetName).resizable().scaledToFit().frame(width: 30, height: 30)
+                } else {
+                    Circle().fill(player.color).frame(width: 16, height: 16).overlay(Circle().stroke(.white, lineWidth: 2))
+                }
                 Text(player.name)
                     .font(.system(size: 8, weight: .black, design: .rounded)).foregroundStyle(.white)
                     .padding(.horizontal, 5).padding(.vertical, 1)
@@ -209,7 +210,7 @@ struct FollowFloorMap: View {
                 Button { onSelectStation(station) } label: {
                     VStack(spacing: 0) {
                         Image(systemName: "location.north.fill")
-                            .font(.system(size: 14, weight: .black)).foregroundStyle(.orange)
+                            .font(.system(size: 14, weight: .black)).foregroundStyle(AmongUsTaskMarker.yellow)
                             .rotationEffect(.radians(atan2(dx, -dy)))
                         Text("\(Int(meters.rounded())) m")
                             .font(.system(size: 8, weight: .black, design: .rounded)).foregroundStyle(.white)
@@ -300,6 +301,25 @@ struct Vision {
             j = i
         }
         return inside
+    }
+}
+
+/// The Among Us map's task marker: a yellow exclamation mark with a black outline.
+struct AmongUsTaskMarker: View {
+    static let yellow = Color(red: 1, green: 0.89, blue: 0.2)
+    var size: CGFloat = 28
+
+    var body: some View {
+        let glyph = Text("!").font(.system(size: size, weight: .black, design: .rounded))
+        ZStack {
+            // The outline: the glyph in black, nudged all the way round.
+            ForEach(0..<12, id: \.self) { i in
+                let angle = Double(i) * .pi / 6
+                glyph.foregroundStyle(.black).offset(x: cos(angle) * 2.5, y: sin(angle) * 2.5)
+            }
+            glyph.foregroundStyle(Self.yellow)
+        }
+        .accessibilityHidden(true)
     }
 }
 
