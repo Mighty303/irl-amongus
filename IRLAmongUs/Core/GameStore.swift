@@ -45,6 +45,8 @@ final class GameStore {
     let signs = SignRecognizer()
     /// This phone's own position estimate (sensors only).
     let positions = PositionEstimator()
+    /// Every SFU Burnaby building's floor plans, so play can happen anywhere on campus.
+    let campus = CampusMap()
     /// Everyone's estimated positions, while live positions are on.
     private(set) var livePositions: [LivePosition] = []
     var livePositionsOn: Bool { state?.settings.livePositions == true }
@@ -83,9 +85,11 @@ final class GameStore {
         if restoresSession, let data = defaults.data(forKey: "session") {
             session = try? JSONDecoder().decode(Session.self, from: data)
         }
+        positions.campus = campus
         location.onLocation = { [positions] in positions.useGPS($0) }
         location.onHeading = { [positions] in positions.useHeading($0) }
         if session != nil { connect() }
+        if let base = serverURL { Task { [campus] in await campus.load(serverURL: base) } }
     }
 
     /// Hosted game server (Render). There's no address field in the app; for a local server, launch with
@@ -340,6 +344,7 @@ final class GameStore {
         guard let session, let base = serverURL,
               var comps = URLComponents(url: base.appendingPathComponent("ws"), resolvingAgainstBaseURL: false) else { return }
         comps.scheme = base.scheme == "https" ? "wss" : "ws"
+        if !campus.isFullCampus { Task { [campus] in await campus.load(serverURL: base) } }
         comps.queryItems = [
             URLQueryItem(name: "code", value: session.code),
             URLQueryItem(name: "playerId", value: session.playerId),
@@ -495,7 +500,8 @@ final class GameStore {
         if let cp = newState.me.lastCheckpoint, cp != old?.me.lastCheckpoint, cp.method != "manual",
            serverNow() - cp.at < 30_000, // not an old check-in replayed by a reconnect
            let station = newState.station(cp.stationId), let lat = station.lat, let lng = station.lng {
-            positions.fix(lat: lat, lng: lng, name: station.signText ?? station.name)
+            positions.fix(lat: lat, lng: lng, name: station.signText ?? station.name,
+                          buildingId: station.buildingId, floorId: station.floorId)
         }
 
         if old?.stations != newState.stations, let base = serverURL {
@@ -694,6 +700,8 @@ final class GameStore {
                                               "levelDelta": e.levelDelta, "sources": e.sources]
                 if let roomId = e.roomId { payload["roomId"] = roomId }
                 if let room = e.room { payload["room"] = room }
+                if let buildingId = e.buildingId { payload["buildingId"] = buildingId }
+                if let floorId = e.floorId { payload["floorId"] = floorId }
                 guard let data = try? JSONSerialization.data(withJSONObject: ["id": 0, "action": "position", "payload": payload])
                 else { continue }
                 socket.send(.string(String(decoding: data, as: UTF8.self))) { _ in }

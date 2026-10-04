@@ -1859,8 +1859,8 @@ struct POCFloorPlan: View {
                     .frame(width: station.style == .sign ? 18 : 26, height: station.style == .sign ? 18 : 26)
                     .background(station.style.color, in: Circle())
                     .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 1.5))
-                if station.style != .sign {
-                    Text(station.roomID)
+                if station.style != .sign || station.faded {
+                    Text(station.pinLabel)
                         .font(.system(size: 7, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 4)
@@ -1868,10 +1868,11 @@ struct POCFloorPlan: View {
                         .background(.black.opacity(0.76), in: Capsule())
                 }
             }
+            .opacity(station.faded ? 0.45 : 1)
             .scaleEffect(1 / zoomScale)
             .position(projection.point(station.position))
             .allowsHitTesting(false)
-            .accessibilityLabel("\(station.displayName) sign")
+            .accessibilityLabel("\(station.displayName) sign\(station.floorNote.map { ", floor \($0)" } ?? "")")
         }
 
         ForEach(stations.filter { $0.style == .task }) { station in
@@ -1889,7 +1890,7 @@ struct POCFloorPlan: View {
                         .overlay(Circle().stroke(.white.opacity(0.9), lineWidth: 2))
                         .shadow(color: (isCompleted ? Color.green : Color.orange).opacity(0.45), radius: 7)
 
-                    Text(station.roomID)
+                    Text(station.pinLabel)
                         .font(.system(size: 8, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 5)
@@ -1898,6 +1899,7 @@ struct POCFloorPlan: View {
                 }
             }
             .buttonStyle(.plain)
+            .opacity(station.faded ? 0.5 : 1)
             .scaleEffect(1 / zoomScale)
             .position(projection.point(station.position))
             .accessibilityLabel("\(station.displayName) station, \(station.roomLabel), \(isCompleted ? "completed" : "assigned")")
@@ -2054,7 +2056,9 @@ struct POCFloorPlan: View {
     }
 
     private func shouldShowLabel(_ room: POCRoom) -> Bool {
-        room.priority == 30
+        // Across many buildings the labels would bury the map; they're for a single building's floor.
+        rooms.count <= 150
+            && room.priority == 30
             && room.roomID != "2430"
             && !stations.contains(where: { $0.roomID == room.roomID })
     }
@@ -2295,7 +2299,7 @@ enum SUBLevel2Map {
         }
     }
 
-    private static func polygonCenter(_ ring: [CGPoint]) -> CGPoint {
+    static func polygonCenter(_ ring: [CGPoint]) -> CGPoint {
         guard let reference = ring.first else { return .zero }
 
         var crossSum: CGFloat = 0
@@ -2364,6 +2368,11 @@ struct POCStation: Identifiable {
     let position: CGPoint
     /// `.task` pins are this player's tasks (tappable); the rest show where every other sign is.
     var style: POCPinStyle = .task
+    /// On a different floor from the one shown: drawn faded, labelled with its floor.
+    var faded = false
+    var floorNote: String? = nil
+
+    var pinLabel: String { floorNote.map { "\(roomID) · \($0)" } ?? roomID }
 }
 
 enum POCPinStyle: Equatable {

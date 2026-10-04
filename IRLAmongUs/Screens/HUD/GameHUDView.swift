@@ -248,12 +248,15 @@ struct HUDMapSquare: View {
     }
 
     var body: some View {
-        let pins = taskPins
+        // The SFU buildings around the signs and players, each on one floor (switchable).
+        let campus = store.campusView(points: state.locatedStationPoints + store.livePositions.map { CGPoint(x: $0.lng, y: $0.lat) },
+                                      stations: state.stations)
+        let pins = taskPins(campus)
         ZStack {
             POCFloorPlan(
-                rooms: SUBLevel2Map.rooms,
+                rooms: campus.rooms,
                 // This player's task signs, plus every other sign so the whole venue is on the map.
-                stations: pins.map(\.station) + state.otherSignPins(excluding: Set(pins.map(\.station.id))),
+                stations: pins.map(\.station) + state.otherSignPins(excluding: Set(pins.map(\.station.id)), campus: campus),
                 meetingPoint: state.meetingPointPin,
                 completedStationIDs: Set(pins.filter(\.completed).map(\.station.id)),
                 selectedStation: nil,
@@ -261,8 +264,16 @@ struct HUDMapSquare: View {
                 onSelectStation: { station in
                     if let pin = pins.first(where: { $0.station.id == station.id }) { selectTask(pin.taskId) }
                 },
-                players: store.liveDots(state: state)
+                players: store.liveDots(state: state, campus: campus)
             )
+            .overlay(alignment: .topLeading) {
+                if let building = campus.focus, building.floors.count > 1, let floor = campus.floors[building.id] {
+                    CampusFloorControl(building: building, floor: floor) { step in
+                        store.campus.stepFloor(building, by: step, hint: store.shownFloorHint(building, stations: state.stations))
+                    }
+                    .padding(12)
+                }
+            }
             if lightsOut {
                 // Lights sabotage: crewmates lose the map until someone fixes Electrical.
                 RoundedRectangle(cornerRadius: 22).fill(.black.opacity(0.88))
@@ -275,7 +286,7 @@ struct HUDMapSquare: View {
         state.sabotage?.kind == "lights" && state.me.role != .impostor && state.me.alive
     }
 
-    private var taskPins: [Pin] {
+    private func taskPins(_ campus: CampusView) -> [Pin] {
         var seen = Set<String>()
         // Incomplete tasks first, so a sign shared with a finished task shows as still due.
         let ordered = state.me.tasks.filter { !$0.completed } + state.me.tasks.filter(\.completed)
@@ -289,7 +300,9 @@ struct HUDMapSquare: View {
                     taskType: task.type.label,
                     roomID: String(station.name.prefix(10)),
                     roomLabel: station.name,
-                    position: CGPoint(x: lng, y: lat)
+                    position: CGPoint(x: lng, y: lat),
+                    faded: campus.isOffFloor(buildingId: station.buildingId, floorId: station.floorId),
+                    floorNote: campus.isOffFloor(buildingId: station.buildingId, floorId: station.floorId) ? station.floorId : nil
                 ),
                 taskId: task.id,
                 completed: task.completed

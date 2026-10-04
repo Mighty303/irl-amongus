@@ -108,6 +108,8 @@ struct SignCaptureStep: View {
     /// Where the map opened, and where its pin is now (what gets saved).
     @State private var pinStart: CLLocationCoordinate2D?
     @State private var pin: CLLocationCoordinate2D?
+    /// SFU building and floor under the pin, saved with the sign.
+    @State private var place: CampusPlace?
     /// Shows the photo in the square instead of the map.
     @State private var showingPhoto = false
     @State private var readText: String?
@@ -125,7 +127,7 @@ struct SignCaptureStep: View {
                     if let photo, showingPhoto {
                         Image(uiImage: photo).resizable().scaledToFill()
                     } else if photo != nil {
-                        SignPinPicker(start: pinStart, pin: $pin, others: store.state?.stations ?? [])
+                        SignPinPicker(start: pinStart, pin: $pin, place: $place, others: store.state?.stations ?? [])
                     } else {
                         CameraView(onFrame: { buffer in latestFrame.buffer = buffer }, frameInterval: 0.2)
                     }
@@ -218,6 +220,7 @@ struct SignCaptureStep: View {
         photoCoordinate = nil
         pinStart = nil
         pin = nil
+        place = nil
         showingPhoto = false
         message = nil
     }
@@ -273,6 +276,10 @@ struct SignCaptureStep: View {
             if let coordinate = pin {
                 payload["lat"] = coordinate.latitude
                 payload["lng"] = coordinate.longitude
+            }
+            if let place {
+                payload["buildingId"] = place.buildingId
+                payload["floorId"] = place.floorId
             }
             do {
                 payload["photoId"] = try await store.uploadPhoto(photo)

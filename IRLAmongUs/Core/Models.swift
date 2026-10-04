@@ -188,6 +188,9 @@ struct Station: Codable, Identifiable, Hashable {
     let photoId: String?
     /// Player who photographed this sign in the lobby (task signs only).
     let addedBy: String?
+    /// SFU building and floor the sign is on (campus map). Optional for older signs and servers.
+    var buildingId: String? = nil
+    var floorId: String? = nil
 }
 
 struct PlayerView: Decodable, Identifiable, Equatable {
@@ -217,6 +220,9 @@ struct LivePosition: Decodable, Identifiable, Equatable {
     let at: Double
     let roomId: String?
     let room: String?
+    /// SFU building and floor, when the phone knows them. Optional for older servers.
+    let buildingId: String?
+    let floorId: String?
     let levelDelta: Int
     let sources: [String]
     let stale: Bool

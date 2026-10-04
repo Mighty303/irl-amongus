@@ -48,68 +48,97 @@ struct SignPinMap: View {
     }
 }
 
-/// Where a new sign goes: our SUB floor plan, dragged under a fixed pin, with the venue's other signs
-/// on it. Away from the SUB (testing somewhere else) there's no floor plan to use, so it falls back to
-/// the Apple map.
+/// Where a new sign goes: the SFU campus floor plans, dragged under a fixed pin, with the venue's other
+/// signs on it and a floor switcher for the building under the pin (saved with the sign). Off campus
+/// there's no floor plan to use, so it falls back to the Apple map.
 struct SignPinPicker: View {
+    @Environment(GameStore.self) private var store
     let start: CLLocationCoordinate2D?
     @Binding var pin: CLLocationCoordinate2D?
+    /// The building and floor under the pin (nil outdoors or on the Apple map).
+    @Binding var place: CampusPlace?
     let others: [Station]
 
     var body: some View {
-        if FloorPlanPinMap.covers(start) {
-            FloorPlanPinMap(start: start, pin: $pin, others: others)
+        if let buildings = FloorPlanPinMap.buildings(around: start, in: store.campus) {
+            FloorPlanPinMap(start: start, pin: $pin, place: $place, others: others, buildings: buildings)
         } else {
-            SignPinMap(start: start, pin: $pin)
+            SignPinMap(start: start, pin: $pin).onAppear { place = nil }
         }
     }
 }
 
-/// The floor plan with a pin fixed in the middle; drag and pinch the plan until the pin is on the sign.
+/// Campus floor plans with a pin fixed in the middle; drag and pinch until the pin is on the sign.
 struct FloorPlanPinMap: View {
+    @Environment(GameStore.self) private var store
     let start: CLLocationCoordinate2D?
     @Binding var pin: CLLocationCoordinate2D?
+    @Binding var place: CampusPlace?
     let others: [Station]
+    /// The buildings drawn (those around the first guess).
+    let buildings: [CampusBuilding]
 
     @State private var scale: CGFloat = 2.2
     @GestureState private var gestureScale: CGFloat = 1
     @State private var offset: CGSize = .zero
     @GestureState private var gestureOffset: CGSize = .zero
     @State private var centered = false
+    /// Floor picked per building while placing this sign.
+    @State private var floorChoice: [String: String] = [:]
+    @State private var pinBuilding: CampusBuilding?
 
-    private static let rooms = SUBLevel2Map.rooms
-    private static let plan = POCMapBounds.covering(SUBLevel2Map.rooms)
+    /// The buildings within ~400 m of the first guess (or around the SUB without one); nil off campus.
+    @MainActor
+    static func buildings(around start: CLLocationCoordinate2D?, in campus: CampusMap) -> [CampusBuilding]? {
+        let center: CLLocationCoordinate2D? = start ?? campus.building("SUB").map { (b: CampusBuilding) -> CLLocationCoordinate2D in
+            CLLocationCoordinate2D(latitude: Double(b.bounds.minY + b.bounds.maxY) / 2,
+                                   longitude: Double(b.bounds.minX + b.bounds.maxX) / 2)
+        }
+        guard let center else { return nil }
+        let near = campus.buildings(near: [CGPoint(x: center.longitude, y: center.latitude)], marginM: 400)
+        return near.isEmpty ? nil : near
+    }
 
-    /// The floor plan is worth using when the first guess is within ~400 m of it (or there's no guess).
-    static func covers(_ c: CLLocationCoordinate2D?) -> Bool {
-        guard !rooms.isEmpty else { return false }
-        guard let c else { return true }
-        let m: CGFloat = 0.004
-        return c.longitude >= plan.minX - m && c.longitude <= plan.maxX + m && c.latitude >= plan.minY - m && c.latitude <= plan.maxY + m
+    private var plan: POCMapBounds {
+        buildings.dropFirst().reduce(buildings[0].bounds) {
+            $0.including(CGPoint(x: $1.bounds.minX, y: $1.bounds.minY)).including(CGPoint(x: $1.bounds.maxX, y: $1.bounds.maxY))
+        }
+    }
+
+    private func floor(_ b: CampusBuilding) -> CampusFloor {
+        if let chosen = b.floor(floorChoice[b.id]) { return chosen }
+        // Start on the floor you're on when you're in this building.
+        if store.positions.estimate?.buildingId == b.id, let mine = b.floor(store.positions.estimate?.floorId) { return mine }
+        return store.campus.displayedFloor(b)
     }
 
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
-            let projection = POCMapProjection(bounds: Self.plan, size: size)
-            let s = min(max(scale * gestureScale, 1), 8)
+            let projection = POCMapProjection(bounds: plan, size: size)
+            let s = min(max(scale * gestureScale, 1), 12)
             let o = CGSize(width: offset.width + gestureOffset.width, height: offset.height + gestureOffset.height)
+            let shown = Dictionary(uniqueKeysWithValues: buildings.map { ($0.id, floor($0)) })
             ZStack {
                 Color(red: 0.06, green: 0.09, blue: 0.11)
                 Canvas { context, _ in
-                    for room in Self.rooms {
-                        let path = room.path(using: projection)
-                        let corridor = room.roomType.localizedCaseInsensitiveContains("corridor")
-                        context.fill(path, with: .color(corridor ? .cyan.opacity(0.10) : .white.opacity(0.14)))
-                        context.stroke(path, with: .color(.white.opacity(0.4)), lineWidth: 0.8 / s)
+                    for building in buildings {
+                        for room in shown[building.id]?.rooms ?? [] {
+                            let path = room.path(using: projection)
+                            let corridor = room.roomType.localizedCaseInsensitiveContains("corridor")
+                            let highlight = building.id == pinBuilding?.id
+                            context.fill(path, with: .color(corridor ? .cyan.opacity(0.10) : .white.opacity(highlight ? 0.2 : 0.12)))
+                            context.stroke(path, with: .color(.white.opacity(0.4)), lineWidth: 0.8 / s)
+                        }
                     }
                     for station in others {
                         guard let lat = station.lat, let lng = station.lng else { continue }
+                        let offFloor = station.buildingId.flatMap { shown[$0] }.map { $0.id != station.floorId } ?? false
                         let p = projection.point(CGPoint(x: lng, y: lat))
                         let r = 4 / s
                         let dot = Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2))
-                        context.fill(dot, with: .color(POCPinStyle(station.kind).color))
-                        context.stroke(dot, with: .color(.white), lineWidth: 1 / s)
+                        context.fill(dot, with: .color(POCPinStyle(station.kind).color.opacity(offFloor ? 0.35 : 1)))
+                        context.stroke(dot, with: .color(.white.opacity(offFloor ? 0.4 : 1)), lineWidth: 1 / s)
                     }
                 }
                 .frame(width: size.width, height: size.height)
@@ -133,7 +162,7 @@ struct FloorPlanPinMap: View {
                     .updating($gestureScale) { value, state, _ in state = value }
                     .onEnded { value in
                         // Zoom about the middle: the point under the pin stays under the pin.
-                        let next = min(max(scale * value, 1), 8)
+                        let next = min(max(scale * value, 1), 12)
                         offset.width *= next / scale
                         offset.height *= next / scale
                         scale = next
@@ -141,12 +170,14 @@ struct FloorPlanPinMap: View {
                     }
             )
             .onChange(of: gestureOffset) { updatePin(size: size, projection: projection) }
+            .onChange(of: floorChoice) { updatePin(size: size, projection: projection) }
             .onAppear {
                 guard !centered else { return }
                 centered = true
                 if let start {
-                    // Put the first guess under the pin.
+                    // Put the first guess under the pin, zoomed to about a building across.
                     let p = projection.point(CGPoint(x: start.longitude, y: start.latitude))
+                    scale = min(max(size.width / max(projection.points(meters: 120), 1), 1), 12)
                     offset = CGSize(width: (size.width / 2 - p.x) * scale, height: (size.height / 2 - p.y) * scale)
                 }
                 updatePin(size: size, projection: projection)
@@ -166,17 +197,37 @@ struct FloorPlanPinMap: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
             }
+            .overlay(alignment: .bottom) {
+                if let building = pinBuilding, building.floors.count > 1 {
+                    CampusFloorControl(building: building, floor: floor(building)) { step in
+                        let current = building.floorIndex(floor(building).id) ?? 0
+                        let next = min(max(current + step, 0), building.floors.count - 1)
+                        floorChoice[building.id] = building.floors[next].id
+                    }
+                    .padding(8)
+                } else if let building = pinBuilding {
+                    Text("\(building.id) · \(floor(building).name)")
+                        .font(.system(size: 10, weight: .black, design: .rounded)).foregroundStyle(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 6)
+                        .background(.black.opacity(0.72), in: Capsule())
+                        .padding(8)
+                }
+            }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Floor plan. Drag until the pin is on the sign")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Campus floor plan. Drag until the pin is on the sign")
     }
 
     /// The plan point under the middle of the view: screen = C + s·(p − C) + o, so p = C − o / s.
     private func updatePin(size: CGSize, projection: POCMapProjection) {
-        let s = min(max(scale * gestureScale, 1), 8)
+        let s = min(max(scale * gestureScale, 1), 12)
         let o = CGSize(width: offset.width + gestureOffset.width, height: offset.height + gestureOffset.height)
         let p = CGPoint(x: size.width / 2 - o.width / s, y: size.height / 2 - o.height / s)
         let c = projection.coordinate(p)
-        pin = CLLocationCoordinate2D(latitude: c.y, longitude: c.x)
+        let coordinate = CLLocationCoordinate2D(latitude: c.y, longitude: c.x)
+        pin = coordinate
+        let building = store.campus.building(at: coordinate, marginM: 2)
+        if building?.id != pinBuilding?.id { pinBuilding = building }
+        place = building.map { CampusPlace(buildingId: $0.id, floorId: floor($0).id) }
     }
 }
