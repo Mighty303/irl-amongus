@@ -39,13 +39,6 @@ struct SecurityCamsView: View {
                 .padding(14)
                 .background(HUDStyle.panel())
                 .overlay(alignment: .topLeading) { HUDCloseButton(action: close) }
-                // Among Us's Security icon on the monitor's corner.
-                .overlay(alignment: .bottomLeading) {
-                    Image("SecurityActionIcon").resizable().scaledToFit().frame(width: 52, height: 52)
-                        .offset(x: -10, y: 10)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
             }
@@ -59,6 +52,8 @@ struct SecurityCamsView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
+            Image("SecurityActionIcon").resizable().scaledToFit().frame(width: 30, height: 30)
+                .accessibilityHidden(true)
             Text("SECURITY").font(.system(size: 18, weight: .black, design: .rounded)).foregroundStyle(.white)
             Spacer()
             RecordingTag()
