@@ -46,6 +46,7 @@ final class GameStore {
             positions.mode = positionMode
             positions.useARState(.off)
             updateARTracking()
+            updateCameraStream()
         }
     }
     private(set) var isUpdatingDemoSigns = false
@@ -808,6 +809,7 @@ final class GameStore {
             positions.stop()
         }
         updateARTracking()
+        updateCameraStream()
     }
 
     /// Testing: put this phone at the red button now (as the game's start does).
@@ -819,31 +821,39 @@ final class GameStore {
     }
 
     /// AR position mode runs the back camera whenever the map is tracking, except while another camera
-    /// view (sign scanning) or the security-camera stream needs it: a phone can't run both.
+    /// view (sign scanning) needs it: a phone can't run both. The security-camera stream doesn't stop it:
+    /// in AR mode that stream is ARKit's own picture.
     private func updateARTracking() {
-        guard positionMode == .ar, localTrackingOn else { arTracker.stop(); return }
+        guard arRuns else { arTracker.stop(); return }
         if CameraUsage.backCameraInUse {
             arTracker.stop(reason: "camera in use (scanning)")
-        } else if isStreamingCamera {
-            arTracker.stop(reason: "camera in use (security cams)")
         } else {
             arTracker.start()
         }
     }
 
-    /// Sends this phone's front camera while someone is watching, except while the back camera is busy
-    /// (scanning a sign): a phone can't run both.
+    private var arRuns: Bool { positionMode == .ar && localTrackingOn && ARPositionTracker.isSupported }
+
+    private enum CameraSource { case front, ar }
+    @ObservationIgnored private var cameraSource: CameraSource?
+
+    /// Sends this phone's camera while someone is watching, except while the back camera is busy (scanning
+    /// a sign). In AR mode that's what ARKit sees (the back camera), so tracking carries on; otherwise
+    /// the front camera.
     private func updateCameraStream() {
         let wanted = state?.phase == .PLAYING && state?.me.camWanted == true && isSynced && !CameraUsage.backCameraInUse
-        guard wanted != isStreamingCamera else { return }
-        isStreamingCamera = wanted
-        updateARTracking()
-        if wanted {
+        let source: CameraSource? = wanted ? (arRuns ? .ar : .front) : nil
+        guard source != cameraSource else { return }
+        cameraSource = source
+        isStreamingCamera = source != nil
+        if source != .front { frontCamera.stop() }
+        arTracker.streamCamera(to: source == .ar ? { [weak self] jpeg in
+            Task { @MainActor in self?.sendCameraFrame(jpeg) }
+        } : nil)
+        if source == .front {
             frontCamera.start { [weak self] jpeg in
                 Task { @MainActor in self?.sendCameraFrame(jpeg) }
             }
-        } else {
-            frontCamera.stop()
         }
     }
 
