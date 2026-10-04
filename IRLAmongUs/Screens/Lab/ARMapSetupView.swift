@@ -7,6 +7,7 @@ struct ARMeasuredMap: View {
     var selectedID: String = "electrical"
     var completed: Set<String> = []
     var tracking = false
+    var heading: Float = 0
     var onPlace: ((SIMD2<Float>) -> Void)?
 
     var body: some View {
@@ -48,10 +49,18 @@ struct ARMeasuredMap: View {
                                  at: CGPoint(x: marker.x, y: marker.y + 9))
                     if let player {
                         let centre = project(player)
-                        context.fill(Path(ellipseIn: CGRect(x: centre.x - 4, y: centre.y - 4, width: 8, height: 8)),
-                                     with: .color(tracking ? .pink : .gray))
-                        context.draw(Text("YOU").font(.system(size: 9, weight: .bold)).foregroundStyle(.white),
-                                     at: CGPoint(x: centre.x + 14, y: centre.y))
+                        var arrow = Path()
+                        let angle = CGFloat(heading)
+                        for (index, p) in [CGPoint(x: 0, y: -8), CGPoint(x: -5, y: 6), CGPoint(x: 5, y: 6)].enumerated() {
+                            let rotated = CGPoint(x: centre.x + p.x * cos(angle) - p.y * sin(angle),
+                                                  y: centre.y + p.x * sin(angle) + p.y * cos(angle))
+                            if index == 0 { arrow.move(to: rotated) } else { arrow.addLine(to: rotated) }
+                        }
+                        arrow.closeSubpath()
+                        context.fill(arrow, with: .color(tracking ? .cyan : .gray))
+                        context.stroke(arrow, with: .color(.black), lineWidth: 1)
+                        context.draw(Text("YOU").font(.system(size: 9, weight: .bold)).foregroundStyle(.cyan),
+                                     at: CGPoint(x: centre.x + 16, y: centre.y))
                     }
                 }
                 .contentShape(Rectangle())

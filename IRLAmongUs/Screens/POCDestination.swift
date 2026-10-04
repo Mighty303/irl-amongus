@@ -31,25 +31,30 @@ enum POCDestination: String, CaseIterable, Identifiable {
     }
 }
 
-/// Full-screen host for a POC screen, with a bar to get back to the main menu.
-/// These screens are laid out for portrait; closing returns to the landscape menu.
+/// Full-screen host for POC screens. AR walking provides its own menu controls.
 struct POCDestinationView: View {
     let destination: POCDestination
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        content
-            .safeAreaInset(edge: .top, spacing: 0) {
-                HStack {
-                    Button { dismiss() } label: { Label("Main menu", systemImage: "chevron.left") }
-                    Spacer()
-                    Text(destination.title).font(.caption).foregroundStyle(.secondary)
-                }
-                .font(.subheadline)
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(.bar)
+        Group {
+            if destination == .arWalking {
+                content
+            } else {
+                content
+                    .safeAreaInset(edge: .top, spacing: 0) {
+                        HStack {
+                            Button { dismiss() } label: { Label("Main menu", systemImage: "chevron.left") }
+                            Spacer()
+                            Text(destination.title).font(.caption).foregroundStyle(.secondary)
+                        }
+                        .font(.subheadline)
+                        .padding(.horizontal)
+                        .padding(.vertical, 8)
+                        .background(.bar)
+                    }
             }
+        }
             // The online game sets its own orientation per phase; the test benches are portrait.
             .onAppear {
                 if destination == .gameOver || destination == .arWalking { OrientationDelegate.requestLandscape() }

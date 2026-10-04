@@ -1,13 +1,14 @@
 # Indoor walking POC
 
 Shake the phone to open Developer Mode, then choose **Indoor AR walking POC**.
-The **Floor task** mode keeps the original one-task walking experiment. **Preset
-map** adds a saved measured layout and marker-aligned task beacons. Both are local
+The camera-open walking HUD starts in **Preset map** mode. Its gear menu contains
+map setup, reset, simulation and tracking diagnostics. **Floor task**, also in the
+gear menu, keeps the original one-task walking experiment. **Preset map** adds a saved measured layout and marker-aligned task beacons. Both are local
 experiments; neither sends locations nor authorizes online game tasks.
 
 ## Preset map: prepare the space
 
-1. Open **Preset map → Map setup**. The POC map covers 12 × 12 metres; grid lines
+1. Open **gear → Map setup**. The POC map covers 12 × 12 metres; grid lines
    are two metres apart. Its origin is the floor directly below the alignment marker.
    Right means right when facing the upright marker; away extends from its wall into
    the room. These are measured local coordinates, not GPS coordinates.
@@ -33,8 +34,9 @@ in the same AR world space. There is no need to place tasks again on the camera 
 
 Beacons have a floor ring, a vertical stem, a floating orb and a task label. Yellow
 marks the selected task, cyan marks the other tasks, and green marks completed tasks.
-Choose a task from the task menu; the minimap and interaction distance refer to that
-same task. The map shows your camera-derived position in pink.
+Choose a task from the **Next task** pill at the top; the minimap and interaction distance refer to that
+same task. The map shows your camera-derived position as a cyan directional arrow. The Report
+button is inactive in this local POC, which contains tasks but no bodies.
 
 Approach the task and remain within **two horizontal metres** at a measured speed
 at or below **0.35 m/s for 0.5 seconds**. Then tap **Use → Complete task**. Passing
@@ -42,7 +44,7 @@ through while moving never unlocks it. Completion is local and remains set when
 rescanning the marker. **Reset** clears completion and alignment but preserves the
 saved measured layout.
 
-To correct drift, point at the fixed marker again and tap **Rescan**. It replaces the
+To correct drift, point at the fixed marker again and choose **gear → Rescan**. It replaces the
 map-to-AR transform and clears the current interaction dwell. It does not silently
 move task pins or discard completed tasks.
 
